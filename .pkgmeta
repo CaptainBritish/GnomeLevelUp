@@ -5,3 +5,4 @@ enable-nolib-creation: no
 ignore:
   - .github
   - .git
+  - changes.txt
