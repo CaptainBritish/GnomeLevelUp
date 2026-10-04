@@ -26,7 +26,7 @@ end
 local frame = CreateFrame("Frame", "GnomeLevelUpFrame", UIParent)
 frame:SetSize(FRAME_WIDTH, 300) -- height is recomputed to fit the content on every show
 frame:SetPoint("CENTER", UIParent, "CENTER", 0, 90)
-frame:SetFrameStrata("TOOLTIP")
+frame:SetFrameStrata("HIGH")
 frame:SetClampedToScreen(true)
 frame:EnableMouse(true)
 frame:SetMovable(true)
@@ -61,9 +61,9 @@ closeText:SetTextColor(1, 1, 1, 1)
 closeButton:SetScript("OnClick", function() ns.CloseLevelUp() end)
 
 function ns.ApplyFrameStrata(strata)
-    local ok = pcall(frame.SetFrameStrata, frame, strata or "TOOLTIP")
+    local ok = pcall(frame.SetFrameStrata, frame, strata or "HIGH")
     if not ok then
-        frame:SetFrameStrata("TOOLTIP")
+        frame:SetFrameStrata("HIGH")
     end
 end
 
@@ -281,8 +281,65 @@ content.spellsHeader = NewText(content, "GameFontNormal", 2)
 ApplyToTextLayers(content.spellsHeader, "SetText", "Abilities")
 RegisterGlowFont(content.spellsHeader)
 
+content.levelTimeText = NewText(content, "GameFontHighlightSmall", 1.5)
+content.levelTimeText:SetWidth(TEXT_WIDTH)
+content.levelTimeText:SetHeight(18)
+ApplyToTextLayers(content.levelTimeText, "SetJustifyH", "CENTER")
+ApplyToTextLayers(content.levelTimeText, "SetJustifyV", "TOP")
+ApplyToTextLayers(content.levelTimeText, "SetTextColor", 0.25, 1.0, 0.25)
+RegisterGlowFont(content.levelTimeText)
+content.levelTimeText:SetPoint("BOTTOM", content.spellsHeader, "TOP", 0, 4)
+content.levelTimeText:Hide()
+
 local ABILITY_ICON_SIZE = 36
 local ABILITY_ICON_GAP = 10
+local ABILITY_COST_HEIGHT = 14
+local ABILITY_COST_GAP = 1
+
+local MONEY_ICON_PATHS = {
+    gold = "Interface\\MoneyFrame\\UI-GoldIcon",
+    silver = "Interface\\MoneyFrame\\UI-SilverIcon",
+    copper = "Interface\\MoneyFrame\\UI-CopperIcon",
+}
+
+local function FormatTrainerCost(cost)
+    cost = tonumber(cost)
+    if not cost or cost <= 0 then return nil end
+
+    local gold = math.floor(cost / 10000)
+    local silver = math.floor((cost % 10000) / 100)
+    local copper = cost % 100
+    local parts = {}
+    local function AddPart(amount, currency)
+        if amount > 0 then
+            parts[#parts + 1] = string.format("%d|T%s:10:10:0:0|t", amount, MONEY_ICON_PATHS[currency])
+        end
+    end
+    AddPart(gold, "gold")
+    AddPart(silver, "silver")
+    AddPart(copper, "copper")
+    return #parts > 0 and table.concat(parts, " ") or nil
+end
+
+local function FormatPlayedTime(seconds)
+    seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local remainingSeconds = seconds % 60
+    if hours > 0 then
+        return string.format("Time this level: %dh %02dm", hours, minutes)
+    elseif minutes > 0 then
+        return string.format("Time this level: %dm %02ds", minutes, remainingSeconds)
+    end
+    return string.format("Time this level: %ds", remainingSeconds)
+end
+
+local function AbilityCellHeight()
+    if ns.db and ns.db.showTrainerCosts then
+        return ABILITY_ICON_SIZE + ABILITY_COST_GAP + ABILITY_COST_HEIGHT
+    end
+    return ABILITY_ICON_SIZE
+end
 
 content.abilityRow = CreateFrame("Frame", nil, content)
 content.abilityRow:SetPoint("BOTTOM", content, "BOTTOM", 0, PAD_BOTTOM)
@@ -478,6 +535,17 @@ local function GetAbilityIcon(index)
     tex:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- trim the default spell-icon border
     btn.icon = tex
 
+    local costText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    costText:SetSize(ABILITY_ICON_SIZE, ABILITY_COST_HEIGHT)
+    costText:SetPoint("TOP", btn, "BOTTOM", 0, -ABILITY_COST_GAP)
+    costText:SetJustifyH("CENTER")
+    costText:SetJustifyV("TOP")
+    costText:SetWordWrap(false)
+    RegisterFontElement(costText, 10)
+    costText:SetTextColor(1, 1, 1, 1)
+    costText:Hide()
+    btn.costText = costText
+
     local border = btn:CreateTexture(nil, "OVERLAY")
     border:SetAllPoints()
     border:SetColorTexture(1, 0.82, 0.2, 0.9)
@@ -517,6 +585,10 @@ local function UpdateTrainerAbilityIcons(trainerAbilities)
             activeIconAnims[icon] = nil
             icon:Hide()
         end
+        ApplyToTextLayers(content.noAbilitiesText, "SetText",
+            ns.db and ns.db.showOnlyCurrentLevelSkills
+                and "No new skills this level"
+                or "No unlearned skills available")
         ApplyToTextLayers(content.noAbilitiesText, "Show")
         return
     end
@@ -526,15 +598,24 @@ local function UpdateTrainerAbilityIcons(trainerAbilities)
     local columns = math.min(count, ABILITY_ICON_COLUMNS)
     local rows = math.ceil(count / ABILITY_ICON_COLUMNS)
     local totalWidth = columns * ABILITY_ICON_SIZE + (columns - 1) * ABILITY_ICON_GAP
-    local totalHeight = rows * ABILITY_ICON_SIZE + (rows - 1) * ABILITY_ICON_GAP
+    local cellHeight = AbilityCellHeight()
+    local totalHeight = rows * cellHeight + (rows - 1) * ABILITY_ICON_GAP
     content.abilityRow:SetHeight(totalHeight)
     local startX = -totalWidth / 2 + ABILITY_ICON_SIZE / 2
-    local startY = totalHeight / 2 - ABILITY_ICON_SIZE / 2
+    local startY = totalHeight / 2 - cellHeight / 2
 
     for i, spell in ipairs(trainerAbilities) do
         local icon = GetAbilityIcon(i)
         icon.spellID = spell.id
         icon.spellName = spell.name
+        local formattedCost = ns.db and ns.db.showTrainerCosts and FormatTrainerCost(spell.cost)
+        if formattedCost then
+            icon.costText:SetText(formattedCost)
+            icon.costText:Show()
+        else
+            icon.costText:SetText("")
+            icon.costText:Hide()
+        end
         local texture = spell.icon or (spell.id and (
             (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell.id))
             or (GetSpellTexture and GetSpellTexture(spell.id))
@@ -545,9 +626,10 @@ local function UpdateTrainerAbilityIcons(trainerAbilities)
         local column = zeroIndex % ABILITY_ICON_COLUMNS
         local row = math.floor(zeroIndex / ABILITY_ICON_COLUMNS)
         local x = startX + column * (ABILITY_ICON_SIZE + ABILITY_ICON_GAP)
-        local y = startY - row * (ABILITY_ICON_SIZE + ABILITY_ICON_GAP)
+        local iconY = startY + (cellHeight - ABILITY_ICON_SIZE) / 2
+            - row * (cellHeight + ABILITY_ICON_GAP)
         local delay = staggerBase + (i - 1) * staggerStep
-        StartIconPop(icon, content.abilityRow, x, y, delay, popDuration)
+        StartIconPop(icon, content.abilityRow, x, iconY, delay, popDuration)
     end
 
     for i = count + 1, #pool do
@@ -664,6 +746,9 @@ local function LayoutFrame(statCount)
     h = h + 4 + TextHeight(content.levelText, 18)
     h = h + 22 + TextHeight(content.statsHeader, 18)
     h = h + 10 + statCount * STAT_LINE_HEIGHT
+    if content.levelTimeText:IsShown() then
+        h = h + 4 + TextHeight(content.levelTimeText, 18)
+    end
     h = h + 20 + TextHeight(content.spellsHeader, 16)
     h = h + 10 + (content.abilityRow:GetHeight() or ABILITY_ICON_SIZE)
     if content.weaponSkillsText:IsShown() then
@@ -753,7 +838,7 @@ frame:SetScript("OnEnter", function()
 end)
 
 
-local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills)
+local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel)
     -- Prepare the content, play the animations, and show the panel.
     local db = ns.db or {}
     if db.enabled == false then return end
@@ -766,6 +851,14 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     ns.ApplyColors()
 
     local statCount = UpdateStatLines(statChanges or {})
+
+    if db.showLevelTime and tonumber(timePlayedThisLevel) then
+        ApplyToTextLayers(content.levelTimeText, "SetText", FormatPlayedTime(timePlayedThisLevel))
+        content.levelTimeText:Show()
+    else
+        ApplyToTextLayers(content.levelTimeText, "SetText", "")
+        content.levelTimeText:Hide()
+    end
 
     UpdateTrainerAbilityIcons(trainerAbilities or {})
     UpdateWeaponSkillText(unlearnedWeaponSkills or {})
@@ -798,9 +891,9 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     ScheduleFadeOut(db.duration or 7)
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel)
     if ns.EnsureDatabase then ns.EnsureDatabase() end
-    local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills)
+    local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel)
     if not ok then
         print("|cffff4040GnomeLevelUp error:|r " .. tostring(err))
         print("|cffff4040GnomeLevelUp:|r the level-up screen failed to display (see above). Please report this error.")

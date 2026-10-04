@@ -32,8 +32,10 @@ Shoutouts: Shadowhand for helping test and fixing my broken-ass code for hiding 
 2. Restart or reload the client (`/reload`).
 3. Make sure it's checked in the AddOns list at the character-select
    screen.
-4. If you are updating from an earlier version please reset trainer data
-   in the options menu or type `/glu cleartraining`
+4. If you are updating from an earlier version, GnomeLevelUp will detect an
+   older trainer-cache format and clear it for a fresh scan. Visit your class
+   trainer once after the update. You can also reset it manually from the
+   options menu or with `/glu cleartraining`.
 
 
 ## Usage
@@ -70,6 +72,21 @@ Slash commands (`/glu`):
 
   Press the white **X** in the top-right corner to close the level-up screen.
   Reduced motion skips the entrance, icon, and fade animations.
+
+Trainer options include displaying each skill's training cost and limiting the
+list to skills that unlock at the current level. Both options are disabled by
+default. Costs are read from the trainer scan and stored separately from the
+profession-service check.
+
+The settings also include an optional level-time line. When enabled, it uses
+the client's played-time data to show how long the player spent on the level
+that just ended.
+The addon requests this silently at login or when the option is enabled, then
+tracks elapsed time locally. It does not repeatedly print played time to chat.
+
+On first boot, GnomeLevelUp prints a short setup reminder in chat. The
+**Print instructions to chat** option controls that message and is enabled by
+default; it is only shown once per character profile.
 
 
 ## Customizing the sound

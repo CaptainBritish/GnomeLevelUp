@@ -2,7 +2,7 @@
 ## Title: GnomeLevelUp
 ## Notes: A gnometastic level-up screen showing stat gains and unlearned trainer abilities.
 ## Author: Lessa - Argent Dawn EU
-## Version: 1.1.0
+## Version: 1.2
 ## SavedVariables: GnomeLevelUpDB
 ## X-Website: https://welcometozombo.com/
 

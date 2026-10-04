@@ -186,7 +186,7 @@ AddDropdown("Font", FONT_CHOICES,
     end)
 
 AddDropdown("Frame strata", ns.STRATA_CHOICES,
-    function() return ns.db.frameStrata or "TOOLTIP" end,
+    function() return ns.db.frameStrata or "HIGH" end,
     function(value)
         ns.db.frameStrata = value
         ns.ApplyFrameStrata(value)
@@ -245,6 +245,20 @@ AddCheckbox("Hide Blizzard level-up toast",
         end
     end)
 
+AddCheckbox("Show time played this level",
+    function() return ns.db.showLevelTime end,
+    function(v)
+        ns.db.showLevelTime = v
+        if v then ns.RequestLevelPlayedTime() end
+    end)
+
+AddCheckbox("Print instructions to chat",
+    function() return ns.db.printInstructions end,
+    function(v)
+        ns.db.printInstructions = v
+        if v and ns.PrintStartupInstructions then ns.PrintStartupInstructions() end
+    end)
+
 AddDropdown("Mode", ns.MODE_CHOICES,
     function() return ns.db.forceFlavor or "auto" end,
     function(value)
@@ -297,6 +311,14 @@ AddCheckbox("Also scan profession trainers",
 AddCheckbox("Show unlearned weapon skills",
     function() return ns.db.showWeaponSkills end,
     function(v) ns.db.showWeaponSkills = v end)
+
+AddCheckbox("Show trainer skill costs",
+    function() return ns.db.showTrainerCosts end,
+    function(v) ns.db.showTrainerCosts = v end)
+
+AddCheckbox("Show only skills unlocked at the current level",
+    function() return ns.db.showOnlyCurrentLevelSkills end,
+    function(v) ns.db.showOnlyCurrentLevelSkills = v end)
 
 AddButton("Clear Scanned Data", 160, LEFT, y, function()
     if ns.ClearScannedTrainerData then

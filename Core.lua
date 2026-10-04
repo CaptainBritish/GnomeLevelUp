@@ -6,7 +6,9 @@ local defaults = {
     playSound = true,
     duration = 7,       -- seconds the cinematic stays up before auto-hiding
     scale = 1.0,
-    frameStrata = "TOOLTIP", -- highest available, so it can't render behind other UI
+    frameStrata = "HIGH",
+    printInstructions = true,
+    introShown = false,
     waitForCombatEnd = true, -- delay showing the screen until combat ends
     soundChoice = "LEVELUP",  -- key into ns.SOUND_CHOICES
     soundChannel = "Master",  -- "Master" | "SFX" | "Music" | "Ambience" | "Dialog"
@@ -15,6 +17,9 @@ local defaults = {
     autoScanTrainers = true,
     scanProfessionTrainers = false,
     showWeaponSkills = false,
+    showTrainerCosts = false,
+    showOnlyCurrentLevelSkills = false,
+    showLevelTime = false,
     hideBlizzardLevelUp = true,
     bgOpacity = 0.70,           -- background darkness at its peak (0-1)
     animSpeedMultiplier = 1.0,  -- higher = faster animations
@@ -38,6 +43,13 @@ local defaults = {
     },
 }
 ns.defaults = defaults
+
+local function PrintStartupInstructions()
+    if not ns.db or ns.db.printInstructions == false or ns.db.introShown then return end
+    print('GnomeLevelUp active! Make sure to visit your class trainer to cache available skills. If you\'re updating to a new version and experiencing any issues, use the "Clear Scanned Data" option in the menu or type /glu cleartraining.')
+    ns.db.introShown = true
+end
+ns.PrintStartupInstructions = PrintStartupInstructions
 
 -- Copy nested settings so a reset cannot share tables with the defaults.
 local function CopySetting(value)
@@ -102,9 +114,9 @@ function ns.ResetOptionsToDefaults()
     -- Restore the settings page to the default values.
     for _, key in ipairs({
         "playSound", "soundChoice", "soundChannel", "customSoundFile",
-        "enabled", "duration", "scale", "autoScanTrainers", "scanProfessionTrainers", "showWeaponSkills", "hideBlizzardLevelUp",
+        "enabled", "duration", "scale", "autoScanTrainers", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showLevelTime", "hideBlizzardLevelUp",
         "bgOpacity", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "customFontPath",
-        "waitForCombatEnd", "forceFlavor", "frameStrata",
+        "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
         "framePosition", "minimapButtonShown", "minimapAngle", "portraitMode", "debugEnabled",
     }) do
         ns.db[key] = CopySetting(defaults[key])
@@ -161,29 +173,40 @@ ns.STRATA_CHOICES = {
     { value = "DIALOG",              label = "Dialog" },
     { value = "FULLSCREEN",          label = "Fullscreen" },
     { value = "FULLSCREEN_DIALOG",   label = "Fullscreen Dialog" },
-    { value = "TOOLTIP",             label = "Tooltip (highest, default)" },
+    { value = "TOOLTIP",             label = "Tooltip (highest)" },
 }
 
 function ns.PlayLevelUpSound(force)
-    if ns.RestoreBlizzardLevelUpSound then ns.RestoreBlizzardLevelUpSound() end
     -- Play a custom sound or one of the built-in sounds.
     local db = ns.db or {}
     if db.playSound == false and not force then return end
 
-    local channel = db.soundChannel or "Master"
-    if db.customSoundFile and db.customSoundFile ~= "" then
-        PlaySoundFile(db.customSoundFile, channel)
-        return
+    local function PlaySelectedSound()
+        local channel = db.soundChannel or "Master"
+        if db.customSoundFile and db.customSoundFile ~= "" then
+            PlaySoundFile(db.customSoundFile, channel)
+            return
+        end
+
+        local wanted = db.soundChoice or "LEVELUP"
+        for _, choice in ipairs(ns.SOUND_CHOICES) do
+            if choice.value == wanted then
+                PlaySound(choice.id, channel)
+                return
+            end
+        end
+        PlaySound(ns.SOUND_CHOICES[1].id, channel)
     end
 
     local wanted = db.soundChoice or "LEVELUP"
-    for _, choice in ipairs(ns.SOUND_CHOICES) do
-        if choice.value == wanted then
-            PlaySound(choice.id, channel)
-            return
-        end
+    if wanted == "LEVELUP" and not db.customSoundFile
+        and db.hideBlizzardLevelUp ~= false
+        and ns.WithLevelUpSoundsUnmuted then
+        -- The native files stay muted; briefly unmute only for our replacement.
+        ns.WithLevelUpSoundsUnmuted(PlaySelectedSound)
+    else
+        PlaySelectedSound()
     end
-    PlaySound(ns.SOUND_CHOICES[1].id, channel)
 end
 
 
@@ -204,7 +227,7 @@ function ns.PreviewLevelUp()
         { name = STRENGTH or "Strength", old = 20, new = 23 },
         { name = STAMINA or "Stamina", old = 22, new = 27 },
         { name = INTELLECT or "Intellect", old = 15, new = 17 },
-    }, trainerAbilities, unlearnedWeaponSkills)
+    }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime())
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -225,6 +248,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             if ns.MergeSavedTrainerData then
                 ns.MergeSavedTrainerData()
             end
+            PrintStartupInstructions()
             if ns.ApplyBackgroundOpacity then
                 ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
             end

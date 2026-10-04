@@ -17,7 +17,14 @@ local savedAlpha = {}
 local suppressionToken = 0
 local suppressionActive = false
 local soundToken = 0
-local levelUpSoundID = (SOUNDKIT and SOUNDKIT.LEVELUP) or 888
+local BLIZZARD_SOUND_MUTE_DURATION = 60
+-- These are the level-up files used by the supported clients. Keep the list
+-- narrow so unrelated spell, creature, and interface sounds stay untouched.
+local levelUpSoundFiles = {
+    "Sound\\Spells\\LevelUp.ogg",
+    "Sound\\Interface\\LevelUp.ogg",
+    "Sound\\Doodad\\GO_LevelUp_Custom_6696263.ogg",
+}
 
 local function SetFrameAlpha(frame, alpha)
     if frame and type(frame.SetAlpha) == "function" then
@@ -83,6 +90,21 @@ local function RestoreSuppressedFrames()
     suppressionActive = false
 end
 
+function ns.WithLevelUpSoundsUnmuted(callback)
+    if type(callback) ~= "function" then return end
+    if type(UnmuteSoundFile) == "function" then
+        for _, soundFile in ipairs(levelUpSoundFiles) do
+            pcall(UnmuteSoundFile, soundFile)
+        end
+    end
+    pcall(callback)
+    if type(MuteSoundFile) == "function" then
+        for _, soundFile in ipairs(levelUpSoundFiles) do
+            pcall(MuteSoundFile, soundFile)
+        end
+    end
+end
+
 function ns.HideBlizzardBannerNow()
     if ns.IsAddonEnabled and not ns.IsAddonEnabled() then return end
     if ns.db and ns.db.hideBlizzardLevelUp == false then return end
@@ -103,19 +125,28 @@ end
 
 function ns.RestoreBlizzardLevelUpSound()
     soundToken = soundToken + 1
+    ns.blizzardLevelUpSoundMutedUntil = 0
     if type(UnmuteSoundFile) == "function" then
-        pcall(UnmuteSoundFile, levelUpSoundID)
+        for _, soundFile in ipairs(levelUpSoundFiles) do
+            pcall(UnmuteSoundFile, soundFile)
+        end
     end
 end
 
 function ns.SuppressBlizzardLevelUpSound()
     if type(MuteSoundFile) ~= "function" then return end
+    if ns.db and ns.db.hideBlizzardLevelUp == false then return end
     soundToken = soundToken + 1
     local token = soundToken
-    pcall(MuteSoundFile, levelUpSoundID)
-    C_Timer.After(1.5, function()
+    ns.blizzardLevelUpSoundMutedUntil = (GetTime and GetTime() or 0) + BLIZZARD_SOUND_MUTE_DURATION
+    for _, soundFile in ipairs(levelUpSoundFiles) do
+        pcall(MuteSoundFile, soundFile)
+    end
+    C_Timer.After(BLIZZARD_SOUND_MUTE_DURATION, function()
         if token == soundToken and type(UnmuteSoundFile) == "function" then
-            pcall(UnmuteSoundFile, levelUpSoundID)
+            for _, soundFile in ipairs(levelUpSoundFiles) do
+                pcall(UnmuteSoundFile, soundFile)
+            end
         end
     end)
 end
@@ -155,5 +186,7 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:SetScript("OnEvent", function()
     ns.HideBlizzardBannerNow()
-    ns.SuppressBlizzardLevelUpSound()
+    if ns.db and ns.db.hideBlizzardLevelUp ~= false then
+        ns.SuppressBlizzardLevelUpSound()
+    end
 end)

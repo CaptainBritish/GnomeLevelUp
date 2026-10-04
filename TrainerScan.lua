@@ -1,6 +1,8 @@
 local ADDON_NAME, ns = ...
 
-local TRAINER_SCHEMA_VERSION = 4
+-- Version 5 adds cost-aware trainer records. Older caches cannot tell us
+-- whether a missing cost means "free" or "not scanned", so they are rebuilt.
+local TRAINER_SCHEMA_VERSION = 5
 local TRAINER_SCAN_DELAY = 0.3
 local TRAINER_RECONCILE_DELAY = 0.25
 
@@ -28,10 +30,15 @@ local function IsProfessionTrainer()
     return LooksLikeProfessionTrainer(UnitName("npc"))
 end
 
-local function IsProfessionService(index)
-    if GetTrainerServiceCost then
-        local ok, _, isProfession = pcall(GetTrainerServiceCost, index)
-        if ok and isProfession == true then return true end
+local function IsProfessionService(index, professionCost)
+    if professionCost ~= nil then
+        return professionCost == true or (tonumber(professionCost) or 0) > 0
+    end
+    if type(GetTrainerServiceCost) == "function" then
+        local ok, _, _, rawProfessionCost = pcall(GetTrainerServiceCost, index)
+        if ok and (rawProfessionCost == true or (tonumber(rawProfessionCost) or 0) > 0) then
+            return true
+        end
     end
     return false
 end
@@ -57,17 +64,8 @@ local function GetLearnedStore()
     return store[flavor][guid]
 end
 
-local function GetLearnedStoreFor(flavor, guid)
-    if not GnomeLevelUpDB or not flavor or not guid then return nil end
-    GnomeLevelUpDB.learnedTraining = GnomeLevelUpDB.learnedTraining or {}
-    local store = GnomeLevelUpDB.learnedTraining
-    store[flavor] = store[flavor] or {}
-    store[flavor][guid] = store[flavor][guid] or {}
-    return store[flavor][guid]
-end
-
 function ns.MigrateTrainerData()
-    -- Update old saved trainer data to the current format.
+    -- Rebuild old caches when their record format cannot provide trainer costs.
     if not GnomeLevelUpDB then return end
     local store = EnsureSavedStore()
     store.classic = nil
@@ -77,51 +75,25 @@ function ns.MigrateTrainerData()
         GnomeLevelUpDB.learnedTraining.retail = nil
     end
     local currentVersion = tonumber(GnomeLevelUpDB.trainerSchemaVersion) or 0
-    if currentVersion < TRAINER_SCHEMA_VERSION
-        and currentVersion >= 3
-        and not GnomeLevelUpDB.scanProfessionTrainers then
-        store.forever = {}
-    end
     if currentVersion >= TRAINER_SCHEMA_VERSION then return end
 
-    for flavor, classMap in pairs(store) do
-        if flavor == "forever" and type(classMap) == "table" then
-            for classToken, levelMap in pairs(classMap) do
-                if type(levelMap) == "table" then
-                    for level, entries in pairs(levelMap) do
-                        if type(entries) == "table" then
-                            for index, entry in ipairs(entries) do
-                                if type(entry) == "string" then
-                                    entry = { name = entry }
-                                    entries[index] = entry
-                                end
-                                if type(entry) == "table" then
-                                    if entry.learnedBy then
-                                        for guid, learned in pairs(entry.learnedBy) do
-                                            if learned then
-                                                local learnedStore = GetLearnedStoreFor(flavor, guid)
-                                                learnedStore[ns.TrainingEntryKey(entry, level)] = true
-                                                if entry.spellID then learnedStore["spell:" .. entry.spellID] = true end
-                                            end
-                                        end
-                                    elseif entry.learned and UnitGUID("player") then
-                                        local learnedStore = GetLearnedStoreFor(flavor, UnitGUID("player"))
-                                        learnedStore[ns.TrainingEntryKey(entry, level)] = true
-                                        if entry.spellID then learnedStore["spell:" .. entry.spellID] = true end
-                                    end
-                                    entry.learned = nil
-                                    entry.learnedBy = nil
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    local hadOldCache = currentVersion > 0 or next(store.forever) ~= nil
+    if not hadOldCache then
+        GnomeLevelUpDB.trainerSchemaVersion = TRAINER_SCHEMA_VERSION
+        return
     end
+
+    -- A 1.1 cache has no reliable cost marker. Keep settings intact, but
+    -- remove the stale skill entries so the next trainer visit rebuilds them.
+    store.forever = {}
+    if GnomeLevelUpDB.learnedTraining then
+        GnomeLevelUpDB.learnedTraining.forever = nil
+    end
+    GnomeLevelUpDB.trainerRescanRequired = true
 
     GnomeLevelUpDB.trainerSchemaVersion = TRAINER_SCHEMA_VERSION
     if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
+    print("|cff3fe0ffGnomeLevelUp|r: trainer data was updated. Visit your class trainer once to rescan skills and costs.")
 end
 
 local function MarkLearned(entry, level)
@@ -173,6 +145,7 @@ function ns.ClearScannedTrainerData()
     -- Remove all saved trainer data and start a fresh scan.
     GnomeLevelUpDB.scannedTraining = { forever = {} }
     GnomeLevelUpDB.learnedTraining = nil
+    GnomeLevelUpDB.trainerRescanRequired = false
     if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
 end
 
@@ -221,11 +194,19 @@ local function ReadService(index)
     if (not subtext or subtext == "") and spellID and C_Spell and C_Spell.GetSpellSubtext then
         subtext = C_Spell.GetSpellSubtext(spellID)
     end
-    return name, subtext, status, level, icon, spellID, category
+    local serviceCost, professionCost
+    if type(GetTrainerServiceCost) == "function" then
+        local costOK, rawCost, _, rawProfessionCost = pcall(GetTrainerServiceCost, index)
+        if costOK then
+            serviceCost = tonumber(rawCost)
+            professionCost = rawProfessionCost
+        end
+    end
+    return name, subtext, status, level, icon, spellID, category, serviceCost, professionCost
 end
 
 -- Preserve one saved record per spell or normalized trainer name.
-local function RecordAbility(classMap, classToken, level, label, icon, spellID, isProfession)
+local function RecordAbility(classMap, classToken, level, label, icon, spellID, isProfession, serviceCost)
     classMap[classToken] = classMap[classToken] or {}
     local levelMap = classMap[classToken]
     local entries = levelMap[level] or levelMap[tostring(level)]
@@ -250,10 +231,20 @@ local function RecordAbility(classMap, classToken, level, label, icon, spellID, 
             if icon and existing.icon ~= icon then existing.icon = icon; changed = true end
             if spellID and existing.spellID ~= spellID then existing.spellID = spellID; changed = true end
             if isProfession and not existing.profession then existing.profession = true; changed = true end
+            if serviceCost ~= nil and existing.cost ~= serviceCost then
+                existing.cost = serviceCost
+                changed = true
+            end
             return existing, false, changed
         end
     end
-    local savedEntry = { name = label, icon = icon, spellID = spellID, profession = isProfession or nil }
+    local savedEntry = {
+        name = label,
+        icon = icon,
+        spellID = spellID,
+        profession = isProfession or nil,
+        cost = serviceCost,
+    }
     entries[#entries + 1] = savedEntry
     return savedEntry, true, true
 end
@@ -261,7 +252,8 @@ end
 local function ScanTrainer()
     -- Read the trainer window and save valid class skills.
     if not GetNumTrainerServices or not GetTrainerServiceInfo then return end
-    if ns.db and ns.db.autoScanTrainers == false then return end
+    if ns.db and ns.db.autoScanTrainers == false
+        and not GnomeLevelUpDB.trainerRescanRequired then return end
     local store = EnsureSavedStore()
     if not store then return end
     local flavor = ns.GetCurrentFlavor()
@@ -274,7 +266,7 @@ local function ScanTrainer()
 
     local added, skippedNoLevel, changed = 0, 0, false
     for i = 1, GetNumTrainerServices() do
-        local name, subtext, status, infoLevel, icon, spellID, category = ReadService(i)
+        local name, subtext, status, infoLevel, icon, spellID, category, serviceCost, professionCost = ReadService(i)
         if name and (status == "available" or status == "unavailable" or status == "used") then
             local level = GetRequiredLevel(i, infoLevel, status)
             if level then
@@ -284,14 +276,14 @@ local function ScanTrainer()
                     if ok then icon = texture end
                 end
                 local professionService = trainerIsProfession
-                    or IsProfessionService(i)
+                    or IsProfessionService(i, professionCost)
                     or category == "profession"
                 local isWeaponSkill = ns.IsHardcodedWeaponSkill
                     and (ns.IsHardcodedWeaponSkill(name) or ns.IsHardcodedWeaponSkill(label))
                 if not isWeaponSkill
                     and (not professionService or (ns.db and ns.db.scanProfessionTrainers)) then
                     local savedEntry, isNew, wasChanged = RecordAbility(
-                        store[flavor], classToken, level, label, icon, spellID, professionService)
+                        store[flavor], classToken, level, label, icon, spellID, professionService, serviceCost)
                     if isNew then added = added + 1 end
                     changed = changed or wasChanged
                     if status == "used" then MarkLearned(savedEntry, level) end
@@ -302,6 +294,9 @@ local function ScanTrainer()
         end
     end
     if changed and ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
+    if GnomeLevelUpDB.trainerRescanRequired then
+        GnomeLevelUpDB.trainerRescanRequired = false
+    end
     if ns.SnapshotSpellBook then ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook()) end
     if added > 0 then
         print(string.format("|cff3fe0ffGnomeLevelUp|r: saved %d new trainer %s from %s.",

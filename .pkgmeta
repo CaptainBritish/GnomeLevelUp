@@ -1,0 +1,7 @@
+package-as: GnomeLevelUp
+
+enable-nolib-creation: no
+
+ignore:
+  - .github
+  - .git

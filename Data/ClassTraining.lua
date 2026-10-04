@@ -132,6 +132,7 @@ function ns.GetTrainerCatalogIndex()
                                 level = level,
                                 name = name,
                                 icon = type(entry) == "table" and entry.icon or nil,
+                                cost = type(entry) == "table" and entry.cost or nil,
                                 id = id,
                                 key = key,
                             }
@@ -144,6 +145,9 @@ function ns.GetTrainerCatalogIndex()
                             end
                             if not existing.icon and type(entry) == "table" then
                                 existing.icon = entry.icon
+                            end
+                            if existing.cost == nil and type(entry) == "table" then
+                                existing.cost = entry.cost
                             end
                             if id and existing.level ~= level then
                                 existing.level = math.min(existing.level, level)
@@ -180,11 +184,15 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     local unlearnedAbilities = {}
     for _, catalogEntry in ipairs(catalog) do
         local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level)
-        if catalogEntry.level <= currentLevel and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
+        local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
+        local levelMatches = not onlyCurrentLevel or catalogEntry.level == currentLevel
+        if levelMatches and catalogEntry.level <= currentLevel
+            and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
             unlearnedAbilities[#unlearnedAbilities + 1] = {
                 name = catalogEntry.name,
                 icon = catalogEntry.icon,
                 id = catalogEntry.id,
+                cost = catalogEntry.cost,
             }
         end
     end
