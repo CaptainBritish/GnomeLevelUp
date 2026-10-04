@@ -1,5 +1,5 @@
 package-as: GnomeLevelUp
-
+manual-changelog: CHANGELOG.md
 enable-nolib-creation: no
 
 ignore:
