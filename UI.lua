@@ -31,8 +31,12 @@ frame:SetClampedToScreen(true)
 frame:EnableMouse(true)
 frame:SetMovable(true)
 frame:RegisterForDrag("LeftButton")
-frame:SetScript("OnDragStart", frame.StartMoving)
+frame:SetScript("OnDragStart", function(self)
+    if ns.db and ns.db.lockFramePosition then return end
+    self:StartMoving()
+end)
 frame:SetScript("OnDragStop", function(self)
+    if ns.db and ns.db.lockFramePosition then return end
     self:StopMovingOrSizing()
     if not ns.db then return end
     local point, _, relativePoint, x, y = self:GetPoint(1)
@@ -43,6 +47,11 @@ frame:SetScript("OnDragStop", function(self)
             x = x,
             y = y,
         }
+    end
+end)
+frame:SetScript("OnMouseUp", function(self, button)
+    if button == "RightButton" and ns.db and ns.db.rightClickClose then
+        ns.CloseLevelUp()
     end
 end)
 ns.levelUpFrame = frame
@@ -65,6 +74,10 @@ function ns.ApplyFrameStrata(strata)
     if not ok then
         frame:SetFrameStrata("HIGH")
     end
+end
+
+function ns.ApplyFrameLock(locked)
+    frame:SetMovable(locked ~= true)
 end
 
 function ns.PositionFrame(f)
@@ -126,6 +139,7 @@ content:SetAllPoints(frame)
 
     -- Store every text layer so a font change updates the whole panel.
 content.fontElements = {}
+content.textLayers = {}
 local function RegisterFontElement(fs, sizeOverride, flagsOverride)
     local _, size, flags = fs:GetFont()
     content.fontElements[#content.fontElements + 1] = {
@@ -155,10 +169,22 @@ local function NewText(parent, template, radius)
         local glow = parent:CreateFontString(nil, "ARTWORK", template)
         glow:SetPoint("TOPLEFT", main, "TOPLEFT", dir[1] * radius, dir[2] * radius)
         glow:SetPoint("TOPRIGHT", main, "TOPRIGHT", dir[1] * radius, dir[2] * radius)
-        glow:SetAlpha(GLOW_ALPHA)
+        glow:SetAlpha(ns.db and ns.db.showTextShadow == false and 0 or GLOW_ALPHA)
         main.glows[i] = glow
     end
+    content.textLayers[#content.textLayers + 1] = main
     return main
+end
+
+function ns.ApplyTextShadow(enabled)
+    local alpha = enabled == false and 0 or GLOW_ALPHA
+    for _, text in ipairs(content.textLayers) do
+        for _, glow in ipairs(text.glows or {}) do glow:SetAlpha(alpha) end
+    end
+end
+
+local function CurrentShadowAlpha()
+    return ns.db and ns.db.showTextShadow == false and 0 or GLOW_ALPHA
 end
 
     -- Apply the same property to the main text and its glow copies.
@@ -390,7 +416,7 @@ local function EaseInQuad(p) return p * p end
 local function SetLineAlpha(fs, alpha)
     fs:SetAlpha(alpha)
     for _, glow in ipairs(fs.glows) do
-        glow:SetAlpha(alpha * GLOW_ALPHA)
+        glow:SetAlpha(alpha * CurrentShadowAlpha())
     end
 end
 

@@ -13,6 +13,7 @@ local defaults = {
     soundChoice = "LEVELUP",  -- key into ns.SOUND_CHOICES
     soundChannel = "Master",  -- "Master" | "SFX" | "Music" | "Ambience" | "Dialog"
     customSoundFile = nil,    -- e.g. "Interface\\AddOns\\GnomeLevelUp\\Sounds\\MyJingle.ogg"
+    customSoundChoice = nil,
     forceFlavor = "auto", -- "auto" | "retail" | "forever"
     autoScanTrainers = true,
     scanProfessionTrainers = false,
@@ -21,6 +22,9 @@ local defaults = {
     showOnlyCurrentLevelSkills = false,
     showLevelTime = false,
     hideBlizzardLevelUp = true,
+    showTextShadow = true,
+    rightClickClose = false,
+    lockFramePosition = false,
     bgOpacity = 0.70,           -- background darkness at its peak (0-1)
     animSpeedMultiplier = 1.0,  -- higher = faster animations
     reducedMotion = false,       -- skip entrance/exit movement and fades
@@ -113,11 +117,11 @@ end
 function ns.ResetOptionsToDefaults()
     -- Restore the settings page to the default values.
     for _, key in ipairs({
-        "playSound", "soundChoice", "soundChannel", "customSoundFile",
+        "playSound", "soundChoice", "soundChannel", "customSoundFile", "customSoundChoice",
         "enabled", "duration", "scale", "autoScanTrainers", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showLevelTime", "hideBlizzardLevelUp",
         "bgOpacity", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "customFontPath",
         "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
-        "framePosition", "minimapButtonShown", "minimapAngle", "portraitMode", "debugEnabled",
+        "framePosition", "lockFramePosition", "rightClickClose", "showTextShadow", "minimapButtonShown", "minimapAngle", "portraitMode", "debugEnabled",
     }) do
         ns.db[key] = CopySetting(defaults[key])
     end
@@ -126,6 +130,8 @@ function ns.ResetOptionsToDefaults()
     ns.ApplyFont(ns.db.customFontPath)
     ns.ApplyColors()
     ns.ApplyFrameStrata(ns.db.frameStrata)
+    if ns.ApplyFrameLock then ns.ApplyFrameLock(ns.db.lockFramePosition) end
+    if ns.ApplyTextShadow then ns.ApplyTextShadow(ns.db.showTextShadow) end
     ns.SuppressBlizzardBanner()
     ns.SetMinimapButtonShown(ns.db.minimapButtonShown)
     ns.RefreshClassIcon()
@@ -141,8 +147,8 @@ ns.SOUND_CHOICES = {
     { value = "READY",   label = "Ready Check",         id = (SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960 },
     { value = "AUCTION", label = "Auction Window Open", id = (SOUNDKIT and SOUNDKIT.AUCTION_WINDOW_OPEN) or 5274 },
     { value = "ALARM",   label = "Alarm Clock",         id = (SOUNDKIT and SOUNDKIT.ALARM_CLOCK_WARNING_3) or 18871 },
+    { value = "CUSTOM",  label = "Custom sound" },
 }
-
 -- Sound channels that the player can choose from.
 ns.SOUND_CHANNELS = {
     { value = "Master",   label = "Master" },
@@ -191,7 +197,8 @@ function ns.PlayLevelUpSound(force)
         local wanted = db.soundChoice or "LEVELUP"
         for _, choice in ipairs(ns.SOUND_CHOICES) do
             if choice.value == wanted then
-                PlaySound(choice.id, channel)
+                if choice.id then PlaySound(choice.id, channel)
+                elseif choice.path then PlaySoundFile(choice.path, channel) end
                 return
             end
         end
@@ -261,6 +268,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
             if ns.ApplyFrameStrata then
                 ns.ApplyFrameStrata(ns.db.frameStrata)
             end
+            if ns.ApplyFrameLock then ns.ApplyFrameLock(ns.db.lockFramePosition) end
+            if ns.ApplyTextShadow then ns.ApplyTextShadow(ns.db.showTextShadow) end
         end
     elseif event == "PLAYER_LOGIN" then
         EnsureDatabase()

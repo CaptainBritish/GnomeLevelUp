@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5
+
+* Added optional LibSharedMedia support for fonts and sounds.
+* Added a toggle to hide the level-up panel's text glow.
+* Added an option to close the level-up panel with a right-click.
+* Improved custom sound registration and menu handling.
+* Added a temporary controller-mode options workaround for WoW: Forever's gamepad UI.
+
 ## 1.2
 
 * Added optional trainer skill costs with gold, silver, and copper icons.
@@ -20,4 +28,3 @@
 * Improved trainer-service parsing, caching and reset behavior.
 * Added hardcoded Forever weapon skills
 * Improved Blizzard's level-up popup suppression and anchoring.
-

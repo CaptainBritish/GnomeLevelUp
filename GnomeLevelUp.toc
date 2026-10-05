@@ -2,12 +2,14 @@
 ## Title: GnomeLevelUp
 ## Notes: A gnometastic level-up screen showing stat gains and unlearned trainer abilities.
 ## Author: Lessa - Argent Dawn EU
-## Version: 1.2
+## Version: 1.2.5
 ## SavedVariables: GnomeLevelUpDB
 ## X-Website: https://welcometozombo.com/
+## IconTexture: Interface\AddOns\GnomeLevelUp\Textures\minimap-button.tga
 
 # Update Interface using /run print((select(4, GetBuildInfo()))).
 
+Sounds\SoundList.lua
 Data\ClassTraining.lua
 Data\WeaponSkills.lua
 SpellBookCompat.lua

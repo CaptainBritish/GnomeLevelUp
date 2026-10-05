@@ -70,38 +70,24 @@ Slash commands (`/glu`):
 - `/glu options` (or `/glu config`) — jumps to the settings page, which
   also lives under **Options > AddOns > GnomeLevelUp**. 
 
-  Press the white **X** in the top-right corner to close the level-up screen.
-  Reduced motion skips the entrance, icon, and fade animations.
-
-Trainer options include displaying each skill's training cost and limiting the
-list to skills that unlock at the current level. Both options are disabled by
-default. Costs are read from the trainer scan and stored separately from the
-profession-service check.
-
-The settings also include an optional level-time line. When enabled, it uses
-the client's played-time data to show how long the player spent on the level
-that just ended.
-The addon requests this silently at login or when the option is enabled, then
-tracks elapsed time locally. It does not repeatedly print played time to chat.
-
-On first boot, GnomeLevelUp prints a short setup reminder in chat. The
-**Print instructions to chat** option controls that message and is enabled by
-default; it is only shown once per character profile.
-
 
 ## Customizing the sound
-
-By default it plays Blizzard's built-in level-up sound effect. To use
-your own instead, drop an `.ogg` file in the addon folder (e.g. under a
-`Sounds\` subfolder) and set it in-game:
+There are three ways to register a custom sound:
+First drop an ".ogg: file in the addon's /sounds/ folder then do one of the following:
 ```
-/run GnomeLevelUpDB.customSoundFile = "Interface\\AddOns\\GnomeLevelUp\\Sounds\\yourfile.ogg"
+Open Soundlist.lua in /sounds/ and copy/paste the example Wildstar sound effect, replace
+the details with your own.
+
+```
+/run GnomeLevelUpDB.customSoundFile = "Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg"
+```
+Or select Custom Sound in the options menu and add your sound's path.
 ```
 
 ## Known limitations
 
 - Retail support is included but has not been tested as extensively as WoW: Forever.
-- Trainer abilities are only known after visiting the relevant class trainer once.
+- Trainer abilities are only known after visiting the relevant class trainer once. 
 - Forever weapon skills use a built-in list because they are not read from the trainer window; that list may need updates if Forever changes its class or weapon rules.
 - Blizzard's popup layout and protected-value rules can change with client updates and may require compatibility fixes.
 - English labels and spell names are currently the most reliable for matching cached trainer data.

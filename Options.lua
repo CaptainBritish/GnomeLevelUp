@@ -6,11 +6,50 @@ local LEFT = 16
 local CONTROL_X = 250
 
 local FONT_CHOICES = {
-    { value = "Fonts\\FRIZQT__.TTF",  label = "Friz Quadrata (default)" },
-    { value = "Fonts\\ARIALN.TTF",    label = "Arial Narrow" },
-    { value = "Fonts\\SKURRI.TTF",    label = "Skurri" },
-    { value = "Fonts\\MORPHEUS.TTF",  label = "Morpheus" },
+    { value = "Fonts\\FRIZQT__.TTF",  label = "Friz Quadrata (default)", previewFont = "Fonts\\FRIZQT__.TTF" },
+    { value = "Fonts\\ARIALN.TTF",    label = "Arial Narrow", previewFont = "Fonts\\ARIALN.TTF" },
+    { value = "Fonts\\SKURRI.TTF",    label = "Skurri", previewFont = "Fonts\\SKURRI.TTF" },
+    { value = "Fonts\\MORPHEUS.TTF",  label = "Morpheus", previewFont = "Fonts\\MORPHEUS.TTF" },
 }
+
+-- LibSharedMedia is optional; use it when another addon has registered fonts.
+local sharedMedia
+local function AddSharedMediaFonts()
+    if not LibStub then return end
+    local ok, media = pcall(LibStub, "LibSharedMedia-3.0", true)
+    if not ok or not media or not media.List or not media.Fetch then return end
+    sharedMedia = media
+
+    for _, name in ipairs(media:List("font") or {}) do
+        local path = media:Fetch("font", name)
+        if path and path ~= "" then
+            FONT_CHOICES[#FONT_CHOICES + 1] = {
+                value = path,
+                label = name .. " (LibSharedMedia)",
+                previewFont = path,
+            }
+        end
+    end
+end
+AddSharedMediaFonts()
+
+-- Treat LibSharedMedia sounds like named custom sounds in the sound dropdown.
+local function AddSharedMediaSounds()
+    if not sharedMedia then return end
+    ns.CUSTOM_SOUND_CHOICES = ns.CUSTOM_SOUND_CHOICES or {}
+    for _, name in ipairs(sharedMedia:List("sound") or {}) do
+        local path = sharedMedia:Fetch("sound", name)
+        if path and path ~= "" then
+            local choice = {
+                value = "LSM_SOUND_" .. name,
+                label = name .. " (LibSharedMedia)",
+                path = path,
+            }
+            ns.SOUND_CHOICES[#ns.SOUND_CHOICES + 1] = choice
+        end
+    end
+end
+AddSharedMediaSounds()
 
 -- The panel is registered with either the modern or legacy settings API below.
 local panel = CreateFrame("Frame", "GnomeLevelUpOptionsPanel", UIParent)
@@ -98,7 +137,7 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect)
     UIDropDownMenu_SetWidth(dd, 190)
 
     local function GetChoiceLabel(value)
-        for _, c in ipairs(choices) do
+        for i, c in ipairs(choices) do
             if c.value == value then return c.label end
         end
         return choices[1].label
@@ -106,10 +145,15 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect)
 
     UIDropDownMenu_Initialize(dd, function(_, level)
         if not ns.db then return end
-        for _, c in ipairs(choices) do
+        for i, c in ipairs(choices) do
             local menuItem = UIDropDownMenu_CreateInfo()
             menuItem.text = c.label
             menuItem.checked = (getCurrent() == c.value)
+            if c.previewFont then
+                c.fontObject = c.fontObject or CreateFont("GnomeLevelUpFontChoice" .. dropdownCount .. "_" .. i)
+                c.fontObject:SetFont(c.previewFont, 13, "")
+                menuItem.fontObject = c.fontObject
+            end
             menuItem.func = function()
                 onSelect(c.value)
                 UIDropDownMenu_SetText(dd, c.label)
@@ -192,6 +236,13 @@ AddDropdown("Frame strata", ns.STRATA_CHOICES,
         ns.ApplyFrameStrata(value)
     end)
 
+AddCheckbox("Lock panel location",
+    function() return ns.db.lockFramePosition end,
+    function(v)
+        ns.db.lockFramePosition = v
+        if ns.ApplyFrameLock then ns.ApplyFrameLock(v) end
+    end)
+
 AddSectionHeader("Animation")
 
 AddStepper("Animation speed",
@@ -244,6 +295,10 @@ AddCheckbox("Hide Blizzard level-up toast",
             ns.RestoreBlizzardBanner()
         end
     end)
+
+AddCheckbox("Right-click to close the level-up popup",
+    function() return ns.db.rightClickClose end,
+    function(v) ns.db.rightClickClose = v end)
 
 AddCheckbox("Show time played this level",
     function() return ns.db.showLevelTime end,
@@ -335,13 +390,45 @@ AddCheckbox("Play a sound on level up",
     function(v) ns.db.playSound = v end)
 
 local refreshCustomSound -- assigned below
+local refreshSoundChoice
+local refreshCustomSoundChoice
+local customSoundDropdown
 
-AddDropdown("Sound", ns.SOUND_CHOICES,
+local function GetCustomSoundChoices()
+    local choices = {}
+    for key, choice in pairs(ns.CUSTOM_SOUND_CHOICES or {}) do
+        if type(choice) == "table" and choice.path then
+            choices[#choices + 1] = {
+                value = choice.value or key,
+                label = choice.label or choice.value or key,
+                path = choice.path,
+            }
+        end
+    end
+    table.sort(choices, function(a, b) return a.label < b.label end)
+    return choices
+end
+
+local customSoundChoices = GetCustomSoundChoices()
+if #customSoundChoices == 0 then
+    customSoundChoices = { { value = "", label = "No registered custom sounds" } }
+end
+
+refreshSoundChoice = AddDropdown("Sound", ns.SOUND_CHOICES,
     function() return ns.db.soundChoice end,
     function(value)
         ns.db.soundChoice = value
-        ns.db.customSoundFile = nil -- picking a built-in sound replaces any custom file
+        local selected
+        for _, choice in ipairs(ns.SOUND_CHOICES) do
+            if choice.value == value then selected = choice break end
+        end
+        if selected and selected.path then
+            ns.db.customSoundFile = selected.path
+        elseif value ~= "CUSTOM" then
+            ns.db.customSoundFile = nil -- picking a built-in sound replaces any custom file
+        end
         if refreshCustomSound then refreshCustomSound() end
+        if refreshCustomSoundChoice then refreshCustomSoundChoice() end
         ns.PlayLevelUpSound(true)
     end)
 
@@ -351,7 +438,27 @@ AddDropdown("Sound channel", ns.SOUND_CHANNELS,
 
 do
     local rowY = y
-    AddLabel("Custom sound file", rowY)
+    refreshCustomSoundChoice = AddDropdown("Registered custom sound", customSoundChoices,
+        function() return ns.db.customSoundChoice or "" end,
+        function(value)
+            if value == "" then return end
+            for _, choice in ipairs(customSoundChoices) do
+                if choice.value == value then
+                    ns.db.customSoundChoice = value
+                    ns.db.customSoundFile = choice.path
+                    ns.db.soundChoice = "CUSTOM"
+                    if refreshSoundChoice then refreshSoundChoice() end
+                    if refreshCustomSound then refreshCustomSound() end
+                    ns.PlayLevelUpSound(true)
+                    break
+                end
+            end
+        end)
+
+    customSoundDropdown = _G["GnomeLevelUpDropdown" .. dropdownCount]
+
+    y = y - 2
+    rowY = y
     local edit
     do
         local ok, made = pcall(CreateFrame, "EditBox", nil, body, "InputBoxTemplate")
@@ -373,18 +480,37 @@ do
     local function commit(self)
         local text = self:GetText():match("^%s*(.-)%s*$")
         ns.db.customSoundFile = (text ~= "") and text or nil
+        ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
+        if refreshSoundChoice then refreshSoundChoice() end
+        if refreshCustomSound then refreshCustomSound() end
         self:ClearFocus()
     end
     edit:SetScript("OnEnterPressed", commit)
     edit:SetScript("OnEditFocusLost", function(self)
         local text = self:GetText():match("^%s*(.-)%s*$")
         ns.db.customSoundFile = (text ~= "") and text or nil
+        ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
+        if refreshSoundChoice then refreshSoundChoice() end
+        if refreshCustomSound then refreshCustomSound() end
     end)
     edit:SetScript("OnEscapePressed", function(self)
         self:SetText(ns.db.customSoundFile or "")
         self:ClearFocus()
     end)
-    refreshCustomSound = function() edit:SetText(ns.db.customSoundFile or "") end
+    local customSoundLabel = AddLabel("Custom sound file", rowY)
+    refreshCustomSound = function()
+        edit:SetText(ns.db.customSoundFile or "")
+        local enabled = ns.db.soundChoice == "CUSTOM"
+        if enabled then
+            edit:Enable()
+            customSoundLabel:SetTextColor(1, 1, 1)
+            UIDropDownMenu_EnableDropDown(customSoundDropdown)
+        else
+            edit:Disable()
+            customSoundLabel:SetTextColor(0.5, 0.5, 0.5)
+            UIDropDownMenu_DisableDropDown(customSoundDropdown)
+        end
+    end
     refreshers[#refreshers + 1] = refreshCustomSound
     y = y - 28
 
@@ -402,6 +528,13 @@ do
 end
 
 AddSectionHeader("Text Colors")
+
+AddCheckbox("Show text shadows",
+    function() return ns.db.showTextShadow end,
+    function(v)
+        ns.db.showTextShadow = v
+        if ns.ApplyTextShadow then ns.ApplyTextShadow(v) end
+    end)
 
 local function OpenColorPicker(color, onChange)
     local r, g, b = color[1], color[2], color[3]
@@ -549,6 +682,13 @@ end
 
 function ns.ToggleOptions()
     if ns.EnsureDatabase then ns.EnsureDatabase() end
+    -- Forever's native gamepad settings teardown can taint Blizzard's protected
+    -- binding cleanup. Keep this addon panel out of that transition.
+    if GetCVar and GetCVar("InputDeviceInterfaceStyle") == "1" then
+        -- Let the chat edit box finish releasing gamepad focus first.
+        C_Timer.After(0, ToggleStandalone)
+        return
+    end
     if registeredWith == "settings" and Settings.OpenToCategory then
         local category = ns.settingsCategory
         local id = category.GetID and category:GetID() or category.ID
