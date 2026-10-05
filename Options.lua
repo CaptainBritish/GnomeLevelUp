@@ -25,7 +25,7 @@ local function AddSharedMediaFonts()
         if path and path ~= "" then
             FONT_CHOICES[#FONT_CHOICES + 1] = {
                 value = path,
-                label = name .. " (LibSharedMedia)",
+                label = name,
                 previewFont = path,
             }
         end
@@ -42,7 +42,7 @@ local function AddSharedMediaSounds()
         if path and path ~= "" then
             local choice = {
                 value = "LSM_SOUND_" .. name,
-                label = name .. " (LibSharedMedia)",
+                label = name,
                 path = path,
             }
             ns.SOUND_CHOICES[#ns.SOUND_CHOICES + 1] = choice

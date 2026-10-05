@@ -72,17 +72,14 @@ Slash commands (`/glu`):
 
 
 ## Customizing the sound
-There are three ways to register a custom sound:
-First drop an ".ogg: file in the addon's /sounds/ folder then do one of the following:
-```
-Open Soundlist.lua in /sounds/ and copy/paste the example Wildstar sound effect, replace
-the details with your own.
 
+By default it plays Blizzard's built-in level-up sound effect. To use
+your own instead, drop an `.ogg` file in the addon folder (e.g. under a
+`Sounds\` subfolder) and either set it in the options menu or using this command:
 ```
 /run GnomeLevelUpDB.customSoundFile = "Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg"
 ```
-Or select Custom Sound in the options menu and add your sound's path.
-```
+An example file is included in /Sounds/ to show you how it works.
 
 ## Known limitations
 

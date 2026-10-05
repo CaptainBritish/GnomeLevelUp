@@ -1,89 +1,72 @@
 local ADDON_NAME, ns = ...
 
--- Keep the button position in saved settings so it stays where the player leaves it.
-local button
-local dragging = false
+local BUTTON_NAME = "GnomeLevelUp"
+local ICON_PATH = "Interface\\AddOns\\GnomeLevelUp\\Textures\\minimap-button.tga"
+local iconButton
 
-local function PositionButton()
-    if not button or not Minimap then return end
-    local angle = math.rad((ns.db and ns.db.minimapAngle) or 225)
-    local radius = Minimap:GetWidth() / 2 + 6
-    button:ClearAllPoints()
-    button:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * radius, math.sin(angle) * radius)
+local function GetButtonDatabase()
+    if ns.EnsureDatabase then ns.EnsureDatabase() end
+
+    -- LibDBIcon stores the minimap position as an angle in minimapPos.
+    if ns.db.minimapPos == nil then
+        ns.db.minimapPos = ns.db.minimapAngle or 225
+    end
+    ns.db.hide = ns.db.minimapButtonShown == false
+    return ns.db
 end
 
-local function UpdateAngle()
-    -- Save the button's angle around the minimap.
-    if not button or not Minimap then return end
-    local x, y = GetCursorPosition()
-    local scale = Minimap:GetEffectiveScale()
-    local centerX, centerY = Minimap:GetCenter()
-    x, y = x / scale, y / scale
-    ns.db.minimapAngle = math.deg(math.atan2(y - centerY, x - centerX))
-    PositionButton()
+local function OnClick(_, mouseButton)
+    if mouseButton == "RightButton" then
+        if ns.SetAddonEnabled then
+            ns.SetAddonEnabled(not ns.db.enabled)
+        else
+            ns.db.enabled = not ns.db.enabled
+        end
+        print("|cff3fe0ffGnomeLevelUp|r: addon " .. (ns.db.enabled and "ON" or "OFF"))
+    elseif ns.ToggleOptions then
+        ns.ToggleOptions()
+    end
+end
+
+local function OnTooltipShow(tooltip)
+    tooltip:AddLine("GnomeLevelUp")
+    tooltip:AddLine("Click to open options", 1, 1, 1)
+    tooltip:AddLine("Right-click to toggle the addon", 1, 1, 1)
+    tooltip:AddLine("Drag to move", 1, 1, 1)
 end
 
 function ns.SetMinimapButtonShown(shown)
-    if not button then return end
-    if shown == false then
-        button:Hide()
+    if not iconButton then return end
+
+    ns.db.minimapButtonShown = shown ~= false
+    ns.db.hide = not ns.db.minimapButtonShown
+    local dbIcon = LibStub("LibDBIcon-1.0", true)
+    if not dbIcon then return end
+
+    if ns.db.hide then
+        dbIcon:Hide(BUTTON_NAME)
     else
-        button:Show()
-        PositionButton()
+        dbIcon:Show(BUTTON_NAME)
     end
 end
 
 local function CreateMinimapButton()
-    if button or not Minimap then return end
-    if ns.EnsureDatabase then ns.EnsureDatabase() end
+    if iconButton or not Minimap then return end
 
-    button = CreateFrame("Button", "GnomeLevelUpMinimapButton", Minimap)
-    button:SetSize(32, 32)
-    button:SetFrameStrata("MEDIUM")
-    button:SetFrameLevel(8)
-    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    highlight:SetBlendMode("ADD")
-    button:SetHighlightTexture(highlight)
-    button:SetNormalTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\minimap-button.tga")
-    button:RegisterForDrag("LeftButton")
-    button:RegisterForClicks("AnyUp")
+    local broker = LibStub("LibDataBroker-1.1")
+    local dbIcon = LibStub("LibDBIcon-1.0")
+    local db = GetButtonDatabase()
+    local dataObject = broker:NewDataObject(BUTTON_NAME, {
+        type = "launcher",
+        icon = ICON_PATH,
+        OnClick = OnClick,
+        OnTooltipShow = OnTooltipShow,
+    })
 
-    button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "RightButton" then
-            if ns.SetAddonEnabled then
-                ns.SetAddonEnabled(not ns.db.enabled)
-            else
-                ns.db.enabled = not ns.db.enabled
-            end
-            print("|cff3fe0ffGnomeLevelUp|r: addon " .. (ns.db.enabled and "ON" or "OFF"))
-        elseif ns.ToggleOptions then
-            ns.ToggleOptions()
-        end
-    end)
-    button:SetScript("OnDragStart", function()
-        dragging = true
-    end)
-    button:SetScript("OnDragStop", function()
-        dragging = false
-        UpdateAngle()
-    end)
-    button:SetScript("OnUpdate", function()
-        if dragging then UpdateAngle() end
-    end)
-    button:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText("GnomeLevelUp")
-        GameTooltip:AddLine("Click to open options", 1, 1, 1)
-        GameTooltip:AddLine("Right-click to toggle the addon", 1, 1, 1)
-        GameTooltip:AddLine("Drag to move", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-
+    db.showInCompartment = true
+    dbIcon:Register(BUTTON_NAME, dataObject, db, ICON_PATH)
+    iconButton = dbIcon:GetMinimapButton(BUTTON_NAME)
+    ns.minimapButton = iconButton
     ns.SetMinimapButtonShown(ns.db.minimapButtonShown ~= false)
 end
 

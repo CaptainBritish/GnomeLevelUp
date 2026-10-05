@@ -223,7 +223,7 @@ function ns.PreviewLevelUp()
     -- A preview does not fire PLAYER_LEVEL_UP, so queue the popup cleanup below.
     local currentLevel = UnitLevel("player")
 
-    local trainerAbilities = { { id = 0, name = "Example Ability" } }
+    local trainerAbilities = { { id = 11362, name = "Teleport to Gnomeregan" } }
     for _, trainingAbility in ipairs(ns.GetAllTrainableUpToLevel(currentLevel)) do
         trainerAbilities[#trainerAbilities + 1] = trainingAbility
     end
