@@ -47,9 +47,22 @@ function ns.TrainingEntryKey(entry, level)
     return (ns.NormalizeTrainingName(GetTrainingName(entry)) or "") .. "@" .. tostring(tonumber(level) or level)
 end
 
+local knownTrainingLookupSource
+local knownTrainingLookup
+
+function ns.InvalidateKnownTrainingLookup()
+    knownTrainingLookupSource = nil
+    knownTrainingLookup = nil
+end
+
 -- Build a quick lookup of spells already known by the player.
 function ns.BuildKnownTrainingLookup(spellSnapshot)
-    local known = { spells = spellSnapshot or {}, names = {}, ranks = {} }
+    spellSnapshot = spellSnapshot or {}
+    if knownTrainingLookupSource == spellSnapshot and knownTrainingLookup then
+        return knownTrainingLookup
+    end
+
+    local known = { spells = spellSnapshot, names = {}, ranks = {} }
     for id, name in pairs(known.spells) do
         local normalized = ns.NormalizeTrainingName(name)
         if normalized then
@@ -63,6 +76,8 @@ function ns.BuildKnownTrainingLookup(spellSnapshot)
             end
         end
     end
+    knownTrainingLookupSource = spellSnapshot
+    knownTrainingLookup = known
     return known
 end
 
@@ -179,12 +194,12 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     if #catalog == 0 then return {} end
     spellSnapshot = spellSnapshot or (ns.SnapshotSpellBook and ns.SnapshotSpellBook()) or {}
     local known = ns.BuildKnownTrainingLookup(spellSnapshot)
-    if ns.MarkKnownTrainerSkills then ns.MarkKnownTrainerSkills(spellSnapshot, known) end
+    local learnedStore = ns.GetLearnedTrainingStore and ns.GetLearnedTrainingStore()
+    local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
 
     local unlearnedAbilities = {}
     for _, catalogEntry in ipairs(catalog) do
-        local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level)
-        local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
+        local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level, learnedStore)
         local levelMatches = not onlyCurrentLevel or catalogEntry.level == currentLevel
         if levelMatches and catalogEntry.level <= currentLevel
             and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then

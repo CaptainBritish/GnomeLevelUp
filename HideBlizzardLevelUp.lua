@@ -16,15 +16,19 @@ local hookedFrames = {}
 local savedAlpha = {}
 local suppressionToken = 0
 local suppressionActive = false
-local soundToken = 0
-local BLIZZARD_SOUND_MUTE_DURATION = 60
--- These are the level-up files used by the supported clients. Keep the list
--- narrow so unrelated spell, creature, and interface sounds stay untouched.
-local levelUpSoundFiles = {
-    "Sound\\Spells\\LevelUp.ogg",
-    "Sound\\Interface\\LevelUp.ogg",
-    "Sound\\Doodad\\GO_LevelUp_Custom_6696263.ogg",
-}
+local suppressionQueueToken = 0
+
+-- Blizzard's native level-up files. GLU mutes these while the addon is
+-- active; its own sound uses a separate FileDataID below.
+local GLU_MUTED_SOUND_IDS = { 569593, 567431 }
+
+function ns.SetGnomeLevelUpSoundMuted(muted)
+    local soundFunction = muted and MuteSoundFile or UnmuteSoundFile
+    if type(soundFunction) ~= "function" then return end
+    for _, soundID in ipairs(GLU_MUTED_SOUND_IDS) do
+        pcall(soundFunction, soundID)
+    end
+end
 
 local function SetFrameAlpha(frame, alpha)
     if frame and type(frame.SetAlpha) == "function" then
@@ -90,21 +94,6 @@ local function RestoreSuppressedFrames()
     suppressionActive = false
 end
 
-function ns.WithLevelUpSoundsUnmuted(callback)
-    if type(callback) ~= "function" then return end
-    if type(UnmuteSoundFile) == "function" then
-        for _, soundFile in ipairs(levelUpSoundFiles) do
-            pcall(UnmuteSoundFile, soundFile)
-        end
-    end
-    pcall(callback)
-    if type(MuteSoundFile) == "function" then
-        for _, soundFile in ipairs(levelUpSoundFiles) do
-            pcall(MuteSoundFile, soundFile)
-        end
-    end
-end
-
 function ns.HideBlizzardBannerNow()
     if ns.IsAddonEnabled and not ns.IsAddonEnabled() then return end
     if ns.db and ns.db.hideBlizzardLevelUp == false then return end
@@ -123,36 +112,9 @@ function ns.HideBlizzardBannerNow()
     end
 end
 
-function ns.RestoreBlizzardLevelUpSound()
-    soundToken = soundToken + 1
-    ns.blizzardLevelUpSoundMutedUntil = 0
-    if type(UnmuteSoundFile) == "function" then
-        for _, soundFile in ipairs(levelUpSoundFiles) do
-            pcall(UnmuteSoundFile, soundFile)
-        end
-    end
-end
-
-function ns.SuppressBlizzardLevelUpSound()
-    if type(MuteSoundFile) ~= "function" then return end
-    if ns.db and ns.db.hideBlizzardLevelUp == false then return end
-    soundToken = soundToken + 1
-    local token = soundToken
-    ns.blizzardLevelUpSoundMutedUntil = (GetTime and GetTime() or 0) + BLIZZARD_SOUND_MUTE_DURATION
-    for _, soundFile in ipairs(levelUpSoundFiles) do
-        pcall(MuteSoundFile, soundFile)
-    end
-    C_Timer.After(BLIZZARD_SOUND_MUTE_DURATION, function()
-        if token == soundToken and type(UnmuteSoundFile) == "function" then
-            for _, soundFile in ipairs(levelUpSoundFiles) do
-                pcall(UnmuteSoundFile, soundFile)
-            end
-        end
-    end)
-end
-
 function ns.RestoreBlizzardBanner()
     suppressionToken = suppressionToken + 1
+    suppressionQueueToken = suppressionQueueToken + 1
     RestoreSuppressedFrames()
 end
 
@@ -176,17 +138,28 @@ ns.RefreshBlizzardSuppression = ns.SuppressBlizzardBanner
 
 function ns.QueueBlizzardSuppression()
     if ns.db and ns.db.hideBlizzardLevelUp == false then return end
-    -- The toast container may be created lazily, so retry only direct globals.
-    for _, delay in ipairs({ 0, 0.15, 0.4, 0.8 }) do
-        C_Timer.After(delay, ns.SuppressBlizzardBanner)
+    -- The toast container may be created lazily. Retry in one cancellable
+    -- chain instead of scheduling several independent timers.
+    suppressionQueueToken = suppressionQueueToken + 1
+    local token = suppressionQueueToken
+    local retryDelays = { 0, 0.15, 0.4, 0.8 }
+    local function Retry(index)
+        if token ~= suppressionQueueToken then return end
+        if ns.db and ns.db.hideBlizzardLevelUp == false then return end
+        if index == 1 then
+            ns.SuppressBlizzardBanner()
+        else
+            ns.HideBlizzardBannerNow()
+        end
+        if retryDelays[index + 1] then
+            C_Timer.After(retryDelays[index + 1], function() Retry(index + 1) end)
+        end
     end
+    C_Timer.After(retryDelays[1], function() Retry(1) end)
 end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:SetScript("OnEvent", function()
     ns.HideBlizzardBannerNow()
-    if ns.db and ns.db.hideBlizzardLevelUp ~= false then
-        ns.SuppressBlizzardLevelUpSound()
-    end
 end)

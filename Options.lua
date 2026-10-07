@@ -1,5 +1,9 @@
 local ADDON_NAME, ns = ...
 
+-- Options are created while the addon files load, before ADDON_LOADED runs.
+-- Initialize the saved settings here so the first refresh has real values.
+if ns.EnsureDatabase then ns.EnsureDatabase() end
+
 -- Keep the settings page compact and aligned with Blizzard's panels.
 local PANEL_NAME = "GnomeLevelUp"
 local LEFT = 16
@@ -58,10 +62,73 @@ panel:Hide()
 
 -- Keep the character artwork as a subtle watermark behind the settings.
 local watermark = panel:CreateTexture(nil, "BACKGROUND")
-watermark:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\options-watermark")
-watermark:SetSize(176, 300)
 watermark:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, 18)
 watermark:SetAlpha(0.40)
+local testWatermarkPath
+
+-- Keep each artwork's original aspect ratio while using the same display height.
+local WATERMARK_DIMENSIONS = {
+    ["options-watermark"] = { width = 235, height = 400 },
+    ["options-watermark-h"] = { width = 287, height = 400 },
+    ["options-watermark-wv"] = { width = 254, height = 400 },
+}
+local WATERMARK_HEIGHT = 300
+
+local function GetWatermarkName(texturePath)
+    return texturePath and texturePath:match("([^\\/]+)$")
+end
+
+local function SizeWatermark(texturePath)
+    local dimensions = WATERMARK_DIMENSIONS[GetWatermarkName(texturePath)]
+        or WATERMARK_DIMENSIONS["options-watermark"]
+    watermark:SetSize(WATERMARK_HEIGHT * dimensions.width / dimensions.height, WATERMARK_HEIGHT)
+end
+
+local function GetSeasonalWatermark()
+    local today = date("*t")
+
+    if today.month == 10 then
+        if today.day == 31 then
+            return nil
+        end
+        return "Interface\\AddOns\\GnomeLevelUp\\Textures\\options-watermark-h"
+    elseif today.month == 12 then
+        return "Interface\\AddOns\\GnomeLevelUp\\Textures\\options-watermark-wv"
+    end
+
+    return "Interface\\AddOns\\GnomeLevelUp\\Textures\\options-watermark"
+end
+
+local function RefreshSeasonalWatermark()
+    local texturePath = testWatermarkPath or GetSeasonalWatermark()
+    if texturePath then
+        SizeWatermark(texturePath)
+        watermark:SetTexture(texturePath)
+        watermark:Show()
+    else
+        watermark:Hide()
+    end
+end
+
+-- This is intentionally exposed only for quiet local texture previews from
+-- the slash command; normal users continue to receive seasonal artwork.
+function ns.SetOptionsWatermarkTest(fileName)
+    if type(fileName) ~= "string" then return false end
+    fileName = fileName:match("^%s*(.-)%s*$")
+    if fileName == "" or fileName:lower() == "clear" then
+        testWatermarkPath = nil
+        RefreshSeasonalWatermark()
+        return true
+    end
+    if fileName:find("[\\/]") then return false end
+    fileName = fileName:gsub("%.[tT][gG][aA]$", "")
+    if fileName == "" or not fileName:match("^[%w_.%-]+$") then return false end
+    testWatermarkPath = "Interface\\AddOns\\GnomeLevelUp\\Textures\\" .. fileName
+    RefreshSeasonalWatermark()
+    return true
+end
+
+RefreshSeasonalWatermark()
 
 local body
 do
@@ -79,20 +146,123 @@ end
 
 local refreshers = {}
 local y = -16
+local sections = {}
+local currentSection
+local finalBodyHeight
+
+-- Keep each section's original coordinates so collapsing one section can move
+-- everything below it without rebuilding the settings page.
+local function TrackElement(element, x, rowY, debugOnly, debugRowY, debugRowHeight)
+    if not currentSection or not element then return end
+    currentSection.elements[#currentSection.elements + 1] = {
+        frame = element,
+        x = x,
+        y = rowY,
+        debugOnly = debugOnly == true,
+    }
+    if debugOnly then
+        currentSection.debugRows = currentSection.debugRows or {}
+        local key = debugRowY or rowY
+        local height = debugRowHeight or 32
+        currentSection.debugRows[key] = math.max(currentSection.debugRows[key] or 0, height)
+    end
+end
+
+local function TrackVisibilityElement(element)
+    if currentSection and element then
+        currentSection.visibilityElements = currentSection.visibilityElements or {}
+        currentSection.visibilityElements[#currentSection.visibilityElements + 1] = element
+    end
+end
+
+local function TrackDebugOnlyElement(element, rowY, rowHeight)
+    if not currentSection or not element then return end
+    currentSection.debugOnlyElements = currentSection.debugOnlyElements or {}
+    currentSection.debugOnlyElements[#currentSection.debugOnlyElements + 1] = element
+    currentSection.debugRows = currentSection.debugRows or {}
+    currentSection.debugRows[rowY] = math.max(currentSection.debugRows[rowY] or 0, rowHeight or 32)
+end
+
+local function ReflowSections()
+    local shift = 0
+    for _, section in ipairs(sections) do
+        local debugEnabled = not ns.IsDebugEnabled or ns.IsDebugEnabled()
+        local hiddenDebugRows = {}
+        local hiddenDebugHeight = 0
+        for rowY, rowHeight in pairs(section.debugRows or {}) do
+            if not debugEnabled then
+                hiddenDebugRows[rowY] = rowHeight
+                hiddenDebugHeight = hiddenDebugHeight + rowHeight
+            end
+        end
+        for _, item in ipairs(section.elements) do
+            local localShift = 0
+            if not debugEnabled then
+                for rowY, rowHeight in pairs(hiddenDebugRows) do
+                    if item.y < rowY then localShift = localShift + rowHeight end
+                end
+            end
+            item.frame:ClearAllPoints()
+            item.frame:SetPoint("TOPLEFT", body, "TOPLEFT", item.x, item.y + shift + localShift)
+            item.frame:SetShown(not section.collapsed and (not item.debugOnly or debugEnabled))
+        end
+        section.header:Show()
+        section.label:Show()
+        for _, element in ipairs(section.visibilityElements or {}) do
+            element:SetShown(not section.collapsed)
+        end
+        for _, element in ipairs(section.debugOnlyElements or {}) do
+            element:SetShown(not section.collapsed and debugEnabled)
+        end
+        if section.collapsed then
+            shift = shift + section.collapseShift
+        elseif hiddenDebugHeight > 0 then
+            shift = shift + hiddenDebugHeight
+        end
+    end
+    if finalBodyHeight then body:SetHeight(math.max(260, finalBodyHeight - shift)) end
+end
 
 -- Section headers share the same vertical rhythm as the controls beneath them.
-local function AddSectionHeader(text)
+local function AddSectionHeader(text, key)
+    if currentSection then currentSection.nextHeaderY = y - 6 end
     y = y - 6
+    local headerY = y
+    local section = {
+        key = key or text:lower():gsub("[^%w]+", "_"),
+        title = text,
+        headerY = headerY,
+        elements = {},
+        collapsed = ns.db and ns.db.collapsedSections and ns.db.collapsedSections[key or text:lower():gsub("[^%w]+", "_")] == true,
+    }
+    sections[#sections + 1] = section
+    currentSection = section
+
+    local header = CreateFrame("Button", nil, body)
+    header:SetSize(520, 26)
+    header:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT - 4, headerY + 4)
+    header:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight", "ADD")
+    section.header = header
+    TrackElement(header, LEFT - 4, headerY + 4)
+
     local fs = body:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    fs:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y)
-    fs:SetText(text)
+    fs:SetPoint("LEFT", header, "LEFT", 4, 0)
+    fs:SetText((section.collapsed and "[+] " or "[-] ") .. text)
+    section.label = fs
+    header:SetScript("OnClick", function()
+        section.collapsed = not section.collapsed
+        ns.db.collapsedSections[section.key] = section.collapsed or nil
+        fs:SetText((section.collapsed and "[+] " or "[-] ") .. text)
+        ReflowSections()
+    end)
     y = y - 30
 end
 
-local function AddLabel(text, rowY, x)
+local function AddLabel(text, rowY, x, debugOnly, debugRowY, debugRowHeight)
     local fs = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     fs:SetPoint("TOPLEFT", body, "TOPLEFT", x or LEFT, rowY - 5)
     fs:SetText(text)
+    TrackElement(fs, x or LEFT, rowY - 5, debugOnly, debugRowY, debugRowHeight)
     return fs
 end
 
@@ -102,7 +272,34 @@ local function AddButton(text, width, x, rowY, onClick)
     btn:SetText(text)
     btn:SetPoint("TOPLEFT", body, "TOPLEFT", x, rowY)
     btn:SetScript("OnClick", onClick)
+    TrackElement(btn, x, rowY)
     return btn
+end
+
+local function OpenColorPicker(color, onChange)
+    local r, g, b = color[1], color[2], color[3]
+    local function swatchFunc()
+        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+        onChange(nr, ng, nb)
+    end
+    local function cancelFunc()
+        onChange(r, g, b)
+    end
+    if ColorPickerFrame.SetupColorPickerAndShow then
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = r, g = g, b = b, hasOpacity = false,
+            swatchFunc = swatchFunc, cancelFunc = cancelFunc,
+        })
+    else
+        ColorPickerFrame.hasOpacity = false
+        ColorPickerFrame.opacityFunc = nil
+        ColorPickerFrame.func = swatchFunc
+        ColorPickerFrame.cancelFunc = cancelFunc
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+        ColorPickerFrame:SetColorRGB(r, g, b)
+        ColorPickerFrame:Hide()
+        ColorPickerFrame:Show()
+    end
 end
 
 local function AddStepper(labelText, formatValue, getValue, adjust)
@@ -112,6 +309,7 @@ local function AddStepper(labelText, formatValue, getValue, adjust)
     valueText:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X + 30, rowY - 5)
     valueText:SetWidth(60)
     valueText:SetJustifyH("CENTER")
+    TrackElement(valueText, CONTROL_X + 30, rowY - 5)
     local function refresh() valueText:SetText(formatValue(getValue())) end
     AddButton("-", 24, CONTROL_X, rowY, function()
         adjust(-1)
@@ -128,13 +326,16 @@ end
 
 local dropdownCount = 0
 
-local function AddDropdown(labelText, choices, getCurrent, onSelect)
+local function AddDropdown(labelText, choices, getCurrent, onSelect, rowYOverride, widthOverride, leftOverride, controlXOverride, debugOnly, debugRowHeight)
     dropdownCount = dropdownCount + 1
-    local rowY = y
-    AddLabel(labelText, rowY)
+    local rowY = rowYOverride or y
+    local labelX = leftOverride or LEFT
+    local controlX = controlXOverride or CONTROL_X
+    local label = AddLabel(labelText, rowY, labelX, debugOnly, rowY, debugRowHeight)
     local dd = CreateFrame("Frame", "GnomeLevelUpDropdown" .. dropdownCount, body, "UIDropDownMenuTemplate")
-    dd:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X - 16, rowY + 2)
-    UIDropDownMenu_SetWidth(dd, 190)
+    dd:SetPoint("TOPLEFT", body, "TOPLEFT", controlX - 16, rowY + 2)
+    TrackElement(dd, controlX - 16, rowY + 2, debugOnly, rowY, debugRowHeight)
+    UIDropDownMenu_SetWidth(dd, widthOverride or 190)
 
     local function GetChoiceLabel(value)
         for i, c in ipairs(choices) do
@@ -165,12 +366,13 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect)
 
     local function refresh() UIDropDownMenu_SetText(dd, GetChoiceLabel(getCurrent())) end
     refreshers[#refreshers + 1] = refresh
-    y = y - 36
-    return refresh
+    if not rowYOverride then y = y - 36 end
+    return refresh, dd, label
 end
 
-local function AddCheckbox(labelText, getValue, setValue)
-    local rowY = y
+local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride, debugOnly, debugRowHeight, debugRowY)
+    local rowY = rowYOverride or y
+    local left = xOverride or LEFT
     local cb
     for _, template in ipairs({ "UICheckButtonTemplate", "InterfaceOptionsCheckButtonTemplate" }) do
         local ok, made = pcall(CreateFrame, "CheckButton", nil, body, template)
@@ -184,13 +386,68 @@ local function AddCheckbox(labelText, getValue, setValue)
         cb:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
     end
     cb:SetSize(26, 26)
-    cb:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT - 2, rowY + 2)
+    cb:SetPoint("TOPLEFT", body, "TOPLEFT", left - 2, rowY + 2)
+    TrackElement(cb, left - 2, rowY + 2, debugOnly, debugRowY or rowY, debugRowHeight)
     cb:SetScript("OnClick", function(self) setValue(self:GetChecked() and true or false) end)
     local fs = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     fs:SetPoint("LEFT", cb, "RIGHT", 4, 0)
     fs:SetText(labelText)
+    if debugOnly then
+        TrackDebugOnlyElement(fs, debugRowY or rowY, debugRowHeight)
+    else
+        TrackVisibilityElement(fs)
+    end
     refreshers[#refreshers + 1] = function() cb:SetChecked(getValue() and true or false) end
+    if not rowYOverride then y = y - 32 end
+    return cb, fs, rowY
+end
+
+local function AddCheckboxPair(first, second)
+    local rowY = y
+    local firstCheck, firstLabel = AddCheckbox(first[1], first[2], first[3], LEFT, rowY)
+    local secondCheck, secondLabel = AddCheckbox(second[1], second[2], second[3], LEFT + 270, rowY)
     y = y - 32
+    return firstCheck, firstLabel, secondCheck, secondLabel
+end
+
+local function AddAvailabilityRefresh(checkButton, label, isAvailable)
+    local section = currentSection
+    refreshers[#refreshers + 1] = function()
+        local available = isAvailable()
+        local visible = available and not (section and section.collapsed)
+        checkButton:SetShown(visible)
+        label:SetShown(visible)
+        if checkButton.SetEnabled then checkButton:SetEnabled(available) end
+        label:SetTextColor(available and 1 or 0.45, available and 1 or 0.45, available and 1 or 0.45)
+    end
+end
+
+local function AddCheckboxWithColor(labelText, getValue, setValue, getColor, setColor, xOverride, rowYOverride)
+    local _, label = AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride)
+    local swatch = CreateFrame("Button", nil, body)
+    swatch:SetSize(36, 18)
+    swatch:SetPoint("LEFT", label, "RIGHT", 10, 0)
+    TrackVisibilityElement(swatch)
+
+    local border = swatch:CreateTexture(nil, "BACKGROUND")
+    border:SetAllPoints()
+    border:SetColorTexture(0.75, 0.75, 0.75, 1)
+    local fill = swatch:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", 2, -2)
+    fill:SetPoint("BOTTOMRIGHT", -2, 2)
+
+    local function refresh()
+        local color = getColor() or { 1.00, 1.00, 159 / 255 }
+        fill:SetColorTexture(color[1], color[2], color[3], 1)
+    end
+    swatch:SetScript("OnClick", function()
+        OpenColorPicker(getColor(), function(r, g, b)
+            setColor({ r, g, b })
+            fill:SetColorTexture(r, g, b, 1)
+        end)
+    end)
+    refreshers[#refreshers + 1] = refresh
+    refresh()
 end
 
 do
@@ -198,14 +455,20 @@ do
     title:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y)
     title:SetText(PANEL_NAME)
 
+    local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+    version:SetTextColor(0.70, 0.70, 0.70)
+    local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3"
+    version:SetText("Version " .. tostring(addonVersion or "1.3"))
+
     local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    byline:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+    byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
     byline:SetText("By Lessá-ArgentDawn")
 
-    y = y - 54
+    y = y - 68
 end
 
-AddSectionHeader("Appearance")
+AddSectionHeader("Appearance", "appearance")
 
 AddDropdown("Portrait", ns.PORTRAIT_CHOICES,
     function() return ns.db.portraitMode or "class" end,
@@ -222,6 +485,280 @@ AddStepper("Background opacity",
         ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
     end)
 
+local function AddColorPicker(labelText, getColor, setColor, xOverride, rowYOverride, debugOnly)
+    local rowY = rowYOverride or y
+    local left = xOverride or LEFT
+    AddLabel(labelText, rowY, left, debugOnly, rowY, 34)
+    local swatch = CreateFrame("Button", nil, body)
+    swatch:SetSize(40, 20)
+    swatch:SetPoint("TOPLEFT", body, "TOPLEFT", left + 170, rowY - 1)
+    TrackElement(swatch, left + 170, rowY - 1, debugOnly, rowY, 34)
+    local border = swatch:CreateTexture(nil, "BACKGROUND")
+    border:SetAllPoints()
+    border:SetColorTexture(0.75, 0.75, 0.75, 1)
+    local fill = swatch:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", 2, -2)
+    fill:SetPoint("BOTTOMRIGHT", -2, 2)
+    local function refresh()
+        local color = getColor() or { 0, 0, 0 }
+        fill:SetColorTexture(color[1], color[2], color[3], 1)
+    end
+    swatch:SetScript("OnClick", function()
+        OpenColorPicker(getColor(), function(r, g, b)
+            if ns.EnsureDatabase then ns.EnsureDatabase() end
+            setColor({ r, g, b })
+            fill:SetColorTexture(r, g, b, 1)
+            if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db and ns.db.bgOpacity or 0.70) end
+        end)
+    end)
+    refreshers[#refreshers + 1] = refresh
+    refresh()
+    if not rowYOverride then y = y - 34 end
+    return swatch
+end
+
+local function AddColorsSection()
+    AddSectionHeader("Colors", "colors")
+
+    local classColorKeys = {
+        title = true, level = true, statsHeader = true, abilitiesHeader = true,
+        abilityName = true, portraitBorder = true,
+    }
+
+    local colorToggleY = y
+    AddCheckbox("Show Text Shadows",
+        function() return ns.db.showTextShadow end,
+        function(v)
+            ns.db.showTextShadow = v
+            if ns.ApplyTextShadow then ns.ApplyTextShadow(v) end
+        end, LEFT, colorToggleY)
+    AddCheckbox("Apply class colours",
+        function() return ns.db.useClassColors end,
+        function(v)
+            if ns.SetClassColorsEnabled then ns.SetClassColorsEnabled(v) else ns.db.useClassColors = v end
+        end, LEFT + 270, colorToggleY)
+    y = y - 32
+
+    local colorEntries = {
+        { "title",           "Title" },
+        { "level",           "Level number" },
+        { "statsHeader",     "Stats header" },
+        { "statLabel",       "Stat name / old value" },
+        { "statNew",         "Improved value" },
+        { "abilitiesHeader", "Abilities header" },
+        { "abilityName",     "Ability icon border" },
+        { "portraitBorder",  "Portrait border" },
+        { "divider",         "Section divider" },
+    }
+
+    local swatches = {}
+    local startY = y
+    for i, colorEntry in ipairs(colorEntries) do
+        local key, text = colorEntry[1], colorEntry[2]
+        local col = (i - 1) % 2
+        local row = math.floor((i - 1) / 2)
+        local x0 = LEFT + col * 270
+        local rowY = startY - row * 32
+
+        AddLabel(text, rowY, x0)
+
+        local btn = CreateFrame("Button", nil, body)
+        btn:SetSize(40, 20)
+        btn:SetPoint("TOPLEFT", body, "TOPLEFT", x0 + 170, rowY - 1)
+        TrackElement(btn, x0 + 170, rowY - 1)
+        local border = btn:CreateTexture(nil, "BACKGROUND")
+        border:SetAllPoints()
+        border:SetColorTexture(0.75, 0.75, 0.75, 1)
+        local fill = btn:CreateTexture(nil, "ARTWORK")
+        fill:SetPoint("TOPLEFT", 2, -2)
+        fill:SetPoint("BOTTOMRIGHT", -2, 2)
+        btn.fill = fill
+        btn:SetScript("OnClick", function()
+            OpenColorPicker(ns.db.colors[key], function(r, g, b)
+                ns.db.colors[key] = { r, g, b }
+                fill:SetColorTexture(r, g, b, 1)
+                if ns.ApplyColors then ns.ApplyColors() end
+            end)
+        end)
+        swatches[key] = btn
+    end
+    refreshers[#refreshers + 1] = function()
+        for key, btn in pairs(swatches) do
+            local c = ns.db.colors[key]
+            btn.fill:SetColorTexture(c[1], c[2], c[3], 1)
+            local controlled = ns.db.useClassColors and classColorKeys[key]
+            if controlled then
+                btn:Disable()
+                btn:SetAlpha(0.55)
+            else
+                btn:Enable()
+                btn:SetAlpha(1)
+            end
+        end
+    end
+    y = startY - math.ceil(#colorEntries / 2) * 32 - 8
+end
+
+AddColorPicker("Background gradient color",
+    function() return ns.db and ns.db.backgroundColor or { 0.00, 0.00, 0.00 } end,
+    function(color)
+        if ns.EnsureDatabase then ns.EnsureDatabase() end
+        ns.db.backgroundColor = color
+    end)
+
+local backgroundThemeChoices = {}
+for _, theme in ipairs(ns.CUSTOM_BACKGROUND_THEMES or {}) do
+    if type(theme) == "table" and theme.value and theme.textures then
+        backgroundThemeChoices[#backgroundThemeChoices + 1] = {
+            value = theme.value,
+            label = theme.label or theme.value,
+        }
+    end
+end
+local refreshBackgroundControls
+local backgroundStyleChoices = {
+    { value = "MODERN", label = "Modern" },
+}
+local backgroundStyleThemes = {}
+for _, theme in ipairs(backgroundThemeChoices) do
+    local value = "CUSTOM:" .. theme.value
+    backgroundStyleChoices[#backgroundStyleChoices + 1] = {
+        value = value,
+        label = theme.label,
+    }
+    backgroundStyleThemes[value] = theme.value
+end
+
+local refreshBackgroundStyle, backgroundStyleDropdown = AddDropdown("Background style", backgroundStyleChoices,
+    function()
+        if ns.db.backgroundMode == "CUSTOM" and ns.db.backgroundTheme then
+            return "CUSTOM:" .. ns.db.backgroundTheme
+        end
+        return "MODERN"
+    end,
+    function(value)
+        if value == "MODERN" then
+            if ns.RestoreModernAppearance then ns.RestoreModernAppearance() end
+        else
+            local themeValue = backgroundStyleThemes[value]
+            if themeValue and ns.ApplyBackgroundTheme then ns.ApplyBackgroundTheme(themeValue) end
+        end
+        if refreshBackgroundControls then refreshBackgroundControls() end
+    end)
+
+local refreshBackgroundFill, backgroundFillDropdown = AddDropdown("Center texture", ns.BACKGROUND_FILL_CHOICES,
+    function() return ns.db.backgroundFillMode or "scale" end,
+    function(value)
+        ns.db.backgroundFillMode = value
+        if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+    end)
+
+local textureColorChoices = {
+    { "topLeft", "Top-left corner hue" }, { "top", "Top edge hue" },
+    { "topRight", "Top-right corner hue" }, { "left", "Left edge hue" },
+    { "center", "Center hue" }, { "right", "Right edge hue" },
+    { "bottomLeft", "Bottom-left corner hue" }, { "bottom", "Bottom edge hue" },
+    { "bottomRight", "Bottom-right corner hue" },
+}
+local textureSwatches = {}
+local textureTransformControls = {}
+local textureGridStartY = y
+for _, entry in ipairs(textureColorChoices) do
+    local index = _
+    local key, label = entry[1], entry[2]
+    local column = (index - 1) % 2
+    local row = math.floor((index - 1) / 2)
+    local rowY = textureGridStartY - row * 34
+    local x0 = LEFT + column * 270
+    textureSwatches[key] = AddColorPicker(label,
+        function()
+            return (ns.db.backgroundTextureColors and ns.db.backgroundTextureColors[key]) or { 1, 1, 1 }
+        end,
+        function(color)
+            ns.db.backgroundTextureColors[key] = color
+            if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+        end, x0, rowY, true)
+end
+y = textureGridStartY - math.ceil(#textureColorChoices / 2) * 34
+
+-- Keep each texture's transform controls in a compact two-column grid.
+local textureTransformStartY = y
+for _, entry in ipairs(textureColorChoices) do
+    local index = _
+    local key, label = entry[1], entry[2]:gsub(" hue$", "")
+    local column = (index - 1) % 2
+    local row = math.floor((index - 1) / 2)
+    local rowY = textureTransformStartY - row * 64
+    local x0 = LEFT + column * 270
+    local _, rotationDropdown = AddDropdown(label .. " rotation", ns.BACKGROUND_ROTATION_CHOICES,
+        function()
+            local transform = ns.db.backgroundTextureTransforms[key]
+            return transform and tonumber(transform.rotation) or 0
+        end,
+        function(value)
+            ns.db.backgroundTextureTransforms[key].rotation = value
+            if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+        end, rowY, 52, x0, x0 + 170, true, 64)
+    local flipRowY = rowY - 30
+    local flipH = AddCheckbox("Flip H",
+        function()
+            local transform = ns.db.backgroundTextureTransforms[key]
+            return transform and transform.flipX
+        end,
+        function(value)
+            ns.db.backgroundTextureTransforms[key].flipX = value
+            if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+        end, x0, flipRowY, true, 64, rowY)
+    local flipV = AddCheckbox("Flip V",
+        function()
+            local transform = ns.db.backgroundTextureTransforms[key]
+            return transform and transform.flipY
+        end,
+        function(value)
+            ns.db.backgroundTextureTransforms[key].flipY = value
+            if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+        end, x0 + 130, flipRowY, true, 64, rowY)
+    textureTransformControls[#textureTransformControls + 1] = {
+        dropdown = rotationDropdown,
+        flipH = flipH,
+        flipV = flipV,
+    }
+end
+y = textureTransformStartY - math.ceil(#textureColorChoices / 2) * 64
+
+refreshers[#refreshers + 1] = function()
+    if refreshBackgroundStyle then refreshBackgroundStyle() end
+    if refreshBackgroundFill then refreshBackgroundFill() end
+end
+
+refreshBackgroundControls = function()
+    local enabled = ns.db.backgroundMode == "CUSTOM" and #backgroundThemeChoices > 0
+    for _, swatch in pairs(textureSwatches) do
+        swatch:SetEnabled(enabled)
+        swatch:SetAlpha(enabled and 1 or 0.45)
+    end
+    for _, controls in ipairs(textureTransformControls) do
+        if enabled then UIDropDownMenu_EnableDropDown(controls.dropdown)
+        else UIDropDownMenu_DisableDropDown(controls.dropdown) end
+        controls.flipH:SetEnabled(enabled)
+        controls.flipV:SetEnabled(enabled)
+        controls.flipH:SetAlpha(enabled and 1 or 0.45)
+        controls.flipV:SetAlpha(enabled and 1 or 0.45)
+    end
+    if enabled then UIDropDownMenu_EnableDropDown(backgroundFillDropdown)
+    else UIDropDownMenu_DisableDropDown(backgroundFillDropdown) end
+end
+refreshers[#refreshers + 1] = refreshBackgroundControls
+refreshBackgroundControls()
+
+AddStepper("Section padding",
+    function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
+    function() return ns.db.sectionPadding end,
+    function(dir)
+        ns.db.sectionPadding = math.max(0, math.min(30, (tonumber(ns.db.sectionPadding) or 8) + dir))
+        if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
+    end)
+
 AddDropdown("Font", FONT_CHOICES,
     function() return ns.db.customFontPath or FONT_CHOICES[1].value end,
     function(value)
@@ -236,14 +773,33 @@ AddDropdown("Frame strata", ns.STRATA_CHOICES,
         ns.ApplyFrameStrata(value)
     end)
 
-AddCheckbox("Lock panel location",
+AddCheckboxPair({
+    "Lock panel location",
     function() return ns.db.lockFramePosition end,
     function(v)
         ns.db.lockFramePosition = v
         if ns.ApplyFrameLock then ns.ApplyFrameLock(v) end
-    end)
+    end,
+}, {
+    "Compact popup layout",
+    function() return ns.db.compactMode end,
+    function(v)
+        ns.db.compactMode = v
+        if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
+    end,
+})
 
-AddSectionHeader("Animation")
+AddButton("Reset Appearance", 150, LEFT, y, function()
+    if ns.ResetAppearanceToDefaults then ns.ResetAppearanceToDefaults() end
+end)
+AddButton("Preview Level-Up", 150, LEFT + 160, y, function()
+    ns.PreviewLevelUp()
+end)
+y = y - 34
+
+AddColorsSection()
+
+AddSectionHeader("Animation", "animation")
 
 AddStepper("Animation speed",
     function(v) return string.format("%.2fx", v) end,
@@ -277,15 +833,16 @@ do
     y = y - 34
 end
 
-AddSectionHeader("Mode")
+AddSectionHeader("Mode", "mode")
 
-AddCheckbox("Enable addon",
+AddCheckboxPair({
+    "Enable addon",
     function() return ns.db.enabled end,
     function(v)
         if ns.SetAddonEnabled then ns.SetAddonEnabled(v) else ns.db.enabled = v end
-    end)
-
-AddCheckbox("Hide Blizzard level-up toast",
+    end,
+}, {
+    "Hide Blizzard level-up toast",
     function() return ns.db.hideBlizzardLevelUp ~= false end,
     function(v)
         ns.db.hideBlizzardLevelUp = v
@@ -294,47 +851,74 @@ AddCheckbox("Hide Blizzard level-up toast",
         elseif ns.RestoreBlizzardBanner then
             ns.RestoreBlizzardBanner()
         end
-    end)
+    end,
+})
 
-AddCheckbox("Right-click to close the level-up popup",
+AddCheckboxPair({
+    "Right-click to close the level-up popup",
     function() return ns.db.rightClickClose end,
-    function(v) ns.db.rightClickClose = v end)
-
-AddCheckbox("Show time played this level",
+    function(v) ns.db.rightClickClose = v end,
+}, {
+    "Show time played this level",
     function() return ns.db.showLevelTime end,
     function(v)
         ns.db.showLevelTime = v
         if v then ns.RequestLevelPlayedTime() end
-    end)
+    end,
+})
 
-AddCheckbox("Print instructions to chat",
-    function() return ns.db.printInstructions end,
-    function(v)
-        ns.db.printInstructions = v
-        if v and ns.PrintStartupInstructions then ns.PrintStartupInstructions() end
-    end)
-
-AddDropdown("Mode", ns.MODE_CHOICES,
-    function() return ns.db.forceFlavor or "auto" end,
-    function(value)
-        ns.db.forceFlavor = value
-        if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
-    end)
-
+local modeRowY = y
+AddCheckbox("Don't show until combat ends",
+    function() return ns.db.waitForCombatEnd end,
+    function(v) ns.db.waitForCombatEnd = v end,
+    LEFT, modeRowY)
 AddCheckbox("Show minimap button",
     function() return ns.db.minimapButtonShown end,
     function(v)
         ns.db.minimapButtonShown = v
         if ns.SetMinimapButtonShown then ns.SetMinimapButtonShown(v) end
-    end)
+    end, LEFT + 270, modeRowY)
+y = y - 32
 
+AddCheckboxPair({
+    "Ignore Mouseover Delay (controller users)",
+    function() return ns.db.ignoreMouseoverDelay == true end,
+    function(v)
+        ns.db.ignoreMouseoverDelay = v
+        if v and ns.RescheduleFadeOut and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
+            ns.RescheduleFadeOut(0.15)
+        end
+    end,
+}, {
+    "Allow click-through",
+    function() return ns.db.clickThrough == true end,
+    function(v)
+        ns.db.clickThrough = v
+        if ns.ApplyClickThrough then ns.ApplyClickThrough(v) end
+    end,
+})
+
+modeRowY = y
 AddCheckbox("Enable debug commands",
     function() return ns.db.debugEnabled end,
-    function(v) ns.db.debugEnabled = v end)
+    function(v)
+        ns.db.debugEnabled = v
+        if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+    end,
+    LEFT, modeRowY)
+AddCheckboxWithColor("Classic-style level up text",
+    function() return ns.db.printClassicLevelUpText end,
+    function(v) ns.db.printClassicLevelUpText = v end,
+    function() return ns.db and ns.db.classicLevelUpTextColor end,
+    function(color) ns.db.classicLevelUpTextColor = color end,
+    LEFT + 270, modeRowY)
+y = y - 32
 
-AddCheckbox("Wait until combat ends before showing the screen",
-    function() return ns.db.waitForCombatEnd end,
-    function(v) ns.db.waitForCombatEnd = v end)
+AddCheckbox("Show all available grimoires",
+    function() return ns.db.showAllWarlockGrimoires == true end,
+    function(v) ns.db.showAllWarlockGrimoires = v end,
+    LEFT, y, true, 32, y)
+y = y - 32
 
 AddStepper("Display duration",
     function(v) return string.format("%ds", v) end,
@@ -350,44 +934,79 @@ AddStepper("Popup scale",
         ns.db.scale = math.max(0.5, math.min(2.0, ns.db.scale + dir * 0.1))
     end)
 
-AddSectionHeader("Trainer Data")
+AddSectionHeader("Trainer Data", "trainer_data")
 
-AddCheckbox("Auto-save trainer data when visiting a trainer",
+AddCheckbox("Auto-save trainer data",
     function() return ns.db.autoScanTrainers end,
     function(v) ns.db.autoScanTrainers = v end)
 
+-- Keep this control for later; profession scanning is not needed for now.
+--[[
 AddCheckbox("Also scan profession trainers",
     function() return ns.db.scanProfessionTrainers end,
     function(v)
         ns.db.scanProfessionTrainers = v
         if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
     end)
+]]
 
-AddCheckbox("Show unlearned weapon skills",
+local weaponCheck, weaponLabel, costCheck, costLabel = AddCheckboxPair({
+    "Show unlearned weapon skills",
     function() return ns.db.showWeaponSkills end,
-    function(v) ns.db.showWeaponSkills = v end)
-
-AddCheckbox("Show trainer skill costs",
+    function(v) ns.db.showWeaponSkills = v end,
+}, {
+    "Show trainer skill costs",
     function() return ns.db.showTrainerCosts end,
-    function(v) ns.db.showTrainerCosts = v end)
+    function(v) ns.db.showTrainerCosts = v end,
+})
+local function IsForeverClient()
+    return not ns.GetCurrentFlavor or ns.GetCurrentFlavor() == "forever"
+end
+AddAvailabilityRefresh(weaponCheck, weaponLabel, IsForeverClient)
+AddAvailabilityRefresh(costCheck, costLabel, IsForeverClient)
 
-AddCheckbox("Show only skills unlocked at the current level",
+local currentLevelCheck, currentLevelLabel, petCheck, petLabel = AddCheckboxPair({
+    "Only skills unlocked at this level",
     function() return ns.db.showOnlyCurrentLevelSkills end,
-    function(v) ns.db.showOnlyCurrentLevelSkills = v end)
+    function(v) ns.db.showOnlyCurrentLevelSkills = v end,
+}, {
+    "Show Warlock pet abilities",
+    function() return ns.db.showWarlockPetSkills end,
+    function(v) ns.db.showWarlockPetSkills = v end,
+})
+local function IsForeverWarlock()
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return false end
+    local _, classToken = UnitClass("player")
+    return classToken == "WARLOCK"
+end
+AddAvailabilityRefresh(petCheck, petLabel, IsForeverWarlock)
 
-AddButton("Clear Scanned Data", 160, LEFT, y, function()
-    if ns.ClearScannedTrainerData then
-        ns.ClearScannedTrainerData()
-        print("|cff3fe0ffGnomeLevelUp|r: cleared all scanned trainer data. Visit a trainer again to re-scan it.")
-    end
-end)
-y = y - 36
+local filterPetCheck, filterPetLabel = AddCheckbox(
+    "Filter grimoires by active pet",
+    function() return ns.db.filterWarlockPetByActivePet end,
+    function(v) ns.db.filterWarlockPetByActivePet = v end)
+AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
 
-AddSectionHeader("Sound")
+-- Keep this common option in the left column when Warlock-only controls are hidden.
+local scrollCheck, scrollLabel = AddCheckbox(
+    "Use horizontal scrolling",
+    function() return ns.db.useHorizontalAbilityScroll end,
+    function(v) ns.db.useHorizontalAbilityScroll = v end)
 
-AddCheckbox("Play a sound on level up",
+AddSectionHeader("Sound", "sound")
+
+AddCheckboxPair({
+    "Play a sound on level up",
     function() return ns.db.playSound end,
-    function(v) ns.db.playSound = v end)
+    function(v) ns.db.playSound = v end,
+}, {
+    "Mute native Ding",
+    function() return ns.db.muteNativeDing ~= false end,
+    function(v)
+        ns.db.muteNativeDing = v
+        if ns.ApplyAddonState then ns.ApplyAddonState(false) end
+    end,
+})
 
 local refreshCustomSound -- assigned below
 local refreshSoundChoice
@@ -475,6 +1094,7 @@ do
     end
     edit:SetSize(290, 22)
     edit:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X + 6, rowY)
+    TrackElement(edit, CONTROL_X + 6, rowY)
     edit:SetAutoFocus(false)
     edit:SetMaxLetters(240)
     local function commit(self)
@@ -516,6 +1136,7 @@ do
 
     local hint = body:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X + 6, y)
+    TrackElement(hint, CONTROL_X + 6, y)
     hint:SetWidth(300)
     hint:SetJustifyH("LEFT")
     hint:SetText("Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg")
@@ -527,107 +1148,82 @@ do
     y = y - 36
 end
 
-AddSectionHeader("Text Colors")
-
-AddCheckbox("Show text shadows",
-    function() return ns.db.showTextShadow end,
-    function(v)
-        ns.db.showTextShadow = v
-        if ns.ApplyTextShadow then ns.ApplyTextShadow(v) end
-    end)
-
-local function OpenColorPicker(color, onChange)
-    local r, g, b = color[1], color[2], color[3]
-    local function swatchFunc()
-        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
-        onChange(nr, ng, nb)
-    end
-    local function cancelFunc()
-        onChange(r, g, b)
-    end
-    if ColorPickerFrame.SetupColorPickerAndShow then
-        ColorPickerFrame:SetupColorPickerAndShow({
-            r = r, g = g, b = b, hasOpacity = false,
-            swatchFunc = swatchFunc, cancelFunc = cancelFunc,
-        })
-    else
-        ColorPickerFrame.hasOpacity = false
-        ColorPickerFrame.opacityFunc = nil
-        ColorPickerFrame.func = swatchFunc
-        ColorPickerFrame.cancelFunc = cancelFunc
-        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
-        ColorPickerFrame:SetColorRGB(r, g, b)
-        ColorPickerFrame:Hide()
-        ColorPickerFrame:Show()
-    end
-end
-
-local COLOR_ENTRIES = {
-    { "title",           "Title" },
-    { "level",           "Level number" },
-    { "statsHeader",     "Stats header" },
-    { "statLabel",       "Stat name / old value" },
-    { "statNew",         "Improved value" },
-    { "abilitiesHeader", "Abilities header" },
-    { "abilityName",     "Ability icon border" },
-}
-
 do
-    local swatches = {}
-    local startY = y
-    for i, colorEntry in ipairs(COLOR_ENTRIES) do
-        local key, text = colorEntry[1], colorEntry[2]
-        local col = (i - 1) % 2
-        local row = math.floor((i - 1) / 2)
-        local x0 = LEFT + col * 270
-        local rowY = startY - row * 32
-
-        AddLabel(text, rowY, x0)
-
-        local btn = CreateFrame("Button", nil, body)
-        btn:SetSize(40, 20)
-        btn:SetPoint("TOPLEFT", body, "TOPLEFT", x0 + 170, rowY - 1)
-        local border = btn:CreateTexture(nil, "BACKGROUND")
-        border:SetAllPoints()
-        border:SetColorTexture(0.75, 0.75, 0.75, 1)
-        local fill = btn:CreateTexture(nil, "ARTWORK")
-        fill:SetPoint("TOPLEFT", 2, -2)
-        fill:SetPoint("BOTTOMRIGHT", -2, 2)
-        btn.fill = fill
-        btn:SetScript("OnClick", function()
-            OpenColorPicker(ns.db.colors[key], function(r, g, b)
-                ns.db.colors[key] = { r, g, b }
-                fill:SetColorTexture(r, g, b, 1)
-                ns.ApplyColors()
-            end)
-        end)
-        swatches[key] = btn
-    end
-    refreshers[#refreshers + 1] = function()
-        for key, btn in pairs(swatches) do
-            local c = ns.db.colors[key]
-            btn.fill:SetColorTexture(c[1], c[2], c[3], 1)
-        end
-    end
-    y = startY - math.ceil(#COLOR_ENTRIES / 2) * 32 - 8
-end
-
-do
-    AddButton("Preview Level-Up", 150, LEFT, y, function() ns.PreviewLevelUp() end)
-    AddButton("Reset to Defaults", 150, LEFT + 160, y, function() ns.ResetOptionsToDefaults() end)
+    AddButton("Reset to Defaults", 150, LEFT, y, function() ns.ResetOptionsToDefaults() end)
     y = y - 40
 end
 
-body:SetHeight(-y + 20)
+AddSectionHeader("Cache Status", "cache_status")
+
+AddDropdown("Mode", ns.MODE_CHOICES,
+    function() return ns.db.forceFlavor or "auto" end,
+    function(value)
+        ns.db.forceFlavor = value
+        if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
+        ns.RefreshOptionsPanel()
+    end)
+
+local cacheStatusText = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+cacheStatusText:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y - 4)
+TrackElement(cacheStatusText, LEFT, y - 4)
+cacheStatusText:SetWidth(410)
+cacheStatusText:SetJustifyH("LEFT")
+cacheStatusText:SetWordWrap(true)
+
+local function RefreshCacheStatus()
+    if not cacheStatusText then return end
+    local status = ns.GetTrainerCacheStatus and ns.GetTrainerCacheStatus()
+    if not status then
+        cacheStatusText:SetText("Cache status unavailable.")
+        return
+    end
+    local lastScan = status.lastScanAt and date("%Y-%m-%d %H:%M", status.lastScanAt) or "Never"
+    local rescan = status.rescanRequired and "\nA trainer rescan is required." or ""
+    cacheStatusText:SetText(string.format(
+        "Flavor: %s\nClass: %s\nCached abilities: %d\nLast trainer: %s\nLast scan: %s\nSchema: %d%s",
+        status.flavor or "unknown", status.classToken or "unknown", status.count or 0,
+        status.npcName or "None", lastScan, status.schemaVersion or 0, rescan))
+end
+refreshers[#refreshers + 1] = RefreshCacheStatus
+RefreshCacheStatus()
+y = y - 88
+
+AddButton("Clear Scanned Data", 160, LEFT, y, function()
+    if ns.ClearScannedTrainerData then
+        ns.ClearScannedTrainerData()
+        RefreshCacheStatus()
+        print("|cff3fe0ffGnomeLevelUp|r: cleared all scanned trainer data. Visit a trainer again to re-scan it.")
+    end
+end)
+AddButton("Refresh Cache Status", 160, LEFT + 170, y, RefreshCacheStatus)
+y = y - 36
+
+finalBodyHeight = -y + 20
+for i, section in ipairs(sections) do
+    local nextSection = sections[i + 1]
+    local nextY = nextSection and nextSection.headerY or y
+    section.fullSpan = math.max(32, section.headerY - nextY)
+    section.collapseShift = math.max(0, section.fullSpan - 32)
+end
+body:SetHeight(finalBodyHeight)
+ReflowSections()
 
 function ns.RefreshOptionsPanel()
     if not ns.db then return end
+    for _, section in ipairs(sections) do
+        section.collapsed = ns.db.collapsedSections and ns.db.collapsedSections[section.key] == true
+        section.label:SetText((section.collapsed and "[+] " or "[-] ") .. section.title)
+    end
+    ReflowSections()
     for _, refresh in ipairs(refreshers) do
         refresh()
     end
 end
 
-panel:SetScript("OnShow", ns.RefreshOptionsPanel)
+panel:SetScript("OnShow", function()
+    RefreshSeasonalWatermark()
+    ns.RefreshOptionsPanel()
+end)
 
 panel.OnCommit = function() end
 panel.OnDefault = function() ns.ResetOptionsToDefaults() end

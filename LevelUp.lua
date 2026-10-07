@@ -13,6 +13,39 @@ local cachedTimeReceivedAt
 local levelTimeForDisplay
 local quietChatFrames = {}
 local playedTimeRequestToken = 0
+local baselineRefreshScheduled = false
+local levelUpChatFilterRegistered = false
+
+local function IsBuiltInLevelUpMessage(message)
+    if type(message) ~= "string" then return false end
+
+    local plainMessage = message:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    local currentLevel = tonumber(UnitLevel("player"))
+    local localizedTemplate = _G.ERR_LEVEL_UP
+    if currentLevel and type(localizedTemplate) == "string" then
+        local ok, expected = pcall(string.format, localizedTemplate, currentLevel)
+        if ok then
+            expected = expected:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            if expected == plainMessage then return true end
+        end
+    end
+
+    -- Keep an English fallback for clients where ERR_LEVEL_UP is unavailable.
+    plainMessage = plainMessage:lower()
+    return plainMessage:find("congratulations", 1, true) ~= nil
+        and plainMessage:find("you have reached", 1, true) ~= nil
+        and plainMessage:find("level%s+%d+") ~= nil
+end
+
+function ns.RegisterLevelUpChatFilter()
+    if levelUpChatFilterRegistered or type(ChatFrame_AddMessageEventFilter) ~= "function" then return end
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
+        if ns.IsAddonEnabled and not ns.IsAddonEnabled() then return false end
+        if IsBuiltInLevelUpMessage(message) then return true end
+        return false
+    end)
+    levelUpChatFilterRegistered = true
+end
 
 local function RestorePlayedTimeChat()
     for _, chatFrame in ipairs(quietChatFrames) do
@@ -65,6 +98,59 @@ function ns.RefreshBaseline()
     baselineStats = ns.SnapshotStats()
 end
 
+local function PrintClassicLevelUpText(currentLevel, statDiff)
+    if not ns.db or ns.db.printClassicLevelUpText ~= true then return end
+
+    local hitPoints
+    local mana
+    local statLines = {}
+    for _, change in ipairs(statDiff.stats or {}) do
+        local increase = change.new - change.old
+        if change.kind == "health" then
+            hitPoints = increase
+        elseif change.kind == "mana" then
+            mana = increase
+        elseif change.kind ~= "power" and increase > 0 then
+            statLines[#statLines + 1] = string.format("Your %s increased by %d", change.name, increase)
+        end
+    end
+
+    local lines = { string.format("Congratulations! You have reached level %d!", currentLevel) }
+    if hitPoints and hitPoints > 0 then
+        if mana and mana > 0 then
+            lines[#lines + 1] = string.format("You have gained %d hit points and %d mana", hitPoints, mana)
+        else
+            lines[#lines + 1] = string.format("You have gained %d hit points", hitPoints)
+        end
+    elseif mana and mana > 0 then
+        lines[#lines + 1] = string.format("You have gained %d mana", mana)
+    end
+
+    for _, line in ipairs(statLines) do
+        lines[#lines + 1] = line
+    end
+
+    local color = ns.db.classicLevelUpTextColor or { 1.00, 1.00, 159 / 255 }
+    local red = math.floor(math.max(0, math.min(1, tonumber(color[1]) or 1)) * 255 + 0.5)
+    local green = math.floor(math.max(0, math.min(1, tonumber(color[2]) or 1)) * 255 + 0.5)
+    local blue = math.floor(math.max(0, math.min(1, tonumber(color[3]) or (159 / 255))) * 255 + 0.5)
+    for index, line in ipairs(lines) do
+        local coloredLine = string.format("|cff%02X%02X%02X%s|r", red, green, blue, line)
+        C_Timer.After((index - 1) * 0.05, function()
+            print(coloredLine)
+        end)
+    end
+end
+
+local function QueueBaselineRefresh()
+    if baselineRefreshScheduled or levelUpPending then return end
+    baselineRefreshScheduled = true
+    C_Timer.After(0.1, function()
+        baselineRefreshScheduled = false
+        if not levelUpPending then ns.RefreshBaseline() end
+    end)
+end
+
 local function DisplayLevelUp()
     -- Compare the saved stats with the new stats and show the panel.
     if not baselineStats then
@@ -75,20 +161,30 @@ local function DisplayLevelUp()
 
     local afterStats = ns.SnapshotStats()
     levelUpPending = false
-    local hasTrainerData = #ns.GetTrainerCatalogIndex() > 0
-    local afterSpells = hasTrainerData and ns.SnapshotSpellBook() or {}
+    local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
+    local afterSpells = ns.SnapshotSpellBook()
+    local retailFutureSpells = ns.GetRetailFutureSpellsBeforeLevel
+        and ns.GetRetailFutureSpellsBeforeLevel() or nil
 
     local ok, err = pcall(function()
         local statDiff = ns.DiffStats(baselineStats, afterStats)
-        local trainerAbilities = {}
-        for _, trainingAbility in ipairs(ns.GetAllTrainableUpToLevel(afterStats.level, afterSpells)) do
-            trainerAbilities[#trainerAbilities + 1] = trainingAbility
+        PrintClassicLevelUpText(afterStats.level, statDiff)
+        local trainerAbilities
+        if flavor == "retail" and ns.GetRetailUnlearnedSpells then
+            trainerAbilities = ns.GetRetailUnlearnedSpells(afterStats.level, retailFutureSpells)
+        else
+            trainerAbilities = ns.GetAllTrainableUpToLevel(afterStats.level, afterSpells)
         end
 
         local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(afterStats.level)
+        local warlockPetAbilities = ns.GetUnlearnedWarlockPetAbilities
+            and ns.GetUnlearnedWarlockPetAbilities(afterStats.level) or {}
         if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
-        ns.ShowLevelUp(afterStats.level, statDiff.stats, trainerAbilities, unlearnedWeaponSkills, levelTimeForDisplay)
+        ns.ShowLevelUp(afterStats.level, statDiff.stats, trainerAbilities, unlearnedWeaponSkills, levelTimeForDisplay, warlockPetAbilities)
         levelTimeForDisplay = nil
+        if flavor == "retail" and ns.CaptureRetailFutureSpells then
+            ns.CaptureRetailFutureSpells()
+        end
     end)
     if not ok then
         print("|cff3fe0ffGnomeLevelUp|r: couldn't display the level-up screen this time (" .. tostring(err) .. ")")
@@ -122,7 +218,9 @@ combatWaitFrame:RegisterEvent("UNIT_MAXPOWER")
 combatWaitFrame:RegisterEvent("UNIT_STATS")
 combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
     if event == "PLAYER_LOGIN" then
+        ns.RegisterLevelUpChatFilter()
         RequestPlayedTime()
+        if ns.CaptureRetailFutureSpells then ns.CaptureRetailFutureSpells() end
     elseif event == "TIME_PLAYED_MSG" then
         local timePlayedThisLevel = ...
         timePlayedThisLevel = tonumber(timePlayedThisLevel)
@@ -145,9 +243,7 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
     elseif not levelUpPending and (event == "PLAYER_EQUIPMENT_CHANGED"
         or (unit == "player" and (event == "UNIT_AURA" or event == "UNIT_MAXHEALTH"
             or event == "UNIT_MAXPOWER" or event == "UNIT_STATS"))) then
-        C_Timer.After(0.1, function()
-            if not levelUpPending then ns.RefreshBaseline() end
-        end)
+        QueueBaselineRefresh()
     end
 end)
 

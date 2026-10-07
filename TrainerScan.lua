@@ -3,8 +3,35 @@ local ADDON_NAME, ns = ...
 -- Version 5 adds cost-aware trainer records. Older caches cannot tell us
 -- whether a missing cost means "free" or "not scanned", so they are rebuilt.
 local TRAINER_SCHEMA_VERSION = 5
+local TRAINER_CACHE_PRUNE_VERSION = 1
 local TRAINER_SCAN_DELAY = 0.3
 local TRAINER_RECONCILE_DELAY = 0.25
+
+function ns.GetTrainerCacheStatus()
+    local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "unknown"
+    local _, classToken = UnitClass("player")
+    local count = 0
+    local store = GnomeLevelUpDB and GnomeLevelUpDB.scannedTraining
+    local levelMap = store and store[flavor] and classToken and store[flavor][classToken]
+    if type(levelMap) == "table" then
+        for _, entries in pairs(levelMap) do
+            if type(entries) == "table" then count = count + #entries end
+        end
+    end
+    local metadata = GnomeLevelUpDB and GnomeLevelUpDB.trainerCacheMeta
+    if type(metadata) ~= "table" or metadata.flavor ~= flavor or metadata.classToken ~= classToken then
+        metadata = nil
+    end
+    return {
+        flavor = flavor,
+        classToken = classToken,
+        count = count,
+        npcName = metadata and metadata.npcName,
+        lastScanAt = metadata and metadata.lastScanAt,
+        schemaVersion = tonumber(GnomeLevelUpDB and GnomeLevelUpDB.trainerSchemaVersion) or 0,
+        rescanRequired = GnomeLevelUpDB and GnomeLevelUpDB.trainerRescanRequired == true,
+    }
+end
 
 -- Saved trainer entries are grouped by class and required level.
 local PROFESSION_KEYWORDS = {
@@ -63,6 +90,69 @@ local function GetLearnedStore()
     store[flavor][guid] = store[flavor][guid] or {}
     return store[flavor][guid]
 end
+ns.GetLearnedTrainingStore = GetLearnedStore
+
+local function PruneTrainerCache()
+    local store = EnsureSavedStore()
+    if not store then return false end
+    local changed = false
+    local forever = store.forever
+    for classToken, levelMap in pairs(forever) do
+        if type(levelMap) ~= "table" then
+            forever[classToken] = nil
+            changed = true
+        else
+            for rawLevel, entries in pairs(levelMap) do
+                if type(entries) ~= "table" then
+                    levelMap[rawLevel] = nil
+                    changed = true
+                else
+                    local seen = {}
+                    local write = 1
+                    for _, entry in ipairs(entries) do
+                        local spellID = type(entry) == "table" and tonumber(entry.spellID)
+                        local rawName = ns.TrainingEntryName and ns.TrainingEntryName(entry)
+                            or (type(entry) == "table" and entry.name or entry)
+                        local name = ns.NormalizeTrainingName and ns.NormalizeTrainingName(rawName)
+                        local key = spellID and ("spell:" .. spellID) or (name and ("name:" .. name))
+                        if key and seen[key] then
+                            local existing = seen[key]
+                            if type(existing) == "table" and type(entry) == "table" then
+                                for field, value in pairs(entry) do
+                                    if existing[field] == nil then existing[field] = value end
+                                end
+                            end
+                            changed = true
+                        else
+                            if key then seen[key] = entry end
+                            entries[write] = entry
+                            write = write + 1
+                        end
+                    end
+                    for index = #entries, write, -1 do entries[index] = nil end
+                    if #entries == 0 then levelMap[rawLevel] = nil; changed = true end
+                end
+            end
+            if next(levelMap) == nil then forever[classToken] = nil; changed = true end
+        end
+    end
+    local learned = GnomeLevelUpDB.learnedTraining
+    if type(learned) == "table" then
+        for flavor, byGUID in pairs(learned) do
+            if type(byGUID) == "table" then
+                for guid, records in pairs(byGUID) do
+                    if type(records) ~= "table" or next(records) == nil then
+                        byGUID[guid] = nil
+                        changed = true
+                    end
+                end
+                if next(byGUID) == nil then learned[flavor] = nil; changed = true end
+            end
+        end
+    end
+    if changed and ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
+    return changed
+end
 
 function ns.MigrateTrainerData()
     -- Rebuild old caches when their record format cannot provide trainer costs.
@@ -73,6 +163,10 @@ function ns.MigrateTrainerData()
     if GnomeLevelUpDB.learnedTraining then
         GnomeLevelUpDB.learnedTraining.classic = nil
         GnomeLevelUpDB.learnedTraining.retail = nil
+    end
+    if (tonumber(GnomeLevelUpDB.trainerCachePruneVersion) or 0) < TRAINER_CACHE_PRUNE_VERSION then
+        PruneTrainerCache()
+        GnomeLevelUpDB.trainerCachePruneVersion = TRAINER_CACHE_PRUNE_VERSION
     end
     local currentVersion = tonumber(GnomeLevelUpDB.trainerSchemaVersion) or 0
     if currentVersion >= TRAINER_SCHEMA_VERSION then return end
@@ -105,10 +199,10 @@ local function MarkLearned(entry, level)
     end
 end
 
-function ns.IsTrainerSkillLearned(entry, level)
+function ns.IsTrainerSkillLearned(entry, level, learnedStore)
     -- Check whether a cached skill is already learned.
     local spellID = type(entry) == "table" and entry.spellID
-    local store = GetLearnedStore()
+    local store = learnedStore or GetLearnedStore()
     if not store then return false end
     return store[ns.TrainingEntryKey(entry, level)] == true
         or (spellID and store["spell:" .. spellID] == true) or false
@@ -146,6 +240,7 @@ function ns.ClearScannedTrainerData()
     GnomeLevelUpDB.scannedTraining = { forever = {} }
     GnomeLevelUpDB.learnedTraining = nil
     GnomeLevelUpDB.trainerRescanRequired = false
+    GnomeLevelUpDB.trainerCacheMeta = nil
     if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
 end
 
@@ -205,38 +300,112 @@ local function ReadService(index)
     return name, subtext, status, level, icon, spellID, category, serviceCost, professionCost
 end
 
+-- Build a short-lived index for one scan so duplicate checks do not walk every
+-- saved entry for every service returned by the trainer API.
+local function BuildRecordIndex(classMap, classToken)
+    local index = {}
+    local levelMap = classMap and classMap[classToken]
+    if type(levelMap) ~= "table" then return index end
+
+    for rawLevel, entries in pairs(levelMap) do
+        local level = tonumber(rawLevel)
+        if level and type(entries) == "table" then
+            local levelIndex = { bySpell = {}, byName = {}, byBase = {} }
+            index[level] = levelIndex
+            for _, existing in ipairs(entries) do
+                local oldName = ns.NormalizeTrainingName(ns.TrainingEntryName(existing))
+                if oldName then
+                    levelIndex.byName[oldName] = existing
+                    local base = oldName:match("^(.-) %(") or oldName
+                    levelIndex.byBase[base] = levelIndex.byBase[base] or existing
+                end
+                if type(existing) == "table" and existing.spellID then
+                    levelIndex.bySpell[existing.spellID] = existing
+                end
+            end
+        end
+    end
+    return index
+end
+
+local function IndexRecord(levelIndex, entry)
+    if not levelIndex or not entry then return end
+    local name = ns.NormalizeTrainingName(ns.TrainingEntryName(entry))
+    if name then
+        levelIndex.byName[name] = entry
+        local base = name:match("^(.-) %(") or name
+        levelIndex.byBase[base] = levelIndex.byBase[base] or entry
+    end
+    if type(entry) == "table" and entry.spellID then
+        levelIndex.bySpell[entry.spellID] = entry
+    end
+end
+
 -- Preserve one saved record per spell or normalized trainer name.
-local function RecordAbility(classMap, classToken, level, label, icon, spellID, isProfession, serviceCost)
+local function RecordAbility(classMap, classToken, level, label, icon, spellID, isProfession, serviceCost, recordIndex)
+    recordIndex = recordIndex or {}
     classMap[classToken] = classMap[classToken] or {}
     local levelMap = classMap[classToken]
     local entries = levelMap[level] or levelMap[tostring(level)]
     if not entries then entries = {}; levelMap[level] = entries end
     local normalized = ns.NormalizeTrainingName(label)
     local base = normalized:match("^(.-) %(") or normalized
-    for index, existing in ipairs(entries) do
-        local oldName = ns.NormalizeTrainingName(ns.TrainingEntryName(existing))
-        local oldID = type(existing) == "table" and existing.spellID
+
+    recordIndex[level] = recordIndex[level] or { bySpell = {}, byName = {}, byBase = {} }
+    local levelIndex = recordIndex[level]
+    local existing = (spellID and levelIndex.bySpell[spellID]) or levelIndex.byName[normalized]
+
+    local function Matches(candidate)
+        if not candidate then return false end
+        local oldName = ns.NormalizeTrainingName(ns.TrainingEntryName(candidate))
+        local oldID = type(candidate) == "table" and candidate.spellID
         local oldBase = oldName and (oldName:match("^(.-) %(") or oldName)
         local oldHasSuffix = oldName and oldName:find(" %(") ~= nil
         local newHasSuffix = normalized:find(" %(") ~= nil
-        local same = (spellID and oldID and spellID == oldID)
+        return (spellID and oldID and spellID == oldID)
             or (not oldID and (oldName == normalized
                 or (not oldHasSuffix and newHasSuffix and oldName == base)
                 or (oldHasSuffix and not newHasSuffix and oldBase == normalized)))
             or (not spellID and oldName == normalized)
-        if same then
-            local changed = false
-            if type(existing) ~= "table" then existing = {name=existing}; entries[index] = existing end
-            if existing.name ~= label then existing.name = label; changed = true end
-            if icon and existing.icon ~= icon then existing.icon = icon; changed = true end
-            if spellID and existing.spellID ~= spellID then existing.spellID = spellID; changed = true end
-            if isProfession and not existing.profession then existing.profession = true; changed = true end
-            if serviceCost ~= nil and existing.cost ~= serviceCost then
-                existing.cost = serviceCost
-                changed = true
+    end
+
+    if not Matches(existing) then
+        existing = Matches(levelIndex.byBase[base]) and levelIndex.byBase[base] or nil
+    end
+    if not existing then
+        -- The indexed paths cover normal scans. Keep the old comparison as a
+        -- fallback for unusual rank/name combinations already in the cache.
+        for index, candidate in ipairs(entries) do
+            if Matches(candidate) then
+                existing = candidate
+                break
             end
-            return existing, false, changed
         end
+    end
+
+    if existing then
+        local existingIndex
+        if type(existing) ~= "table" then
+            for index, candidate in ipairs(entries) do
+                if candidate == existing then existingIndex = index; break end
+            end
+        end
+        local index = existingIndex
+        local changed = false
+        if type(existing) ~= "table" then
+            existing = { name = existing }
+            if index then entries[index] = existing end
+        end
+        if existing.name ~= label then existing.name = label; changed = true end
+        if icon and existing.icon ~= icon then existing.icon = icon; changed = true end
+        if spellID and existing.spellID ~= spellID then existing.spellID = spellID; changed = true end
+        if isProfession and not existing.profession then existing.profession = true; changed = true end
+        if serviceCost ~= nil and existing.cost ~= serviceCost then
+            existing.cost = serviceCost
+            changed = true
+        end
+        IndexRecord(levelIndex, existing)
+        return existing, false, changed
     end
     local savedEntry = {
         name = label,
@@ -246,6 +415,7 @@ local function RecordAbility(classMap, classToken, level, label, icon, spellID, 
         cost = serviceCost,
     }
     entries[#entries + 1] = savedEntry
+    IndexRecord(levelIndex, savedEntry)
     return savedEntry, true, true
 end
 
@@ -263,6 +433,7 @@ local function ScanTrainer()
     if trainerIsProfession and not (ns.db and ns.db.scanProfessionTrainers) then return end
     local _, classToken = UnitClass("player")
     if not classToken then return end
+    local recordIndex = BuildRecordIndex(store[flavor], classToken)
 
     local added, skippedNoLevel, changed = 0, 0, false
     for i = 1, GetNumTrainerServices() do
@@ -283,7 +454,7 @@ local function ScanTrainer()
                 if not isWeaponSkill
                     and (not professionService or (ns.db and ns.db.scanProfessionTrainers)) then
                     local savedEntry, isNew, wasChanged = RecordAbility(
-                        store[flavor], classToken, level, label, icon, spellID, professionService, serviceCost)
+                        store[flavor], classToken, level, label, icon, spellID, professionService, serviceCost, recordIndex)
                     if isNew then added = added + 1 end
                     changed = changed or wasChanged
                     if status == "used" then MarkLearned(savedEntry, level) end
@@ -297,7 +468,15 @@ local function ScanTrainer()
     if GnomeLevelUpDB.trainerRescanRequired then
         GnomeLevelUpDB.trainerRescanRequired = false
     end
-    if ns.SnapshotSpellBook then ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook()) end
+    GnomeLevelUpDB.trainerCacheMeta = {
+        flavor = flavor,
+        classToken = classToken,
+        npcName = npcName,
+        lastScanAt = type(time) == "function" and time() or nil,
+    }
+    if ns.SnapshotSpellBook and ns.MarkKnownTrainerSkills then
+        ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook())
+    end
     if added > 0 then
         print(string.format("|cff3fe0ffGnomeLevelUp|r: saved %d new trainer %s from %s.",
             added, added == 1 and "entry" or "entries", npcName or "this trainer"))
@@ -313,6 +492,7 @@ local trainerOpen, scanQueued, reconcileQueued = false, false, false
 local trainerSession = 0
 local function QueueScan()
     -- Wait briefly so the trainer list has time to finish loading.
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return end
     if scanQueued then return end
     scanQueued = true
     local session = trainerSession
@@ -323,12 +503,13 @@ local function QueueScan()
 end
 local function QueueReconcile()
     -- Recheck saved skills after the trainer window closes.
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return end
     if reconcileQueued then return end
     reconcileQueued = true
     C_Timer.After(TRAINER_RECONCILE_DELAY, function()
         reconcileQueued = false
         if ns.db and ns.GetTrainerCatalogIndex and #ns.GetTrainerCatalogIndex() > 0
-            and ns.SnapshotSpellBook then
+            and ns.SnapshotSpellBook and ns.MarkKnownTrainerSkills then
             ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook())
         end
     end)
@@ -355,10 +536,16 @@ function ns.TestTrainerList()
     -- Print the skills currently shown in the level-up panel.
     if not ns.IsDebugEnabled or not ns.IsDebugEnabled() then return end
     local currentLevel = UnitLevel("player")
-    local trainerAbilities = ns.GetAllTrainableUpToLevel(currentLevel)
-    print(string.format("|cff3fe0ffGnomeLevelUp|r unlearned trainer skills: %d", #trainerAbilities))
-    for _, trainingAbility in ipairs(trainerAbilities) do
-        print("  " .. trainingAbility.name)
+    local abilities
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "retail" and ns.GetRetailUnlearnedSpells then
+        abilities = ns.GetRetailUnlearnedSpells(currentLevel)
+        print(string.format("|cff3fe0ffGnomeLevelUp|r unlearned Retail spell unlocks: %d", #abilities))
+    else
+        abilities = ns.GetAllTrainableUpToLevel(currentLevel)
+        print(string.format("|cff3fe0ffGnomeLevelUp|r unlearned trainer skills: %d", #abilities))
+    end
+    for _, ability in ipairs(abilities) do
+        print("  " .. ability.name)
     end
     local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills
         and ns.GetUnlearnedWeaponSkills(currentLevel) or {}
@@ -373,8 +560,13 @@ frame:RegisterEvent("TRAINER_UPDATE")
 frame:RegisterEvent("TRAINER_CLOSED")
 frame:RegisterEvent("SPELLS_CHANGED")
 frame:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
+frame:RegisterEvent("SKILL_LINES_CHANGED")
 -- Keep the cache updated while the player visits trainers or learns spells.
 frame:SetScript("OnEvent", function(self, event, ...)
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever"
+        and event ~= "SPELLS_CHANGED" and event ~= "LEARNED_SPELL_IN_SKILL_LINE" then
+        return
+    end
     if event == "TRAINER_SHOW" then
         trainerSession = trainerSession + 1
         trainerOpen = true
@@ -385,8 +577,14 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "TRAINER_UPDATE" then
         if trainerOpen then QueueScan() end
     elseif event == "LEARNED_SPELL_IN_SKILL_LINE" then
+        if ns.InvalidateSpellBookSnapshot then ns.InvalidateSpellBookSnapshot() end
+        if ns.InvalidateWeaponSkillSnapshot then ns.InvalidateWeaponSkillSnapshot() end
         ns.MarkTrainerSpellLearned((...))
     else
-        QueueReconcile()
+        if ns.InvalidateSpellBookSnapshot then ns.InvalidateSpellBookSnapshot() end
+        if ns.InvalidateWeaponSkillSnapshot then ns.InvalidateWeaponSkillSnapshot() end
+        if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "forever" then
+            QueueReconcile()
+        end
     end
 end)

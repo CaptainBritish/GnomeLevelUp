@@ -8,6 +8,8 @@ I intentionally stuck to the free version of Claude to discourage myself from re
 As it stands the addon is about 70/30 my code/AI code. My goal isn't to just throw out vibe coded slop,
 just to get a cool addon out that was above my level of understanding at the start while learning along the way.
 
+No AI was used for any graphical assets, they're either taken directly from WoW or kitbashed from various other assets.
+
 # GnomeLevelUp
 
 A fancy level-up screen for World of Warcraft that shows the stats you
@@ -73,13 +75,17 @@ Slash commands (`/glu`):
 
 ## Customizing the sound
 
-By default it plays Blizzard's built-in level-up sound effect. To use
-your own instead, drop an `.ogg` file in the addon folder (e.g. under a
-`Sounds\` subfolder) and either set it in the options menu or using this command:
+There are three ways to register a custom sound:
+First drop an ".ogg: file in the addon's /sounds/ folder then do one of the following:
+```
+Open Soundlist.lua in /sounds/ and copy/paste the example Wildstar sound effect, replace
+the details with your own.
+
 ```
 /run GnomeLevelUpDB.customSoundFile = "Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg"
 ```
-An example file is included in /Sounds/ to show you how it works.
+Or select Custom Sound in the options menu and add your sound's path.
+
 
 ## Known limitations
 
@@ -88,6 +94,7 @@ An example file is included in /Sounds/ to show you how it works.
 - Forever weapon skills use a built-in list because they are not read from the trainer window; that list may need updates if Forever changes its class or weapon rules.
 - Blizzard's popup layout and protected-value rules can change with client updates and may require compatibility fixes.
 - English labels and spell names are currently the most reliable for matching cached trainer data.
+- Warlock Grimoires can currently only show grimoires that are available at the reached level.
 
 ## File overview
 

@@ -20,6 +20,7 @@ function ns.SnapshotStats()
         level = UnitLevel("player"),
         health = UnitHealthMax("player"),
         power = UnitPowerMax("player"),
+        powerToken = powerToken,
         powerLabel = powerLabel,
         stats = {},
     }
@@ -50,7 +51,7 @@ function ns.DiffStats(before, after)
         stats = {},
     }
 
-    local function AddStat(name, oldVal, newVal)
+    local function AddStat(name, oldVal, newVal, kind)
         oldVal, newVal = GetVisibleNumber(oldVal), GetVisibleNumber(newVal)
         if oldVal == nil or newVal == nil then
             return -- secret right now; skip this one rather than crash
@@ -59,11 +60,12 @@ function ns.DiffStats(before, after)
         if not ok or not increased then
             return -- unchanged or (shouldn't happen, but just in case) went down
         end
-        diff.stats[#diff.stats + 1] = { name = name, old = oldVal, new = newVal }
+        diff.stats[#diff.stats + 1] = { name = name, old = oldVal, new = newVal, kind = kind }
     end
 
-    AddStat("Health", before.health, after.health)
-    AddStat(after.powerLabel or "Power", before.power, after.power)
+    AddStat("Health", before.health, after.health, "health")
+    AddStat(after.powerLabel or "Power", before.power, after.power,
+        after.powerToken == "MANA" and "mana" or "power")
 
     for _, i in ipairs(GetDisplayedStatIndexes()) do
         AddStat(STAT_NAMES[i], before.stats[i], after.stats[i])

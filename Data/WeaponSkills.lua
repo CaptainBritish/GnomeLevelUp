@@ -62,7 +62,14 @@ function ns.IsHardcodedWeaponSkill(name)
     return HARD_CODED_WEAPON_NAMES[NormalizeSkillName(name)] == true
 end
 
+local knownWeaponSkills
+
+function ns.InvalidateWeaponSkillSnapshot()
+    knownWeaponSkills = nil
+end
+
 local function SnapshotKnownWeaponSkills()
+    if knownWeaponSkills then return knownWeaponSkills end
     local known = {}
     if type(GetNumSkillLines) ~= "function" or type(GetSkillLineInfo) ~= "function" then
         return known
@@ -77,6 +84,7 @@ local function SnapshotKnownWeaponSkills()
             if normalized then known[normalized] = true end
         end
     end
+    knownWeaponSkills = known
     return known
 end
 
