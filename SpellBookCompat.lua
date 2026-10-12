@@ -9,6 +9,7 @@ local cachedFutureRevision = -1
 local retailFutureSpellsBeforeLevel
 local knownSpellCache = {}
 local knownSpellCacheRevision = -1
+local spellbookInvalidationQueued = false
 
 local function IsSecretValue(value)
     return type(issecretvalue) == "function" and issecretvalue(value)
@@ -24,6 +25,20 @@ function ns.InvalidateSpellBookSnapshot()
     knownSpellCacheRevision = -1
     if ns.InvalidateKnownTrainingLookup then
         ns.InvalidateKnownTrainingLookup()
+    end
+end
+
+function ns.QueueSpellBookInvalidation(delay)
+    if spellbookInvalidationQueued then return end
+    spellbookInvalidationQueued = true
+    local function Flush()
+        spellbookInvalidationQueued = false
+        ns.InvalidateSpellBookSnapshot()
+    end
+    if C_Timer and C_Timer.After then
+        C_Timer.After(tonumber(delay) or 0.10, Flush)
+    else
+        Flush()
     end
 end
 
@@ -84,11 +99,13 @@ function ns.SnapshotSpellBook(forceRefresh)
         return cachedSpellbook
     end
 
+    local perf = ns.PerfStart and ns.PerfStart("spellbook_snapshot")
     local known = {}
     local playerBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
     if not C_SpellBook or not C_SpellBook.GetNumSpellBookSkillLines or not playerBank then
         cachedSpellbook = known
         cachedRevision = spellbookRevision
+        if ns.PerfEnd then ns.PerfEnd(perf) end
         return known
     end
 
@@ -119,6 +136,7 @@ function ns.SnapshotSpellBook(forceRefresh)
     end
     cachedSpellbook = known
     cachedRevision = spellbookRevision
+    if ns.PerfEnd then ns.PerfEnd(perf) end
     return known
 end
 
@@ -184,6 +202,7 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
         return cachedFutureSpells
     end
 
+    local perf = ns.PerfStart and ns.PerfStart("retail_future_snapshot")
     local futureSpells = {}
     local seen = {}
     local playerBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
@@ -193,6 +212,7 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
         or not C_SpellBook.GetSpellBookItemInfo or not playerBank or not futureType then
         cachedFutureSpells = futureSpells
         cachedFutureRevision = spellbookRevision
+        if ns.PerfEnd then ns.PerfEnd(perf) end
         return futureSpells
     end
 
@@ -228,6 +248,7 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
     end)
     cachedFutureSpells = futureSpells
     cachedFutureRevision = spellbookRevision
+    if ns.PerfEnd then ns.PerfEnd(perf) end
     return futureSpells
 end
 
@@ -237,16 +258,31 @@ function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells)
     futureSpells = futureSpells or ns.SnapshotRetailFutureSpells()
 
     local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
+    local onlyNewSkills = ns.db and ns.db.showOnlyNewSkills == true
     local available = {}
+    local ranked = {}
     for _, spell in ipairs(futureSpells) do
         local levelMatches = not onlyCurrentLevel or spell.requiredLevel == currentLevel
         if spell.requiredLevel <= currentLevel and levelMatches then
-            available[#available + 1] = {
+            local ability = {
                 id = spell.id,
                 name = spell.name,
                 icon = spell.icon,
             }
+            local baseName, rank = ns.GetTrainingRankInfo and ns.GetTrainingRankInfo(spell.name)
+            if onlyNewSkills and rank then
+                local existing = ranked[baseName]
+                if not existing or rank < existing.rank then
+                    if existing then available[existing.index] = ability end
+                    ability.rank, ability.index = rank, #available + 1
+                    ranked[baseName] = ability
+                    available[#available + 1] = ability
+                end
+            else
+                available[#available + 1] = ability
+            end
         end
     end
+    for _, ability in ipairs(available) do ability.rank, ability.index = nil, nil end
     return available
 end

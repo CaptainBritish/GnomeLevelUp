@@ -1,14 +1,9 @@
-# AI Usage Disclaimer 
-I am still new to LUA and used AI as a training tool and to help me debug and to suggest 
-ways to build certain functions, AI was used to help me write and understand the functions 
-that allow for spell book caching. A lot of Claude's suggestions were outright thrown out (
-e.g.: Originally, it wanted me to scan for a lot of things by name rather than using documented API functions.)
-I intentionally stuck to the free version of Claude to discourage myself from relying on it too much.
+## Release notes
 
-As it stands the addon is about 70/30 my code/AI code. My goal isn't to just throw out vibe coded slop,
-just to get a cool addon out that was above my level of understanding at the start while learning along the way.
+- Profiles upgrading from older releases may need to visit a trainer again if their cached trainer data is incomplete or outdated.
+- If a custom theme contains missing or invalid texture references, use **Reset Appearance** or select the theme again to restore valid defaults.
+- The controller menu is still considered beta functionality. Report controller input, menu layering, or theme-rendering problems with the client version and active theme included.
 
-No AI was used for any graphical assets, they're either taken directly from WoW or kitbashed from various other assets.
 
 # GnomeLevelUp
 
@@ -19,6 +14,7 @@ Credit where it's due, This addon is inspired by the *idea* behind the old addon
 "CoolLevelUp" by Forge_User_42492943. None of CLU's code ort other assets have been used.
 
 Shoutouts: Shadowhand for helping test and fixing my broken-ass code for hiding the default level-up toast
+the 54 Sky Elf warriors that were created and killed to help me test this addon.
 
 ## Supported clients
 
@@ -90,11 +86,26 @@ Or select Custom Sound in the options menu and add your sound's path.
 ## Known limitations
 
 - Retail support is included but has not been tested as extensively as WoW: Forever.
+- The controller options menu is a WoW: Forever feature. It is disabled on Retail because Retail does not currently expose the required controller API reliably.
+- Forever controller navigation uses the client's gamepad bindings and may require controller mode to be active before opening `/glu options`.
 - Trainer abilities are only known after visiting the relevant class trainer once. 
 - Forever weapon skills use a built-in list because they are not read from the trainer window; that list may need updates if Forever changes its class or weapon rules.
 - Blizzard's popup layout and protected-value rules can change with client updates and may require compatibility fixes.
 - English labels and spell names are currently the most reliable for matching cached trainer data.
 - Warlock Grimoires can currently only show grimoires that are available at the reached level.
+
+## AI Usage Disclaimer 
+I am still new to LUA and used AI as a training tool and to help me debug and to suggest 
+ways to build certain functions, AI was used to help me write and understand the functions 
+that allow for spell book caching. A lot of Claude's suggestions were outright thrown out (
+e.g.: Originally, it wanted me to scan for a lot of things by name rather than using documented API functions.)
+I intentionally stuck to the free version of Claude to discourage myself from relying on it too much.
+
+As it stands the addon is about 70/30 my code/AI code. My goal isn't to just throw out vibe coded slop,
+just to get a cool addon out that was above my level of understanding at the start while learning along the way.
+
+No AI was used for any graphical assets, they're either taken directly from WoW or kitbashed from various other assets
+
 
 ## File overview
 

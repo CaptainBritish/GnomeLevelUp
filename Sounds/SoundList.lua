@@ -6,4 +6,9 @@ ns.CUSTOM_SOUND_CHOICES = {
         label = "Wildstar Cupcake",
         path = "Interface\\AddOns\\GnomeLevelUp\\Sounds\\wildstar_cupcake.ogg",
     },
+    {
+        value = "FFXIV Duty",
+        label = "FFXIV Victory Reborn",
+        path = "Interface\\AddOns\\GnomeLevelUp\\Sounds\\VictoryReborn.ogg",
+    },
 }

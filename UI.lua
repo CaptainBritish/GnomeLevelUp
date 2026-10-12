@@ -14,13 +14,15 @@ local SECTION_DIVIDER_HEIGHT = 3
 local SEPARATOR_TEXTURE = "Interface\\AddOns\\GnomeLevelUp\\Textures\\seperator"
 local DEFAULT_SECTION_PADDING = 8
 local FRAME_BOTTOM_EXTENSION = 30
+local WHITE_COLOR = { 1, 1, 1 }
+local BLACK_COLOR = { 0, 0, 0 }
 
 local FRAME_WIDTH = 460
 local TEXT_WIDTH = FRAME_WIDTH - 60
 local DEFAULT_TEXT_WIDTH = TEXT_WIDTH
 local COMPACT_MAX_SKILLS = 5
-local CLASS_ICON_SIZE = 60
-local PLAYER_PORTRAIT_SIZE = CLASS_ICON_SIZE + 30
+local PLAYER_PORTRAIT_SIZE = 90
+local CLASS_ICON_SIZE = PLAYER_PORTRAIT_SIZE
 local PORTRAIT_RING_PADDING = 6
 
 local function IsPlayerPortrait()
@@ -42,6 +44,16 @@ end
 
 local function PortraitRingSize()
     return PortraitIconSize() + PORTRAIT_RING_PADDING
+end
+
+local function PortraitRingScale()
+    local scale = tonumber(ns.db and ns.db.portraitRingScale) or 1.0
+    return math.max(0.5, math.min(2.0, scale))
+end
+
+local function PortraitRingOffset()
+    local offset = ns.db and ns.db.portraitRingOffset
+    return tonumber(offset and offset.x) or 0, tonumber(offset and offset.y) or 0
 end
 
 local function Speed()
@@ -110,9 +122,199 @@ local closeText = closeButton:CreateFontString(nil, "OVERLAY", "GameFontNormalLa
 closeText:SetAllPoints()
 closeText:SetJustifyH("CENTER")
 closeText:SetJustifyV("MIDDLE")
-closeText:SetText("X")
 closeText:SetTextColor(1, 1, 1, 1)
+local closeIcon = closeButton:CreateTexture(nil, "OVERLAY")
+closeIcon:SetPoint("CENTER")
+closeIcon:SetSize(24, 24)
+
+local lastControllerUIState
+local function SyncControllerDefaults(active)
+    if ns.db then
+        if active and ns.db.ignoreMouseoverDelayUserSet ~= true then
+            ns.db.ignoreMouseoverDelay = true
+        elseif not active and lastControllerUIState == true
+            and ns.db.ignoreMouseoverDelayUserSet ~= true then
+            ns.db.ignoreMouseoverDelay = false
+        end
+    end
+    lastControllerUIState = active == true
+end
+
+local function IsControllerUIActive()
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "retail" then
+        SyncControllerDefaults(false)
+        return false
+    end
+    local detected = false
+    -- Forever's visible Gamepad UI mode is exposed through this CVar. It is
+    -- the same signal used by the options window when selecting its controller
+    -- handling path, so prefer it over the lower-level device API.
+    local style
+    local explicitKeyboardStyle = false
+    if type(GetCVar) == "function" then
+        local ok, value = pcall(GetCVar, "InputDeviceInterfaceStyle")
+        if ok then
+            style = value
+            explicitKeyboardStyle = value == "0" or value == "keyboard"
+        end
+    end
+    if style == "1" or style == "gamepad" then
+        SyncControllerDefaults(true)
+        return true
+    end
+    -- Some Forever builds expose the current value through C_CVar even when
+    -- the legacy GetCVar call returns the previous interface style.
+    if C_CVar and type(C_CVar.GetCVar) == "function" then
+        local ok, value = pcall(C_CVar.GetCVar, "InputDeviceInterfaceStyle")
+        if ok and (value == "1" or value == "gamepad") then
+            SyncControllerDefaults(true)
+            return true
+        end
+        if ok and (value == "0" or value == "keyboard") then explicitKeyboardStyle = true end
+    end
+    if explicitKeyboardStyle then
+        SyncControllerDefaults(false)
+        return false
+    end
+    if C_GamePad and type(C_GamePad.IsEnabled) == "function" then
+        local ok, enabled = pcall(C_GamePad.IsEnabled)
+        if ok and enabled == true then detected = true end
+    end
+    -- Forever exposes the native mode through the same client cvar on builds
+    -- where C_GamePad.IsEnabled is not available to addons.
+    if not detected and type(GetCVarBool) == "function" then
+        local ok, enabled = pcall(GetCVarBool, "GamePadEnable")
+        if ok and enabled == true then detected = true end
+    end
+    if not detected and type(GetCVar) == "function" then
+        local ok, enabled = pcall(GetCVar, "GamePadEnable")
+        if ok and (enabled == "1" or enabled == "true") then detected = true end
+    end
+    SyncControllerDefaults(detected)
+    return detected
+end
+ns.IsControllerUIActive = IsControllerUIActive
+
+local function ControllerLabelStyle()
+    -- Forever does not expose a stable controller-family API to addons. Let
+    -- the player choose the glyph family once instead of guessing from CVars.
+    local style = ns.db and ns.db.controllerGlyphStyle
+    if style == "none" then return "none" end
+    if style == "playstation" or style == "nintendo" then return style end
+    return "xbox"
+end
+
+local CONTROLLER_B_ATLASES = {
+    xbox = { atlases = { "gamepad_ltr_b_64", "Gamepad_Ltr_B_64" }, file = "Interface\\Gamepad\\gamepadltr.blp" },
+    playstation = { atlases = { "gamepad_shp_circle_64", "Gamepad_Shp_Circle_64" }, file = "Interface\\Gamepad\\gamepadshp.blp" },
+    nintendo = { atlases = { "gamepad_rev_a_64", "Gamepad_Rev_A_64" }, file = "Interface\\Gamepad\\gamepadrev.blp" },
+}
+
+local function SetControllerGlyphTexture(texture, path)
+    local ok = pcall(texture.SetTexture, texture, path)
+    if not ok then return false end
+    if texture.GetTextureFileID then
+        local idOK, fileID = pcall(texture.GetTextureFileID, texture)
+        if idOK then return fileID ~= nil and fileID ~= 0 end
+    end
+    return true
+end
+
+local function RefreshCloseButtonLabel()
+    if not IsControllerUIActive() then
+        closeIcon:Hide()
+        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
+        closeText:SetText("X")
+        closeText:Show()
+        return
+    end
+
+    if ControllerLabelStyle() == "none" then
+        closeIcon:Hide()
+        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
+        closeText:SetText("X")
+        closeText:Show()
+        return
+    end
+
+    local atlas = CONTROLLER_B_ATLASES[ControllerLabelStyle()] or CONTROLLER_B_ATLASES.xbox
+    local atlasApplied = false
+    if C_Texture and type(C_Texture.GetAtlasInfo) == "function" then
+        for _, atlasName in ipairs(atlas.atlases or {}) do
+            local infoOK, info = pcall(C_Texture.GetAtlasInfo, atlasName)
+            if infoOK and info and (info.file or info.filename)
+                and info.leftTexCoord and info.rightTexCoord
+                and info.topTexCoord and info.bottomTexCoord then
+                local textureOK = pcall(closeIcon.SetTexture, closeIcon, info.file or info.filename)
+                if textureOK then
+                    closeIcon:SetTexCoord(info.leftTexCoord, info.rightTexCoord,
+                        info.topTexCoord, info.bottomTexCoord)
+                    atlasApplied = true
+                    break
+                end
+            end
+        end
+    end
+    if not atlasApplied and closeIcon.SetAtlas then
+        for _, atlasName in ipairs(atlas.atlases or {}) do
+            -- Do not request the atlas's native size; the popup uses a compact
+            -- 24-pixel controller hint regardless of the source region size.
+            atlasApplied = pcall(closeIcon.SetAtlas, closeIcon, atlasName, false)
+            if atlasApplied then break end
+        end
+    end
+    if not atlasApplied then
+        atlasApplied = SetControllerGlyphTexture(closeIcon, atlas.file)
+        if atlasApplied then closeIcon:SetTexCoord(0, 1, 0, 1) end
+    end
+    if atlasApplied then
+        closeIcon:SetSize(24, 24)
+        closeText:Hide()
+        closeIcon:Show()
+    else
+        -- The text fallback keeps controller mode usable on clients that have
+        -- the gamepad API but do not expose the new atlas regions to addons.
+        closeIcon:Hide()
+        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
+        closeText:SetText(ControllerLabelStyle() == "nintendo" and "A" or "B")
+        closeText:Show()
+    end
+end
+ns.RefreshControllerGlyph = RefreshCloseButtonLabel
+ns.RefreshCloseButton = RefreshCloseButtonLabel
+
+-- CVAR_UPDATE is not emitted consistently by Forever when a controller is
+-- unplugged. Poll only while the popup is visible so the glyph disappears
+-- promptly without adding a permanent update loop to the addon.
+local controllerGlyphElapsed = 0
+frame:SetScript("OnUpdate", function(_, elapsed)
+    controllerGlyphElapsed = controllerGlyphElapsed + (elapsed or 0)
+    if controllerGlyphElapsed < 0.20 then return end
+    controllerGlyphElapsed = 0
+    RefreshCloseButtonLabel()
+end)
+
+local function IsControllerBackButton(button)
+    button = tostring(button or ""):upper()
+    return button == "PAD2"
+        or button == "PADB"
+        or button == "PADBACK"
+        or button == "GAMEPAD_BUTTON_B"
+        or button == "GAMEPAD_B"
+end
+
+-- Forever's native controller UI can route the B/Back action directly to the
+-- top-most gamepad-enabled frame. Keep this opt-in and feature-detected so
+-- Retail and older clients retain the normal mouse-only close button.
+if (not ns.GetCurrentFlavor or ns.GetCurrentFlavor() ~= "retail")
+    and type(closeButton.EnableGamePadButton) == "function" then
+    closeButton:EnableGamePadButton(true)
+    closeButton:SetScript("OnGamePadButtonDown", function(_, button)
+        if IsControllerBackButton(button) then ns.CloseLevelUp() end
+    end)
+end
 closeButton:SetScript("OnClick", function() ns.CloseLevelUp() end)
+RefreshCloseButtonLabel()
 
 function ns.ApplyFrameStrata(strata)
     local ok = pcall(frame.SetFrameStrata, frame, strata or "HIGH")
@@ -147,7 +349,15 @@ end
 
 local BG_LAYERS = 28
 local BG_FADE_FRACTION = 0.10 -- fade band thickness per side, as a fraction of that dimension
+-- Clip the repeated edge bands a few pixels inside the outside frame edge.
+-- Their regions still run beneath the corner textures at both ends.
+local EDGE_MASK_INSET = 5
 local backgroundWidth, backgroundHeight
+-- LayoutCustomBackground performs a large number of anchor and size updates.
+-- Keep a small invalidation counter so repeated popup/layout refreshes do not
+-- rebuild an unchanged nine-slice background.
+local backgroundLayoutVersion = 0
+local laidOutBackgroundVersion = -1
 
 local bg = CreateFrame("Frame", nil, frame)
 bg:SetAllPoints(frame)
@@ -164,23 +374,28 @@ local BACKGROUND_PIECES = {
     "topLeft", "top", "topRight", "left", "center", "right",
     "bottomLeft", "bottom", "bottomRight",
 }
+local EDGE_PIECES = {
+    top = true,
+    bottom = true,
+    left = true,
+    right = true,
+}
 bg.customPieces = {}
 for _, name in ipairs(BACKGROUND_PIECES) do
-    -- All nine authored slices sit above the backing fill.
-    local texture = bg:CreateTexture(nil, "BACKGROUND", nil, -6)
+    -- Edge bands sit below the corners, allowing their repeats to continue
+    -- underneath the corner artwork without leaking over it.
+    local subLevel = EDGE_PIECES[name] and -7 or -6
+    local texture = bg:CreateTexture(nil, "BACKGROUND", nil, subLevel)
     texture:Hide()
     bg.customPieces[name] = texture
 end
 
 -- The center/background must remain underneath the entire nine-slice, including
--- the corner squares. The edge textures also continue a short distance beneath
--- their adjacent corners. This is important for authored corner TGAs that use
--- alpha to feather into the surrounding background/edge art: transparent pixels
--- should reveal the neighboring theme textures, never the game world.
+-- the corner squares. Edge bands are drawn below corners so authored corner
+-- alpha can reveal the neighboring edge art instead of the game world.
 --
--- Draw order: center backing (-8) -> edge-under-corner pieces (-7) -> authored
--- nine-slice pieces (-6). The underlays are restricted to the corner squares so
--- the visible edge slices are not double-blended/darkened.
+-- Draw order: center backing (-8) -> continuous edge bands (-7) -> authored
+-- corner pieces (-6).
 bg.customBackingPieces = {}
 bg.customBackingPieces.center = bg:CreateTexture(nil, "BACKGROUND", nil, -8)
 bg.customBackingPieces.center:Hide()
@@ -202,6 +417,10 @@ for _, info in ipairs(CORNER_UNDERLAYS) do
 end
 
 local function GetBackgroundTheme()
+    if ns.GetSelectedCompositeTheme then
+        local selected = ns.GetSelectedCompositeTheme()
+        if selected then return selected end
+    end
     local wanted = ns.db and ns.db.backgroundTheme
     for _, theme in ipairs(ns.CUSTOM_BACKGROUND_THEMES or {}) do
         if theme.value == wanted then return theme end
@@ -211,7 +430,14 @@ end
 local function BackgroundPieceColor(name)
     local colors = ns.db and ns.db.backgroundTextureColors
     local color = colors and colors[name]
-    return color or { 1, 1, 1 }
+    local hue = ns.db and ns.db.backgroundColor
+    -- The historical black default means "no texture tint" for custom
+    -- artwork; any selected hue is multiplied into the texture pieces.
+    if hue and not (hue[1] == 0 and hue[2] == 0 and hue[3] == 0) then
+        color = color or WHITE_COLOR
+        return { color[1] * hue[1], color[2] * hue[2], color[3] * hue[3] }
+    end
+    return color or WHITE_COLOR
 end
 
 local function SetBackgroundPieceColor(texture, name, alpha)
@@ -219,31 +445,105 @@ local function SetBackgroundPieceColor(texture, name, alpha)
     texture:SetVertexColor(color[1] or 1, color[2] or 1, color[3] or 1, alpha)
 end
 
-local function SetBackgroundPiece(texture, name, path, alpha)
-    if not path or path == "" then
+local function BackgroundStyle()
+    local style = ns.db and ns.db.backgroundStyle
+    if style == "fill" or style == "tile" or style == "stretch" then return style end
+    return ns.db and ns.db.backgroundFillMode == "tile" and "tile" or "stretch"
+end
+
+local function ApplyTextureReference(texture, reference, wrapH, wrapV)
+    local function SetTextureSafely(source)
+        -- Keep wrapping separate from texture assignment. Retail and Forever
+        -- both accept the one-argument form reliably; tile flags are applied
+        -- by SetHorizTile/SetVertTile after the reference is loaded.
+        return pcall(texture.SetTexture, texture, source)
+    end
+
+    if type(reference) == "table" and type(reference.atlas) == "string" then
+        -- Resolve the atlas to its parent file when the client exposes the
+        -- metadata. This preserves the atlas sub-rectangle while still
+        -- allowing the existing repeat/flip/rotation code to work.
+        if C_Texture and C_Texture.GetAtlasInfo then
+            local ok, info = pcall(C_Texture.GetAtlasInfo, reference.atlas)
+            local source = ok and info and (info.file or info.filename)
+            if source and info.leftTexCoord and info.rightTexCoord
+                and info.topTexCoord and info.bottomTexCoord then
+                local setOK = SetTextureSafely(source)
+                if setOK then
+                    return true, info.leftTexCoord, info.rightTexCoord,
+                        info.topTexCoord, info.bottomTexCoord
+                end
+            end
+        end
+        if texture.SetAtlas then
+            local ok = pcall(texture.SetAtlas, texture, reference.atlas, reference.useAtlasSize == true)
+            if ok then return true end
+        end
+        return false
+    end
+    if type(reference) == "string" and reference ~= "" then
+        -- A tiled center must use a repeat wrap mode. Without it the client
+        -- clamps the final texel and makes the texture look stretched at the
+        -- right and bottom edges. Non-tiled pieces stay clamped.
+        local horizontalWrap = wrapH and "REPEAT" or "CLAMP"
+        local verticalWrap = wrapV and "REPEAT" or "CLAMP"
+        local wrapped = pcall(texture.SetTexture, texture, reference, horizontalWrap, verticalWrap)
+        if wrapped then return true end
+        return SetTextureSafely(reference)
+    end
+    return false
+end
+
+local function SetBackgroundPiece(texture, name, path, alpha, tileEdges)
+    if not path or (type(path) == "string" and path == "") then
         texture:Hide()
         return
     end
 
-    -- SetHorizTile/SetVertTile preserve native texel size, but the texture's
-    -- wrap mode decides what appears outside the 0..1 coordinate range. The
-    -- default CLAMP mode extends edge pixels and looks like a stretched fill.
-    -- REPEAT is required for an actual tiled center texture.
-    local tiledCenter = name == "center"
-        and ns.db and ns.db.backgroundFillMode == "tile"
-    if tiledCenter then
-        texture:SetTexture(path, "REPEAT", "REPEAT")
-    else
-        texture:SetTexture(path, "CLAMP", "CLAMP")
+    -- Edge strips are repeatable bands. Their texture regions are bounded by
+    -- the outer-frame mask in LayoutCustomBackground, so the final tile is
+    -- clipped before the frame edge instead of poking outside it.
+    local style = BackgroundStyle()
+    local tiledCenter = name == "center" and style == "tile"
+    -- Edge strips are always tiled. The per-theme style applies only to the
+    -- center/background layer; tileEdges=false is used by its corner underlays.
+    local tiledEdges = tileEdges ~= false
+    local tileHorizontal = tiledCenter
+        or (tiledEdges and (name == "top" or name == "bottom"))
+    local tileVertical = tiledCenter
+        or (tiledEdges and (name == "left" or name == "right"))
+    local isAtlas = type(path) == "table" and type(path.atlas) == "string"
+    local applied, atlasLeft, atlasRight, atlasTop, atlasBottom =
+        ApplyTextureReference(texture, path, tileHorizontal, tileVertical)
+    if not applied then
+        texture:Hide()
+        return
     end
+    -- Make the TGA alpha channel explicit. This is especially important for
+    -- corner slices, whose transparent pixels are intended to reveal the
+    -- top/side edge pieces beneath them.
+    if texture.SetBlendMode then texture:SetBlendMode("BLEND") end
 
     local transform = ns.db and ns.db.backgroundTextureTransforms
         and ns.db.backgroundTextureTransforms[name]
     local rotation = transform and tonumber(transform.rotation) or 0
     if texture.SetRotation then texture:SetRotation(math.rad(rotation)) end
-    local left, right = transform and transform.flipX and 1 or 0, transform and transform.flipX and 0 or 1
-    local top, bottom = transform and transform.flipY and 1 or 0, transform and transform.flipY and 0 or 1
-    texture:SetTexCoord(left, right, top, bottom)
+    -- SetAtlas establishes the atlas region's coordinates internally. Do not
+    -- overwrite them with full-texture coordinates; direct paths retain the
+    -- older flip behavior used by the existing themes.
+    if isAtlas and atlasLeft then
+        local left = transform and transform.flipX and atlasRight or atlasLeft
+        local right = transform and transform.flipX and atlasLeft or atlasRight
+        local top = transform and transform.flipY and atlasBottom or atlasTop
+        local bottom = transform and transform.flipY and atlasTop or atlasBottom
+        texture:SetTexCoord(left, right, top, bottom)
+    elseif not isAtlas then
+        local left, right = transform and transform.flipX and 1 or 0, transform and transform.flipX and 0 or 1
+        local top, bottom = transform and transform.flipY and 1 or 0, transform and transform.flipY and 0 or 1
+        texture:SetTexCoord(left, right, top, bottom)
+    end
+    if texture.SetHorizTile then texture:SetHorizTile(tileHorizontal) end
+    if texture.SetVertTile then texture:SetVertTile(tileVertical) end
     SetBackgroundPieceColor(texture, name, alpha)
     texture:Show()
 end
@@ -263,6 +563,12 @@ local function LayoutCustomBackground(theme)
     ))
     local innerWidth = math.max(1, w - corner * 2)
     local innerHeight = math.max(1, h - corner * 2)
+    -- Edge strips run continuously behind the corner textures. The region
+    -- boundary is inset from the outside frame edge, so the final partial
+    -- tile is clipped there while the corners mask the strip at each join.
+    local edgeMask = math.max(0, tonumber(theme.edgeMaskInset) or EDGE_MASK_INSET)
+    local edgeSpanWidth = math.max(1, w - edgeMask * 2)
+    local edgeSpanHeight = math.max(1, h - edgeMask * 2)
 
     local pieces = bg.customPieces
     local backing = bg.customBackingPieces
@@ -273,57 +579,36 @@ local function LayoutCustomBackground(theme)
     end
 
     Anchor(pieces.topLeft, "TOPLEFT", "TOPLEFT", 0, 0, corner, corner)
-    Anchor(pieces.top, "TOPLEFT", "TOPLEFT", corner, 0, innerWidth, edge)
+    Anchor(pieces.top, "TOPLEFT", "TOPLEFT", edgeMask, 0, edgeSpanWidth, edge)
     Anchor(pieces.topRight, "TOPRIGHT", "TOPRIGHT", 0, 0, corner, corner)
-    Anchor(pieces.left, "TOPLEFT", "TOPLEFT", 0, -corner, edge, innerHeight)
+    Anchor(pieces.left, "TOPLEFT", "TOPLEFT", 0, -edgeMask, edge, edgeSpanHeight)
     Anchor(pieces.center, "TOPLEFT", "TOPLEFT", corner, -corner, innerWidth, innerHeight)
-    Anchor(pieces.right, "TOPRIGHT", "TOPRIGHT", 0, -corner, edge, innerHeight)
+    Anchor(pieces.right, "TOPRIGHT", "TOPRIGHT", 0, -edgeMask, edge, edgeSpanHeight)
     Anchor(pieces.bottomLeft, "BOTTOMLEFT", "BOTTOMLEFT", 0, 0, corner, corner)
-    Anchor(pieces.bottom, "BOTTOMLEFT", "BOTTOMLEFT", corner, 0, innerWidth, edge)
+    Anchor(pieces.bottom, "BOTTOMLEFT", "BOTTOMLEFT", edgeMask, 0, edgeSpanWidth, edge)
     Anchor(pieces.bottomRight, "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0, corner, corner)
 
-    -- The center texture is the deepest backing layer and covers the full frame.
-    -- That prevents corner alpha from cutting through to the game world.
+    -- The center texture is the deepest backing layer and always covers the
+    -- full frame. The authored edge pieces sit above it, so stretch fills the
+    -- complete panel while tile can repeat beneath the entire nine-slice.
     Anchor(backing.center, "TOPLEFT", "TOPLEFT", 0, 0, w, h)
 
-    -- Continue the horizontal edge artwork underneath the top/bottom corners.
-    -- Only the corner portions are drawn here; the normal visible edge pieces
-    -- remain between the corners at their usual size.
-    Anchor(backing.topLeftTop, "TOPLEFT", "TOPLEFT", 0, 0, corner, edge)
-    Anchor(backing.topRightTop, "TOPRIGHT", "TOPRIGHT", 0, 0, corner, edge)
-    Anchor(backing.bottomLeftBottom, "BOTTOMLEFT", "BOTTOMLEFT", 0, 0, corner, edge)
-    Anchor(backing.bottomRightBottom, "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0, corner, edge)
-
-    -- If corners are larger than the edge thickness, continue the vertical edge
-    -- artwork through the remaining part of each corner. The horizontal edge
-    -- underlay owns the outer edge-sized strip, so these do not overlap it.
-    local sideUnderlayHeight = math.max(0, corner - edge)
-    if sideUnderlayHeight > 0 then
-        Anchor(backing.topLeftLeft, "TOPLEFT", "TOPLEFT", 0, -edge, edge, sideUnderlayHeight)
-        Anchor(backing.topRightRight, "TOPRIGHT", "TOPRIGHT", 0, -edge, edge, sideUnderlayHeight)
-        Anchor(backing.bottomLeftLeft, "BOTTOMLEFT", "BOTTOMLEFT", 0, edge, edge, sideUnderlayHeight)
-        Anchor(backing.bottomRightRight, "BOTTOMRIGHT", "BOTTOMRIGHT", 0, edge, edge, sideUnderlayHeight)
-        backing.topLeftLeft:Show()
-        backing.topRightRight:Show()
-        backing.bottomLeftLeft:Show()
-        backing.bottomRightRight:Show()
-    else
-        backing.topLeftLeft:Hide()
-        backing.topRightRight:Hide()
-        backing.bottomLeftLeft:Hide()
-        backing.bottomRightRight:Hide()
+    -- The visible edge bands already run beneath the corners. Keep the old
+    -- corner underlay objects hidden so they cannot double-blend the same art.
+    for _, info in ipairs(CORNER_UNDERLAYS) do
+        backing[info.key]:Hide()
     end
 
-    local tiled = ns.db and ns.db.backgroundFillMode == "tile"
+    local tiled = BackgroundStyle() == "tile"
     backing.center:SetHorizTile(tiled)
     backing.center:SetVertTile(tiled)
 end
 
 local function LayoutBackground()
     local w, h = frame:GetWidth(), frame:GetHeight()
-    if w == backgroundWidth and h == backgroundHeight then
-        local theme = GetBackgroundTheme()
-        if ns.db and ns.db.backgroundMode == "CUSTOM" and theme then LayoutCustomBackground(theme) end
+    local custom = ns.db and ns.db.backgroundMode == "CUSTOM"
+    if w == backgroundWidth and h == backgroundHeight
+        and (not custom or laidOutBackgroundVersion == backgroundLayoutVersion) then
         return
     end
     backgroundWidth, backgroundHeight = w, h
@@ -337,6 +622,7 @@ local function LayoutBackground()
     end
     local theme = GetBackgroundTheme()
     if theme then LayoutCustomBackground(theme) end
+    laidOutBackgroundVersion = backgroundLayoutVersion
 end
 LayoutBackground()
 
@@ -346,16 +632,17 @@ end
 
     -- Keep the background opacity separate from the content animation.
 function ns.ApplyBackgroundAppearance()
-    local useCustom = ns.db and ns.db.backgroundMode == "CUSTOM"
-        and GetBackgroundTheme() ~= nil
+    backgroundLayoutVersion = backgroundLayoutVersion + 1
+    local theme = GetBackgroundTheme()
+    local useCustom = ns.db and ns.db.backgroundMode == "CUSTOM" and theme ~= nil
     for _, layer in ipairs(bg.layers) do
         layer:SetShown(not useCustom)
     end
-    local theme = useCustom and GetBackgroundTheme() or nil
+    if not useCustom then theme = nil end
     for _, name in ipairs(BACKGROUND_PIECES) do
         local piece = bg.customPieces[name]
         if useCustom and name ~= "center" then
-            SetBackgroundPiece(piece, name, theme.textures and theme.textures[name], (ns.db and ns.db.bgOpacity) or 0.70)
+            SetBackgroundPiece(piece, name, theme.textures and theme.textures[name], (ns.db and ns.db.bgOpacity) or 0.70, true)
         else
             -- The authored center slice is rendered by the dedicated backing
             -- layer so it is never double-blended. That backing extends beneath
@@ -368,11 +655,9 @@ function ns.ApplyBackgroundAppearance()
     -- transparent corner pixels reveal theme artwork instead of the world.
     local alpha = (ns.db and ns.db.bgOpacity) or 0.70
     if useCustom then
-        SetBackgroundPiece(bg.customBackingPieces.center, "center", theme.textures and theme.textures.center, alpha)
+        SetBackgroundPiece(bg.customBackingPieces.center, "center", theme.textures and theme.textures.center, alpha, false)
         for _, info in ipairs(CORNER_UNDERLAYS) do
-            local piece = bg.customBackingPieces[info.key]
-            local path = theme.textures and theme.textures[info.source]
-            SetBackgroundPiece(piece, info.source, path, alpha)
+            bg.customBackingPieces[info.key]:Hide()
         end
     else
         for _, piece in pairs(bg.customBackingPieces) do
@@ -384,7 +669,7 @@ end
 
 function ns.ApplyBackgroundOpacity(opacity)
     opacity = math.max(0, math.min(0.995, opacity or 0.70))
-    local color = ns.db and ns.db.backgroundColor or { 0.00, 0.00, 0.00 }
+    local color = ns.db and ns.db.backgroundColor or BLACK_COLOR
     local previousCumulative = 0
     for k = 1, BG_LAYERS do
         local target = opacity * SmoothStep(k / BG_LAYERS)
@@ -426,30 +711,81 @@ local GLOW_DIRS = {
     { -1, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 },
 }
 
+local function CurrentShadowAlpha(text)
+    if ns.db and ns.db.showTextShadow == false then return 0 end
+    return text and text.glowAlpha or GLOW_ALPHA
+end
+
+local function EnsureGlowLayers(main)
+    if main.glowsReady then return end
+    main.glowsReady = true
+    main.glows = main.glows or {}
+    local r, g, b = main:GetTextColor()
+    local fontPath, fontSize, fontFlags = main:GetFont()
+    -- Restore the authored coloured glow. A faint native drop shadow cannot
+    -- reproduce the coverage of the original eight offset text layers.
+    for i, dir in ipairs(GLOW_DIRS) do
+        local glow = main:GetParent():CreateFontString(nil, "ARTWORK", main.template)
+        if fontPath and fontSize then glow:SetFont(fontPath, fontSize, fontFlags or "") end
+        local glowOffsetY = tonumber(main.glowOffsetY) or 0
+        glow:SetPoint("TOPLEFT", main, "TOPLEFT", dir[1] * main.glowRadius, dir[2] * main.glowRadius + glowOffsetY)
+        glow:SetPoint("TOPRIGHT", main, "TOPRIGHT", dir[1] * main.glowRadius, dir[2] * main.glowRadius + glowOffsetY)
+        glow:SetText(main:GetText() or "")
+        if main.GetJustifyH then glow:SetJustifyH(main:GetJustifyH()) end
+        if main.GetJustifyV then glow:SetJustifyV(main:GetJustifyV()) end
+        -- The level label has intrinsic sizing from its font template. Adding
+        -- explicit width/height while it is still empty shifts its glow above
+        -- the later populated text, so keep that one glow set intrinsically.
+        if not main.glowUseIntrinsicSize then
+            if main.GetWidth then glow:SetWidth(main:GetWidth()) end
+            if main.GetHeight then glow:SetHeight(main:GetHeight()) end
+            if main.GetWordWrap then glow:SetWordWrap(main:GetWordWrap()) end
+        end
+        -- Text colour has full alpha; only the region alpha fades the glow.
+        glow:SetTextColor(r or 1, g or 1, b or 1, 1)
+        glow:SetAlpha(CurrentShadowAlpha(main))
+        glow:SetShown(main:IsShown())
+        main.glows[i] = glow
+        RegisterFontElement(glow)
+    end
+end
+
+-- Wrapped text can grow after a compact-layout width change or after a long
+-- weapon-skill list is assigned. Keep the main FontString and every glow copy
+-- at the same measured height so neither gets clipped or visually detached.
+local function SyncTextGeometry(main)
+    if not main or main.glowUseIntrinsicSize then return end
+    local width = main.GetWidth and main:GetWidth() or 0
+    if not width or width <= 0 then return end
+    local measured = main.GetStringHeight and main:GetStringHeight() or 0
+    local requestedLines = tonumber(main.wrapLineCount) or 0
+    local height = math.max(18, tonumber(measured) or 0, requestedLines * 14)
+    main:SetHeight(height)
+    for _, glow in ipairs(main.glows or {}) do
+        glow:SetWidth(width)
+        glow:SetHeight(height)
+        if glow.SetWordWrap and main.GetWordWrap then glow:SetWordWrap(main:GetWordWrap()) end
+    end
+end
+
 local function NewText(parent, template, radius)
     local main = parent:CreateFontString(nil, "OVERLAY", template)
     main.glows = {}
-    for i, dir in ipairs(GLOW_DIRS) do
-        local glow = parent:CreateFontString(nil, "ARTWORK", template)
-        glow:SetPoint("TOPLEFT", main, "TOPLEFT", dir[1] * radius, dir[2] * radius)
-        glow:SetPoint("TOPRIGHT", main, "TOPRIGHT", dir[1] * radius, dir[2] * radius)
-        glow:SetAlpha(ns.db and ns.db.showTextShadow == false and 0 or GLOW_ALPHA)
-        main.glows[i] = glow
-    end
+    main.template = template
+    main.glowRadius = radius
     content.textLayers[#content.textLayers + 1] = main
     return main
 end
 
 function ns.ApplyTextShadow(enabled)
-    local alpha = enabled == false and 0 or GLOW_ALPHA
     for _, text in ipairs(content.textLayers) do
-        local textAlpha = enabled == false and 0 or (text.glowAlpha or GLOW_ALPHA)
-        for _, glow in ipairs(text.glows or {}) do glow:SetAlpha(textAlpha) end
+        if enabled ~= false then EnsureGlowLayers(text) end
+        local alpha = enabled == false and 0 or (text.glowAlpha or GLOW_ALPHA)
+        for _, glow in ipairs(text.glows) do
+            glow:SetAlpha((text.lineAlpha or 1) * alpha)
+            if glow.animationAlpha then glow.animationAlpha:SetToAlpha(alpha) end
+        end
     end
-end
-
-local function CurrentShadowAlpha()
-    return ns.db and ns.db.showTextShadow == false and 0 or GLOW_ALPHA
 end
 
     -- Apply the same property to the main text and its glow copies.
@@ -458,13 +794,18 @@ local function ApplyToTextLayers(text, method, ...)
     for _, glow in ipairs(text.glows) do
         glow[method](glow, ...)
     end
+    if method == "SetText" or method == "SetWidth" or method == "SetWordWrap" then
+        SyncTextGeometry(text)
+    end
 end
 
 local function RegisterGlowFont(main, size, flags)
     RegisterFontElement(main, size, flags)
-    for _, glow in ipairs(main.glows) do
-        RegisterFontElement(glow, size, flags)
-    end
+end
+
+local function EnsureAllTextGlows()
+    if ns.db and ns.db.showTextShadow == false then return end
+    for _, text in ipairs(content.textLayers) do EnsureGlowLayers(text) end
 end
 
 local function ColorOf(key)
@@ -545,7 +886,10 @@ function ns.RefreshPortraitGeometry()
     content.classRing:ClearAllPoints()
     content.classRing:SetPoint("TOP", content, "TOP", x, -SectionPadding() + y)
     content.classIcon:SetSize(iconSize, iconSize)
-    content.classRingGraphic:SetSize(ringSize, ringSize)
+    content.classRingGraphic:SetSize(ringSize * PortraitRingScale(), ringSize * PortraitRingScale())
+    local ringOffsetX, ringOffsetY = PortraitRingOffset()
+    content.classRingGraphic:ClearAllPoints()
+    content.classRingGraphic:SetPoint("CENTER", content.classRing, "CENTER", ringOffsetX, ringOffsetY)
 
     if content.title then
         content.title:ClearAllPoints()
@@ -598,11 +942,30 @@ end
 function ns.RefreshPortraitRing()
     if not content.classRingGraphic then return end
     local db = ns.db or {}
+    local reference = db.portraitRingTexture
+    if (type(reference) ~= "string" or reference == "")
+        and db.portraitRingChoice and ns.GetPortraitRingReference then
+        reference = ns.GetPortraitRingReference(db.portraitRingChoice)
+    end
     local enabled = db.portraitRingEnabled == true
-        and type(db.portraitRingTexture) == "string"
-        and db.portraitRingTexture ~= ""
-    if enabled then
-        content.classRingGraphic:SetTexture(db.portraitRingTexture, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        and ((type(reference) == "string" and reference ~= "")
+            or (type(reference) == "table" and reference.atlas))
+    if not enabled then
+        content.classRingGraphic:Hide()
+        content.classRing:Show()
+        return
+    end
+
+    local applied = false
+    if type(reference) == "table" and reference.atlas and content.classRingGraphic.SetAtlas then
+        local ok = pcall(content.classRingGraphic.SetAtlas, content.classRingGraphic, reference.atlas, reference.useAtlasSize == true)
+        applied = ok
+    elseif type(reference) == "string" then
+        -- Portrait rings are authored as complete circular images. Use the
+        -- reliable one-argument form and leave wrapping completely disabled.
+        applied = pcall(content.classRingGraphic.SetTexture, content.classRingGraphic, reference)
+    end
+    if applied then
         content.classRingGraphic:SetTexCoord(0, 1, 0, 1)
         content.classRing:Hide()
         content.classRingGraphic:Show()
@@ -622,11 +985,12 @@ RegisterGlowFont(content.title)
 
 content.levelText = NewText(content, "GameFontNormalLarge", 2)
 content.levelText:SetPoint("TOP", content.classRing, "BOTTOM", 0, -6)
+content.levelText.glowUseIntrinsicSize = true
 RegisterGlowFont(content.levelText)
 
 content.statsHeader = NewText(content, "GameFontNormalLarge", 2)
 content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
-ApplyToTextLayers(content.statsHeader, "SetText", "Stats Gained")
+ApplyToTextLayers(content.statsHeader, "SetText", ns.L("Stats Gained"))
 RegisterGlowFont(content.statsHeader)
 
 content.statsContainer = CreateFrame("Frame", nil, content)
@@ -660,7 +1024,7 @@ content.statsHeaderDivider:SetPoint("TOP", content.statsHeader, "BOTTOM", 0, -Se
 content.statsContainer:SetPoint("TOP", content.statsHeaderDivider, "BOTTOM", 0, -SectionGap())
 
 content.spellsHeader = NewText(content, "GameFontNormal", 2)
-ApplyToTextLayers(content.spellsHeader, "SetText", "Abilities")
+ApplyToTextLayers(content.spellsHeader, "SetText", ns.L("Abilities"))
 RegisterGlowFont(content.spellsHeader)
 
 content.levelTimeText = NewText(content, "GameFontHighlightSmall", 1.5)
@@ -672,7 +1036,7 @@ ApplyToTextLayers(content.levelTimeText, "SetJustifyH", "CENTER")
 ApplyToTextLayers(content.levelTimeText, "SetJustifyV", "MIDDLE")
 ApplyToTextLayers(content.levelTimeText, "SetTextColor", 0.25, 1.0, 0.25)
 RegisterGlowFont(content.levelTimeText)
-content.levelTimeText:Hide()
+ApplyToTextLayers(content.levelTimeText, "SetShown", false)
 
 local ABILITY_ICON_SIZE = 36
 local ABILITY_COST_HEIGHT = 14
@@ -710,11 +1074,11 @@ local function FormatPlayedTime(seconds)
     local minutes = math.floor((seconds % 3600) / 60)
     local remainingSeconds = seconds % 60
     if hours > 0 then
-        return string.format("Time to level: %dh %02dm", hours, minutes)
+        return ns.L("Time to level: %dh %02dm", hours, minutes)
     elseif minutes > 0 then
-        return string.format("Time to level: %dm %02ds", minutes, remainingSeconds)
+        return ns.L("Time to level: %dm %02ds", minutes, remainingSeconds)
     end
-    return string.format("Time to level: %ds", remainingSeconds)
+    return ns.L("Time to level: %ds", remainingSeconds)
 end
 
 local function AbilityCellHeight()
@@ -771,7 +1135,7 @@ content.abilityIconPool = {}
 content.currentTrainerAbilities = {}
 
 content.petSpellsHeader = NewText(content, "GameFontNormal", 2)
-ApplyToTextLayers(content.petSpellsHeader, "SetText", "Warlock Grimoires")
+ApplyToTextLayers(content.petSpellsHeader, "SetText", ns.L("Warlock Grimoires"))
 RegisterGlowFont(content.petSpellsHeader)
 content.petAbilityViewport, content.petAbilityRow = CreateAbilityViewport()
 content.petAbilityIconPool = {}
@@ -786,12 +1150,12 @@ ApplyToTextLayers(content.weaponSkillsText, "SetJustifyH", "CENTER")
 ApplyToTextLayers(content.weaponSkillsText, "SetJustifyV", "TOP")
 ApplyToTextLayers(content.weaponSkillsText, "SetWordWrap", true)
 RegisterGlowFont(content.weaponSkillsText)
-content.weaponSkillsText:Hide()
+ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
 
 content.noAbilitiesText = NewText(content.abilityRow, "GameFontHighlightSmall", 1.5)
 content.noAbilitiesText:SetPoint("CENTER", content.abilityRow, "CENTER", 0, 0)
 RegisterGlowFont(content.noAbilitiesText)
-ApplyToTextLayers(content.noAbilitiesText, "SetText", "No unlearned skills available")
+ApplyToTextLayers(content.noAbilitiesText, "SetText", ns.L("No unlearned skills available"))
 
 local function ApplyPopupWidth()
     local compact = ns.db and ns.db.compactMode == true
@@ -805,6 +1169,7 @@ local function ApplyPopupWidth()
     content.statsContainer:SetWidth(TEXT_WIDTH)
     content.levelTimeText:SetWidth(TEXT_WIDTH)
     content.weaponSkillsText:SetWidth(TEXT_WIDTH)
+    SyncTextGeometry(content.weaponSkillsText)
     for _, fs in ipairs(content.statLinePool) do fs:SetWidth(TEXT_WIDTH) end
     for _, divider in ipairs({
         content.statsHeaderDivider, content.statsBottomDivider, content.timeBottomDivider,
@@ -883,16 +1248,12 @@ end
 
 local activeLineAnims = {}
 local activeIconAnims = {}
-local animationDriver = CreateFrame("Frame")
-animationDriver:Hide()
-
-local function EaseOutQuad(p) return 1 - (1 - p) * (1 - p) end
-local function EaseInQuad(p) return p * p end
 
 local function SetLineAlpha(fs, alpha)
+    fs.lineAlpha = alpha
     fs:SetAlpha(alpha)
     for _, glow in ipairs(fs.glows) do
-        glow:SetAlpha(alpha * CurrentShadowAlpha())
+        glow:SetAlpha(alpha * CurrentShadowAlpha(fs))
     end
 end
 
@@ -900,10 +1261,9 @@ local function SetLineShown(fs, shown)
     ApplyToTextLayers(fs, "SetShown", shown)
 end
 
--- Ability icons share the same update driver as stat lines so the panel uses
--- one animation loop instead of two independent OnUpdate handlers.
+-- Stat lines and ability icons use WoW AnimationGroups so entrance motion does
+-- not need a Lua OnUpdate loop.
 local ABILITY_POP_DISTANCE = 24  -- how far below its resting spot an icon starts
-local ABILITY_POP_START_SCALE = 0.4
 
 local function AbilityIconColumns()
     if ns.db and ns.db.compactMode then return COMPACT_MAX_SKILLS end
@@ -911,84 +1271,93 @@ local function AbilityIconColumns()
     return math.max(1, math.floor((TEXT_WIDTH + gap) / (ABILITY_ICON_SIZE + gap)))
 end
 
-local function UpdateLineAnimations(elapsed)
-    local stillActive = false
-    for fs, anim in pairs(activeLineAnims) do
-        anim.t = anim.t + elapsed
-        if anim.t < anim.delay then
-            stillActive = true
-        else
-            if not anim.started then
-                anim.started = true
-                SetLineAlpha(fs, 0)
-                SetLineShown(fs, true)
-            end
-            local p = (anim.t - anim.delay) / anim.duration
-            if p >= 1 then
-                p = 1
-                activeLineAnims[fs] = nil
-            else
-                stillActive = true
-            end
-            local x = anim.startX * (1 - EaseOutQuad(p))
-            fs:ClearAllPoints()
-            fs:SetPoint("TOP", anim.container, "TOP", x, anim.y)
-            SetLineAlpha(fs, EaseInQuad(p))
-        end
+local function StopLineAnimation(fs)
+    activeLineAnims[fs] = nil
+    if fs.animationGroup then fs.animationGroup:Stop() end
+    for _, glow in ipairs(fs.glows) do
+        if glow.animationGroup then glow.animationGroup:Stop() end
     end
-    return stillActive
 end
 
-local function UpdateIconAnimations(elapsed)
-    local stillActive = false
-    for icon, anim in pairs(activeIconAnims) do
-        anim.t = anim.t + elapsed
-        if anim.t < anim.delay then
-            stillActive = true
-        else
-            if not anim.started then
-                anim.started = true
-                icon:Show()
+local function EnsureLineAnimation(fs)
+    if not fs.animationGroup then
+        local group = fs:CreateAnimationGroup()
+        local translation = group:CreateAnimation("Translation")
+        local alpha = group:CreateAnimation("Alpha")
+        group:SetScript("OnFinished", function()
+            if fs.animationContainer then
+                fs:ClearAllPoints()
+                fs:SetPoint("TOP", fs.animationContainer, "TOP", 0, fs.animationY or 0)
             end
-            local p = (anim.t - anim.delay) / anim.duration
-            if p >= 1 then
-                p = 1
-                activeIconAnims[icon] = nil
-            else
-                stillActive = true
-            end
-            local eased = EaseOutQuad(p)
-            icon:ClearAllPoints()
-            icon:SetPoint("CENTER", anim.container, "CENTER", anim.x,
-                anim.y - anim.startY * (1 - eased))
-            icon:SetScale(ABILITY_POP_START_SCALE + (1 - ABILITY_POP_START_SCALE) * eased)
-            icon:SetAlpha(EaseInQuad(p))
+            SetLineAlpha(fs, 1)
+            SetLineShown(fs, true)
+            activeLineAnims[fs] = nil
+        end)
+        fs.animationGroup = group
+        fs.animationTranslation = translation
+        fs.animationAlpha = alpha
+    end
+
+    -- Region translations do not move sibling FontStrings anchored to them.
+    -- Animate the glow layers with the same native timing as the main text.
+    for _, glow in ipairs(fs.glows) do
+        if not glow.animationGroup then
+            local glowGroup = glow:CreateAnimationGroup()
+            glow.animationTranslation = glowGroup:CreateAnimation("Translation")
+            glow.animationAlpha = glowGroup:CreateAnimation("Alpha")
+            glowGroup:SetScript("OnFinished", function()
+                glow:SetAlpha(CurrentShadowAlpha(fs))
+            end)
+            glow.animationGroup = glowGroup
         end
     end
-    return stillActive
 end
-
-animationDriver:SetScript("OnUpdate", function(self, elapsed)
-    local linesActive = UpdateLineAnimations(elapsed)
-    local iconsActive = UpdateIconAnimations(elapsed)
-    if not linesActive and not iconsActive then self:Hide() end
-end)
 
 local function StartLineAnimation(fs, container, startX, y, delay, duration)
+    EnsureLineAnimation(fs)
+    StopLineAnimation(fs)
     if ns.db and ns.db.reducedMotion then
-        activeLineAnims[fs] = nil
         fs:ClearAllPoints()
         fs:SetPoint("TOP", container, "TOP", 0, y)
         SetLineAlpha(fs, 1)
         SetLineShown(fs, true)
         return
     end
-    activeLineAnims[fs] = { t = 0, delay = delay, duration = duration, startX = startX, container = container, y = y }
+    activeLineAnims[fs] = true
+    fs.animationContainer = container
+    fs.animationY = y
     fs:ClearAllPoints()
     fs:SetPoint("TOP", container, "TOP", startX, y)
     SetLineAlpha(fs, 0)
-    SetLineShown(fs, false)
-    animationDriver:Show()
+    SetLineShown(fs, true)
+
+    local translation = fs.animationTranslation
+    translation:SetOffset(-startX, 0)
+    translation:SetDuration(duration)
+    translation:SetStartDelay(delay)
+    translation:SetSmoothing("OUT")
+
+    local alpha = fs.animationAlpha
+    alpha:SetFromAlpha(0)
+    alpha:SetToAlpha(1)
+    alpha:SetDuration(duration)
+    alpha:SetStartDelay(delay)
+    alpha:SetSmoothing("IN")
+    fs.animationGroup:Play()
+    for _, glow in ipairs(fs.glows) do
+        local glowTranslation = glow.animationTranslation
+        glowTranslation:SetOffset(-startX, 0)
+        glowTranslation:SetDuration(duration)
+        glowTranslation:SetStartDelay(delay)
+        glowTranslation:SetSmoothing("OUT")
+        local glowAlpha = glow.animationAlpha
+        glowAlpha:SetFromAlpha(0)
+        glowAlpha:SetToAlpha(CurrentShadowAlpha(fs))
+        glowAlpha:SetDuration(duration)
+        glowAlpha:SetStartDelay(delay)
+        glowAlpha:SetSmoothing("IN")
+        glow.animationGroup:Play()
+    end
 end
 
 local function GetStatLine(index)
@@ -1008,8 +1377,28 @@ local function GetStatLine(index)
 end
 
 local function StartIconPop(icon, container, x, y, delay, duration)
+    if not icon.animationGroup then
+        local group = icon:CreateAnimationGroup()
+        local translation = group:CreateAnimation("Translation")
+        local alpha = group:CreateAnimation("Alpha")
+        group:SetScript("OnFinished", function()
+            if icon.animationContainer then
+                icon:ClearAllPoints()
+                icon:SetPoint("CENTER", icon.animationContainer, "CENTER",
+                    icon.animationX or 0, icon.animationY or 0)
+            end
+            icon:SetScale(1)
+            icon:SetAlpha(1)
+            icon:Show()
+            activeIconAnims[icon] = nil
+        end)
+        icon.animationGroup = group
+        icon.animationTranslation = translation
+        icon.animationAlpha = alpha
+    end
+    activeIconAnims[icon] = nil
+    if icon.animationGroup then icon.animationGroup:Stop() end
     if ns.db and ns.db.reducedMotion then
-        activeIconAnims[icon] = nil
         icon:ClearAllPoints()
         icon:SetPoint("CENTER", container, "CENTER", x, y)
         icon:SetScale(1)
@@ -1017,16 +1406,34 @@ local function StartIconPop(icon, container, x, y, delay, duration)
         icon:Show()
         return
     end
-    activeIconAnims[icon] = {
-        t = 0, delay = delay, duration = duration, container = container,
-        x = x, y = y, startY = ABILITY_POP_DISTANCE,
-    }
+    activeIconAnims[icon] = true
+    icon.animationContainer = container
+    icon.animationX = x
+    icon.animationY = y
     icon:ClearAllPoints()
     icon:SetPoint("CENTER", container, "CENTER", x, y - ABILITY_POP_DISTANCE)
-    icon:SetScale(ABILITY_POP_START_SCALE)
+    icon:SetScale(1)
     icon:SetAlpha(0)
-    icon:Hide()
-    animationDriver:Show()
+    icon:Show()
+
+    local translation = icon.animationTranslation
+    translation:SetOffset(0, ABILITY_POP_DISTANCE)
+    translation:SetDuration(duration)
+    translation:SetStartDelay(delay)
+    translation:SetSmoothing("OUT")
+
+    local alpha = icon.animationAlpha
+    alpha:SetFromAlpha(0)
+    alpha:SetToAlpha(1)
+    alpha:SetDuration(duration)
+    alpha:SetStartDelay(delay)
+    alpha:SetSmoothing("IN")
+    icon.animationGroup:Play()
+end
+
+local function StopIconAnimation(icon)
+    activeIconAnims[icon] = nil
+    if icon.animationGroup then icon.animationGroup:Stop() end
 end
 
 local function GetAbilityIcon(index, row, pool)
@@ -1094,7 +1501,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         row.viewport.slider:Hide()
         row.viewport.scrollTrack:Hide()
         for _, icon in ipairs(pool) do
-            activeIconAnims[icon] = nil
+            StopIconAnimation(icon)
             icon:Hide()
         end
         if emptyText then
@@ -1142,21 +1549,33 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
 
     for i, spell in ipairs(abilities) do
         local icon = GetAbilityIcon(i, row, pool)
-        icon.spellID = spell.id
-        icon.spellName = spell.name
+        local spellID = spell.id
+        local spellName = spell.name
+        icon.spellID = spellID
+        icon.spellName = spellName
         local formattedCost = ns.db and ns.db.showTrainerCosts and FormatTrainerCost(spell.cost)
-        if formattedCost then
-            icon.costText:SetText(formattedCost)
-            icon.costText:Show()
-        else
-            icon.costText:SetText("")
-            icon.costText:Hide()
+        if formattedCost ~= icon.formattedCost then
+            icon.costText:SetText(formattedCost or "")
+            icon.formattedCost = formattedCost
+            icon.costText:SetShown(formattedCost ~= nil)
         end
-        local texture = spell.icon or (spell.id and (
-            (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell.id))
-            or (GetSpellTexture and GetSpellTexture(spell.id))
-        ))
-        icon.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+        local texture = spell.icon
+        if not texture and icon.textureSpellID == spellID then
+            texture = icon.texturePath
+        elseif not texture then
+            texture = spellID and (
+                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID))
+                or (GetSpellTexture and GetSpellTexture(spellID))
+            )
+            icon.textureSpellID = spellID
+        else
+            icon.textureSpellID = nil
+        end
+        texture = texture or "Interface\\Icons\\INV_Misc_QuestionMark"
+        if texture ~= icon.texturePath then
+            icon.icon:SetTexture(texture)
+            icon.texturePath = texture
+        end
 
         local zeroIndex = i - 1
         local column = zeroIndex % columns
@@ -1171,7 +1590,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     end
 
     for i = count + 1, #pool do
-        activeIconAnims[pool[i]] = nil
+        StopIconAnimation(pool[i])
         pool[i]:Hide()
     end
 end
@@ -1200,39 +1619,119 @@ end
 local function UpdateWeaponSkillText(unlearnedWeaponSkills)
     local enabled = ns.db and ns.db.showWeaponSkills ~= false
     if not enabled or type(unlearnedWeaponSkills) ~= "table" or #unlearnedWeaponSkills == 0 then
-        content.weaponSkillsText:Hide()
+        ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
         ApplyToTextLayers(content.weaponSkillsText, "SetText", "")
         PositionSections()
         return false
     end
 
     local names = {}
+    local compact = ns.db and ns.db.compactMode == true
+    local maxNames = compact and 5 or math.huge
+    local totalNames = 0
     for _, skill in ipairs(unlearnedWeaponSkills) do
+        local name
         if type(skill) == "table" and skill.name then
-            names[#names + 1] = skill.name
+            name = skill.name
         elseif type(skill) == "string" then
-            names[#names + 1] = skill
+            name = skill
+        end
+        if name then
+            totalNames = totalNames + 1
+            if #names < maxNames then names[#names + 1] = name end
         end
     end
     if #names == 0 then
-        content.weaponSkillsText:Hide()
+        ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
         ApplyToTextLayers(content.weaponSkillsText, "SetText", "")
         PositionSections()
         return false
     end
 
-    ApplyToTextLayers(content.weaponSkillsText, "SetText", "Weapon skills: " .. table.concat(names, ", "))
+    local more = totalNames > #names and " & more..." or ""
+    local maxCharacters = compact and 30 or 54
+    local maxItemsPerLine = compact and 2 or 3
+    local lines, currentLine = {}, ""
+    local currentItems = 0
+    for _, name in ipairs(names) do
+        local candidate = currentLine == "" and name or (currentLine .. ", " .. name)
+        if currentLine ~= "" and (currentItems >= maxItemsPerLine or #candidate > maxCharacters) then
+            lines[#lines + 1] = currentLine
+            currentLine = name
+            currentItems = 1
+        else
+            currentLine = candidate
+            currentItems = currentItems + 1
+        end
+    end
+    if currentLine ~= "" then lines[#lines + 1] = currentLine end
+    if #lines == 0 then lines[1] = "" end
+    lines[#lines] = lines[#lines] .. more
+    local displayText = table.concat(lines, "\n")
+    content.weaponSkillsText.wrapLineCount = #lines
+    ApplyToTextLayers(content.weaponSkillsText, "SetText",
+        ns.L("Weapon skills: %s", displayText))
     SetTextColorKey(content.weaponSkillsText, "statLabel")
-    content.weaponSkillsText:Show()
+    ApplyToTextLayers(content.weaponSkillsText, "SetShown", true)
     PositionSections()
     return true
 end
 
-local function ApplyStatLineText(fs)
+local statMeasureFont
+local function MeasureStatText(fs, text)
+    statMeasureFont = statMeasureFont or content:CreateFontString(nil, "ARTWORK")
+    local fontPath, fontSize, fontFlags = fs:GetFont()
+    if fontPath and fontSize then statMeasureFont:SetFont(fontPath, fontSize, fontFlags or "") end
+    statMeasureFont:SetText(text or "")
+    return statMeasureFont:GetStringWidth() or 0
+end
+
+local function BuildStatLineText(data, tracking)
+    if not data then return "" end
+    local spaces = string.rep(" ", math.max(0, tonumber(tracking) or 0))
+    return string.format("%s: %d%s %s->%s %d|r",
+        data.name, data.old, spaces, Hex(ColorOf("statNew")), spaces, data.new)
+end
+
+local function UpdateStatTracking(statChanges)
+    if not ns.db or ns.db.equalStatWidths ~= true then
+        for i = 1, #statChanges do
+            local fs = content.statLinePool[i]
+            if fs then fs.statTracking = 0 end
+        end
+        return
+    end
+
+    local target = 0
+    for _, data in ipairs(statChanges) do
+        target = math.max(target, MeasureStatText(content.statLinePool[1] or GetStatLine(1), BuildStatLineText(data, 0)))
+    end
+    for i, data in ipairs(statChanges) do
+        local fs = content.statLinePool[i] or GetStatLine(i)
+        local best, bestDelta = 0, math.huge
+        for tracking = 0, 20 do
+            local delta = math.abs(MeasureStatText(fs, BuildStatLineText(data, tracking)) - target)
+            if delta < bestDelta then best, bestDelta = tracking, delta end
+        end
+        fs.statTracking = best
+    end
+end
+
+local ApplyStatLineText
+function ns.RefreshStatTextLayout()
+    local changes = {}
+    for _, fs in ipairs(content.statLinePool or {}) do
+        if fs.statData then changes[#changes + 1] = fs.statData end
+    end
+    UpdateStatTracking(changes)
+    for _, fs in ipairs(content.statLinePool or {}) do ApplyStatLineText(fs) end
+end
+
+ApplyStatLineText = function(fs)
     local d = fs.statData
     local text
     if d then
-        text = string.format("%s: %d %s-> %d|r", d.name, d.old, Hex(ColorOf("statNew")), d.new)
+        text = BuildStatLineText(d, ns.db and ns.db.equalStatWidths and fs.statTracking or 0)
     else
         text = fs.plainText or ""
     end
@@ -1247,8 +1746,10 @@ function ns.ApplyColors()
     SetTextColorKey(content.spellsHeader, "abilitiesHeader")
     SetTextColorKey(content.petSpellsHeader, "abilitiesHeader")
     SetTextColorKey(content.weaponSkillsText, "statLabel")
-    for _, fs in ipairs(content.statLinePool) do
-        ApplyStatLineText(fs)
+    if ns.RefreshStatTextLayout then
+        ns.RefreshStatTextLayout()
+    else
+        for _, fs in ipairs(content.statLinePool) do ApplyStatLineText(fs) end
     end
     local borderColor = ActiveColor("abilityName")
     for _, icon in ipairs(content.abilityIconPool) do
@@ -1278,6 +1779,8 @@ local function UpdateStatLines(statChanges)
     local staggerStep = BASE_STAT_STAGGER_STEP / speed
     local slideDuration = BASE_STAT_SLIDE_DURATION / speed
 
+    if count > 0 then UpdateStatTracking(statChanges) end
+
     local function LayoutStatLine(i, statChange, plainText)
         local fs = GetStatLine(i)
         fs.statData = statChange
@@ -1290,7 +1793,7 @@ local function UpdateStatLines(statChanges)
     end
 
     if count == 0 then
-        LayoutStatLine(1, nil, "No stat changes")
+        LayoutStatLine(1, nil, ns.L("No stat changes"))
         count = 1
     else
         for i = 1, count do
@@ -1299,7 +1802,7 @@ local function UpdateStatLines(statChanges)
     end
 
     for i = count + 1, #pool do
-        activeLineAnims[pool[i]] = nil
+        StopLineAnimation(pool[i])
         SetLineShown(pool[i], false)
     end
 
@@ -1344,7 +1847,8 @@ local function LayoutFrame(statCount)
     LayoutBackground()
 end
 
-function ns.RefreshPopupLayout()
+local function RefreshPopupLayoutNow()
+    local perf = ns.PerfStart and ns.PerfStart("popup_layout")
     ApplyPopupWidth()
     ns.RefreshPortraitGeometry()
     UpdateTrainerAbilityIcons(content.currentTrainerAbilities or {})
@@ -1352,6 +1856,31 @@ function ns.RefreshPopupLayout()
     PositionSections()
     local statCount = math.max(1, math.floor((content.statsContainer:GetHeight() or STAT_LINE_HEIGHT) / STAT_LINE_HEIGHT + 0.5))
     LayoutFrame(statCount)
+    if ns.PerfEnd then ns.PerfEnd(perf) end
+end
+
+ns.RefreshPopupLayoutNow = RefreshPopupLayoutNow
+
+-- Option changes, theme changes, and cache updates can all request a layout in
+-- the same frame. Defer one refresh so those requests collapse into a single
+-- icon rebuild and frame measurement.
+local popupRefreshQueued = false
+function ns.QueuePopupRefresh()
+    if ns.PerfCount then ns.PerfCount("popup_refresh_requests") end
+    if popupRefreshQueued then
+        if ns.PerfCount then ns.PerfCount("popup_refresh_coalesced") end
+        return
+    end
+    popupRefreshQueued = true
+    local function Flush()
+        popupRefreshQueued = false
+        RefreshPopupLayoutNow()
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(0, Flush) else Flush() end
+end
+
+function ns.RefreshPopupLayout()
+    ns.QueuePopupRefresh()
 end
 
 
@@ -1415,12 +1944,20 @@ ns.RescheduleFadeOut = ScheduleFadeOut
 
 function ns.CloseLevelUp()
     hideToken = hideToken + 1
-    activeLineAnims = {}
-    activeIconAnims = {}
-    animationDriver:Hide()
+    for _, fs in ipairs(content.statLinePool) do StopLineAnimation(fs) end
+    for _, icon in ipairs(content.abilityIconPool) do StopIconAnimation(icon) end
+    for _, icon in ipairs(content.petAbilityIconPool) do StopIconAnimation(icon) end
     bgAnim:Stop()
     contentAnim:Stop()
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
+    -- The next level-up rebuilds these lists; release the previous preview
+    -- data while the panel is hidden instead of retaining the last snapshot.
+    content.currentTrainerAbilities = {}
+    content.currentWarlockPetAbilities = {}
+    for _, fs in ipairs(content.statLinePool) do
+        fs.statData = nil
+        fs.plainText = nil
+    end
     frame:SetAlpha(1)
     frame:Hide()
 end
@@ -1445,17 +1982,18 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
 
     ApplyPopupWidth()
     frame:SetScale(db.scale or 1.0)
+    EnsureAllTextGlows()
     ns.RefreshClassIcon()
-    ApplyToTextLayers(content.levelText, "SetText", string.format("Level %d", currentLevel))
+    ApplyToTextLayers(content.levelText, "SetText", ns.L("Level %d", currentLevel))
 
     local statCount = UpdateStatLines(statChanges or {})
 
     if db.showLevelTime and tonumber(timePlayedThisLevel) then
         ApplyToTextLayers(content.levelTimeText, "SetText", FormatPlayedTime(timePlayedThisLevel))
-        content.levelTimeText:Show()
+        ApplyToTextLayers(content.levelTimeText, "SetShown", true)
     else
         ApplyToTextLayers(content.levelTimeText, "SetText", "")
-        content.levelTimeText:Hide()
+        ApplyToTextLayers(content.levelTimeText, "SetShown", false)
     end
 
     UpdateTrainerAbilityIcons(trainerAbilities or {})
@@ -1484,6 +2022,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     if frame.fadeOutGroup:IsPlaying() then
         frame.fadeOutGroup:Stop()
     end
+    RefreshCloseButtonLabel()
     frame:Show()
 
     ns.PlayLevelUpSound()

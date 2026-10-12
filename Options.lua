@@ -7,7 +7,10 @@ if ns.EnsureDatabase then ns.EnsureDatabase() end
 -- Keep the settings page compact and aligned with Blizzard's panels.
 local PANEL_NAME = "GnomeLevelUp"
 local LEFT = 16
-local CONTROL_X = 250
+local CONTROL_X = 160
+local APPEARANCE_SHIFT = 50
+local WHITE_COLOR = { 1, 1, 1 }
+local BLACK_COLOR = { 0, 0, 0 }
 
 local FONT_CHOICES = {
     { value = "Fonts\\FRIZQT__.TTF",  label = "Friz Quadrata (default)", previewFont = "Fonts\\FRIZQT__.TTF" },
@@ -59,6 +62,46 @@ AddSharedMediaSounds()
 local panel = CreateFrame("Frame", "GnomeLevelUpOptionsPanel", UIParent)
 panel.name = PANEL_NAME
 panel:Hide()
+
+-- The gamepad cannot reliably navigate the normal Blizzard settings widgets.
+-- The launcher is created below, directly under the final scroll-child frame,
+-- like BugSack's options controls. Creating it under the panel and reparenting
+-- it later can leave it out of Forever's controller focus group.
+local controllerOptionsButton
+local controllerLauncherOwner
+local controllerLauncherBound = false
+local refreshControllerOpenGlyph
+
+local function RefreshControllerOptionsButton()
+    if not controllerOptionsButton then return end
+    local active = ns.IsControllerUIActive and ns.IsControllerUIActive()
+    controllerOptionsButton:SetShown(active == true)
+    if refreshControllerOpenGlyph then refreshControllerOpenGlyph(active == true) end
+    if active then
+        local inCombat = type(InCombatLockdown) == "function" and InCombatLockdown()
+        if not inCombat and controllerLauncherOwner and type(SetOverrideBindingClick) == "function" then
+            controllerLauncherOwner:Show()
+            local expected = "CLICK " .. (controllerOptionsButton:GetName() or "") .. ":LeftButton"
+            local current
+            if type(GetBindingAction) == "function" then
+                local ok, value = pcall(GetBindingAction, "PAD1", true)
+                if ok then current = value end
+            end
+            if current ~= expected then
+                local ok = pcall(SetOverrideBindingClick, controllerLauncherOwner, true,
+                    "PAD1", controllerOptionsButton:GetName(), "LeftButton")
+                controllerLauncherBound = ok
+            end
+        end
+    elseif controllerLauncherBound then
+        if controllerLauncherOwner and type(ClearOverrideBindings) == "function"
+            and not (type(InCombatLockdown) == "function" and InCombatLockdown()) then
+            pcall(ClearOverrideBindings, controllerLauncherOwner)
+        end
+        if controllerLauncherOwner then controllerLauncherOwner:Hide() end
+        controllerLauncherBound = false
+    end
+end
 
 -- Keep the character artwork as a subtle watermark behind the settings.
 local watermark = panel:CreateTexture(nil, "BACKGROUND")
@@ -144,6 +187,90 @@ do
     end
 end
 
+-- Keep the launcher inside the scroll child and create it with that final
+-- parent. This is the same construction pattern used by BugSack's options
+-- controls and gives the Forever gamepad focus scanner a normal child button.
+controllerOptionsButton = CreateFrame(
+    "Button", "GnomeLevelUpControllerOptionsLauncher", body, "UIPanelButtonTemplate")
+controllerOptionsButton:SetSize(240, 26)
+controllerOptionsButton:SetPoint("TOPRIGHT", body, "TOPRIGHT", -8, -8)
+controllerOptionsButton:SetText("Open Controller Options")
+controllerOptionsButton:SetScript("OnClick", function()
+    if ns.OpenControllerOptionsWhenFree then ns.OpenControllerOptionsWhenFree() end
+end)
+controllerOptionsButton:Hide()
+controllerLauncherOwner = CreateFrame("Frame", "GnomeLevelUpControllerLauncherBindings", UIParent)
+controllerLauncherOwner:Hide()
+
+local controllerOpenGlyph = controllerOptionsButton:CreateTexture(nil, "ARTWORK")
+controllerOpenGlyph:SetSize(24, 24)
+controllerOpenGlyph:SetPoint("RIGHT", controllerOptionsButton, "LEFT", -6, 0)
+local controllerOpenGlyphText = controllerOptionsButton:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+controllerOpenGlyphText:SetSize(24, 24)
+controllerOpenGlyphText:SetPoint("RIGHT", controllerOptionsButton, "LEFT", -6, 0)
+controllerOpenGlyphText:SetJustifyH("CENTER")
+controllerOpenGlyphText:SetJustifyV("MIDDLE")
+controllerOpenGlyphText:SetTextColor(1, 1, 1, 1)
+local function SetControllerGlyphTexture(texture, path)
+    local ok = pcall(texture.SetTexture, texture, path)
+    if not ok then return false end
+    if texture.GetTextureFileID then
+        local idOK, fileID = pcall(texture.GetTextureFileID, texture)
+        if idOK then return fileID ~= nil and fileID ~= 0 end
+    end
+    return true
+end
+refreshControllerOpenGlyph = function(active)
+    if not active or not ns.db or ns.db.controllerGlyphStyle == "none" then
+        controllerOpenGlyph:Hide()
+        controllerOpenGlyphText:Hide()
+        return
+    end
+    local style = ns.db.controllerGlyphStyle
+    local glyphReferences = {
+        xbox = { atlases = { "gamepad_ltr_a_64", "Gamepad_Ltr_A_64" }, file = "Interface\\Gamepad\\gamepadltr.blp" },
+        playstation = { atlases = { "gamepad_shp_cross_64", "Gamepad_Shp_Cross_64" }, file = "Interface\\Gamepad\\gamepadshp.blp" },
+        nintendo = { atlases = { "gamepad_rev_b_64", "Gamepad_Rev_B_64" }, file = "Interface\\Gamepad\\gamepadrev.blp" },
+    }
+    local reference = glyphReferences[style] or {
+        atlas = "gamepad_ltr_a_64", file = "Interface\\Gamepad\\gamepadltr.blp",
+    }
+    local applied = false
+    if C_Texture and type(C_Texture.GetAtlasInfo) == "function" then
+        for _, atlas in ipairs(reference.atlases or {}) do
+            local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
+            if ok and info and (info.file or info.filename)
+                and info.leftTexCoord and info.rightTexCoord
+                and info.topTexCoord and info.bottomTexCoord then
+                applied = pcall(controllerOpenGlyph.SetTexture, controllerOpenGlyph, info.file or info.filename)
+                if applied then
+                    controllerOpenGlyph:SetTexCoord(info.leftTexCoord, info.rightTexCoord,
+                        info.topTexCoord, info.bottomTexCoord)
+                    break
+                end
+            end
+        end
+    end
+    if not applied and controllerOpenGlyph.SetAtlas then
+        for _, atlas in ipairs(reference.atlases or {}) do
+            applied = pcall(controllerOpenGlyph.SetAtlas, controllerOpenGlyph, atlas, false)
+            if applied then break end
+        end
+    end
+    if not applied then
+        applied = SetControllerGlyphTexture(controllerOpenGlyph, reference.file)
+        if applied then controllerOpenGlyph:SetTexCoord(0, 1, 0, 1) end
+    end
+    if applied then
+        controllerOpenGlyphText:Hide()
+        controllerOpenGlyph:Show()
+    else
+        controllerOpenGlyph:Hide()
+        controllerOpenGlyphText:SetText(style == "playstation" and "X" or "A")
+        controllerOpenGlyphText:Show()
+    end
+end
+
 local refreshers = {}
 local y = -16
 local sections = {}
@@ -225,6 +352,7 @@ end
 
 -- Section headers share the same vertical rhythm as the controls beneath them.
 local function AddSectionHeader(text, key)
+    text = ns.L and ns.L(text) or text
     if currentSection then currentSection.nextHeaderY = y - 6 end
     y = y - 6
     local headerY = y
@@ -259,6 +387,7 @@ local function AddSectionHeader(text, key)
 end
 
 local function AddLabel(text, rowY, x, debugOnly, debugRowY, debugRowHeight)
+    text = ns.L and ns.L(text) or text
     local fs = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     fs:SetPoint("TOPLEFT", body, "TOPLEFT", x or LEFT, rowY - 5)
     fs:SetText(text)
@@ -266,13 +395,14 @@ local function AddLabel(text, rowY, x, debugOnly, debugRowY, debugRowHeight)
     return fs
 end
 
-local function AddButton(text, width, x, rowY, onClick)
+local function AddButton(text, width, x, rowY, onClick, debugOnly, debugRowY, debugRowHeight)
+    text = ns.L and ns.L(text) or text
     local btn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
     btn:SetSize(width, 22)
     btn:SetText(text)
     btn:SetPoint("TOPLEFT", body, "TOPLEFT", x, rowY)
     btn:SetScript("OnClick", onClick)
-    TrackElement(btn, x, rowY)
+    TrackElement(btn, x, rowY, debugOnly, debugRowY or rowY, debugRowHeight)
     return btn
 end
 
@@ -302,25 +432,28 @@ local function OpenColorPicker(color, onChange)
     end
 end
 
-local function AddStepper(labelText, formatValue, getValue, adjust)
-    local rowY = y
-    AddLabel(labelText, rowY)
+local function AddStepper(labelText, formatValue, getValue, adjust, debugOnly, debugRowY, debugRowHeight, leftOverride, controlXOverride, rowYOverride)
+    local rowY = rowYOverride or y
+    local left = leftOverride or LEFT
+    local controlX = controlXOverride or CONTROL_X
+    local trackedRowY = debugRowY or rowY
+    AddLabel(labelText, rowY, left, debugOnly, trackedRowY, debugRowHeight)
     local valueText = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    valueText:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X + 30, rowY - 5)
+    valueText:SetPoint("TOPLEFT", body, "TOPLEFT", controlX + 30, rowY - 5)
     valueText:SetWidth(60)
     valueText:SetJustifyH("CENTER")
-    TrackElement(valueText, CONTROL_X + 30, rowY - 5)
+    TrackElement(valueText, controlX + 30, rowY - 5, debugOnly, trackedRowY, debugRowHeight)
     local function refresh() valueText:SetText(formatValue(getValue())) end
-    AddButton("-", 24, CONTROL_X, rowY, function()
+    AddButton("-", 24, controlX, rowY, function()
         adjust(-1)
         refresh()
-    end)
-    AddButton("+", 24, CONTROL_X + 96, rowY, function()
+    end, debugOnly, trackedRowY, debugRowHeight)
+    AddButton("+", 24, controlX + 96, rowY, function()
         adjust(1)
         refresh()
-    end)
+    end, debugOnly, trackedRowY, debugRowHeight)
     refreshers[#refreshers + 1] = refresh
-    y = y - 34
+    if not rowYOverride then y = y - 34 end
     return refresh
 end
 
@@ -339,16 +472,16 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect, rowYOverrid
 
     local function GetChoiceLabel(value)
         for i, c in ipairs(choices) do
-            if c.value == value then return c.label end
+            if c.value == value then return ns.LocalizeChoiceLabel and ns.LocalizeChoiceLabel(c) or c.label end
         end
-        return choices[1].label
+        return ns.LocalizeChoiceLabel and ns.LocalizeChoiceLabel(choices[1]) or choices[1].label
     end
 
     UIDropDownMenu_Initialize(dd, function(_, level)
         if not ns.db then return end
         for i, c in ipairs(choices) do
             local menuItem = UIDropDownMenu_CreateInfo()
-            menuItem.text = c.label
+            menuItem.text = ns.LocalizeChoiceLabel and ns.LocalizeChoiceLabel(c) or c.label
             menuItem.checked = (getCurrent() == c.value)
             if c.previewFont then
                 c.fontObject = c.fontObject or CreateFont("GnomeLevelUpFontChoice" .. dropdownCount .. "_" .. i)
@@ -357,7 +490,7 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect, rowYOverrid
             end
             menuItem.func = function()
                 onSelect(c.value)
-                UIDropDownMenu_SetText(dd, c.label)
+                UIDropDownMenu_SetText(dd, ns.LocalizeChoiceLabel and ns.LocalizeChoiceLabel(c) or c.label)
                 CloseDropDownMenus()
             end
             UIDropDownMenu_AddButton(menuItem, level)
@@ -371,6 +504,7 @@ local function AddDropdown(labelText, choices, getCurrent, onSelect, rowYOverrid
 end
 
 local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride, debugOnly, debugRowHeight, debugRowY)
+    labelText = ns.L and ns.L(labelText) or labelText
     local rowY = rowYOverride or y
     local left = xOverride or LEFT
     local cb
@@ -402,10 +536,10 @@ local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverrid
     return cb, fs, rowY
 end
 
-local function AddCheckboxPair(first, second)
+local function AddCheckboxPair(first, second, firstX, secondX)
     local rowY = y
-    local firstCheck, firstLabel = AddCheckbox(first[1], first[2], first[3], LEFT, rowY)
-    local secondCheck, secondLabel = AddCheckbox(second[1], second[2], second[3], LEFT + 270, rowY)
+    local firstCheck, firstLabel = AddCheckbox(first[1], first[2], first[3], firstX or LEFT, rowY)
+    local secondCheck, secondLabel = AddCheckbox(second[1], second[2], second[3], secondX or (LEFT + 270), rowY)
     y = y - 32
     return firstCheck, firstLabel, secondCheck, secondLabel
 end
@@ -453,37 +587,107 @@ end
 do
     local title = body:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y)
-    title:SetText(PANEL_NAME)
+    title:SetText(ns.L and ns.L(PANEL_NAME) or PANEL_NAME)
 
     local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     version:SetTextColor(0.70, 0.70, 0.70)
     local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3"
-    version:SetText("Version " .. tostring(addonVersion or "1.3"))
+    version:SetText((ns.L and ns.L("Version %s", tostring(addonVersion or "1.3")))
+        or ("Version " .. tostring(addonVersion or "1.3")))
 
     local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
-    byline:SetText("By Lessá-ArgentDawn")
+    byline:SetText(ns.L and ns.L("By Lessá-ArgentDawn") or "By Lessá-ArgentDawn")
 
     y = y - 68
 end
 
 AddSectionHeader("Appearance", "appearance")
 
+local appearanceRow = y
 AddDropdown("Portrait", ns.PORTRAIT_CHOICES,
     function() return ns.db.portraitMode or "class" end,
     function(value)
         ns.db.portraitMode = value
         if ns.RefreshClassIcon then ns.RefreshClassIcon() end
-    end)
+    end, appearanceRow, 140, LEFT, CONTROL_X)
 
-AddStepper("Background opacity",
-    function(v) return math.floor(v * 100 + 0.5) .. "%" end,
-    function() return ns.db.bgOpacity end,
-    function(dir)
-        ns.db.bgOpacity = math.max(0, math.min(1, ns.db.bgOpacity + dir * 0.05))
-        ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
-    end)
+if ns.PORTRAIT_RING_CHOICES then
+    AddDropdown("Portrait ring", ns.PORTRAIT_RING_CHOICES,
+        function()
+            if ns.db.portraitRingChoice and not (ns.db.portraitRingChoice == "NONE" and ns.db.portraitRingTexture) then
+                return ns.db.portraitRingChoice
+            end
+            for _, choice in ipairs(ns.PORTRAIT_RING_CHOICES) do
+                local reference = ns.GetPortraitRingReference and ns.GetPortraitRingReference(choice.value)
+                if reference and reference == ns.db.portraitRingTexture then return choice.value end
+            end
+            return "NONE"
+        end,
+        function(value)
+            ns.db.portraitRingChoice = value
+            local reference = ns.GetPortraitRingReference and ns.GetPortraitRingReference(value)
+            ns.db.portraitRingTexture = reference
+            ns.db.portraitRingEnabled = reference ~= nil
+            if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
+        end, appearanceRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT)
+end
+y = appearanceRow - 36
+
+local appearanceThemeRow = y
+local refreshTheme, themeDropdown = AddDropdown("Theme", ns.THEME_CHOICES or {},
+    function()
+        return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN")
+    end,
+    function(value)
+        if ns.ApplyBackgroundTheme then ns.ApplyBackgroundTheme(value) end
+    end, appearanceThemeRow, 140, LEFT, CONTROL_X)
+
+local refreshBackground, backgroundDropdown = AddDropdown("Background", ns.BACKGROUND_TEXTURE_CHOICES or {},
+    function() return ns.db.backgroundChoice or "NONE" end,
+    function(value)
+        if ns.ApplyBackgroundChoice then ns.ApplyBackgroundChoice(value) end
+    end, appearanceThemeRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT)
+y = appearanceThemeRow - 36
+
+local appearanceFrameRow = y
+local refreshBackgroundTexture, backgroundTextureDropdown = AddDropdown("Background texture", ns.BACKGROUND_FILL_CHOICES,
+    function()
+        if ns.db.backgroundStyle == "fill" or ns.db.backgroundStyle == "tile"
+            or ns.db.backgroundStyle == "stretch" then return ns.db.backgroundStyle end
+        return ns.db.backgroundFillMode == "tile" and "tile" or "stretch"
+    end,
+    function(value)
+        ns.db.backgroundStyle = value
+        ns.db.backgroundFillMode = value == "tile" and "tile" or "scale"
+        if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+    end, appearanceFrameRow, 140, LEFT, CONTROL_X)
+
+local refreshFrame, frameDropdown = AddDropdown("Frame", ns.FRAME_CHOICES or {},
+    function() return ns.db.frameChoice or "BLACK_METAL" end,
+    function(value)
+        if ns.ApplyFrameChoice then ns.ApplyFrameChoice(value) end
+    end, appearanceFrameRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT)
+y = appearanceFrameRow - 36
+
+local function RefreshThemeAvailability()
+    local modern = ns.db and ns.db.backgroundMode == "MODERN"
+    local controls = { backgroundDropdown, frameDropdown, backgroundTextureDropdown }
+    for _, control in ipairs(controls) do
+        if control then
+            if modern then UIDropDownMenu_DisableDropDown(control)
+            else UIDropDownMenu_EnableDropDown(control) end
+        end
+    end
+end
+refreshers[#refreshers + 1] = function()
+    if refreshTheme then refreshTheme() end
+    if refreshBackground then refreshBackground() end
+    if refreshFrame then refreshFrame() end
+    if refreshBackgroundTexture then refreshBackgroundTexture() end
+    RefreshThemeAvailability()
+end
 
 local function AddColorPicker(labelText, getColor, setColor, xOverride, rowYOverride, debugOnly)
     local rowY = rowYOverride or y
@@ -500,7 +704,7 @@ local function AddColorPicker(labelText, getColor, setColor, xOverride, rowYOver
     fill:SetPoint("TOPLEFT", 2, -2)
     fill:SetPoint("BOTTOMRIGHT", -2, 2)
     local function refresh()
-        local color = getColor() or { 0, 0, 0 }
+        local color = getColor() or BLACK_COLOR
         fill:SetColorTexture(color[1], color[2], color[3], 1)
     end
     swatch:SetScript("OnClick", function()
@@ -516,6 +720,23 @@ local function AddColorPicker(labelText, getColor, setColor, xOverride, rowYOver
     if not rowYOverride then y = y - 34 end
     return swatch
 end
+
+AddStepper("Background opacity",
+    function(v) return math.floor(v * 100 + 0.5) .. "%" end,
+    function() return ns.db.bgOpacity end,
+    function(dir)
+        ns.db.bgOpacity = math.max(0, math.min(1, ns.db.bgOpacity + dir * 0.05))
+        ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
+    end, nil, nil, nil, LEFT, CONTROL_X, y)
+
+AddStepper("Section padding",
+    function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
+    function() return ns.db.sectionPadding end,
+    function(dir)
+        ns.db.sectionPadding = math.max(0, math.min(30, (tonumber(ns.db.sectionPadding) or 8) + dir))
+        if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
+    end, nil, nil, nil, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT, y)
+y = y - 34
 
 local function AddColorsSection()
     AddSectionHeader("Colors", "colors")
@@ -599,60 +820,6 @@ local function AddColorsSection()
     y = startY - math.ceil(#colorEntries / 2) * 32 - 8
 end
 
-AddColorPicker("Background gradient color",
-    function() return ns.db and ns.db.backgroundColor or { 0.00, 0.00, 0.00 } end,
-    function(color)
-        if ns.EnsureDatabase then ns.EnsureDatabase() end
-        ns.db.backgroundColor = color
-    end)
-
-local backgroundThemeChoices = {}
-for _, theme in ipairs(ns.CUSTOM_BACKGROUND_THEMES or {}) do
-    if type(theme) == "table" and theme.value and theme.textures then
-        backgroundThemeChoices[#backgroundThemeChoices + 1] = {
-            value = theme.value,
-            label = theme.label or theme.value,
-        }
-    end
-end
-local refreshBackgroundControls
-local backgroundStyleChoices = {
-    { value = "MODERN", label = "Modern" },
-}
-local backgroundStyleThemes = {}
-for _, theme in ipairs(backgroundThemeChoices) do
-    local value = "CUSTOM:" .. theme.value
-    backgroundStyleChoices[#backgroundStyleChoices + 1] = {
-        value = value,
-        label = theme.label,
-    }
-    backgroundStyleThemes[value] = theme.value
-end
-
-local refreshBackgroundStyle, backgroundStyleDropdown = AddDropdown("Background style", backgroundStyleChoices,
-    function()
-        if ns.db.backgroundMode == "CUSTOM" and ns.db.backgroundTheme then
-            return "CUSTOM:" .. ns.db.backgroundTheme
-        end
-        return "MODERN"
-    end,
-    function(value)
-        if value == "MODERN" then
-            if ns.RestoreModernAppearance then ns.RestoreModernAppearance() end
-        else
-            local themeValue = backgroundStyleThemes[value]
-            if themeValue and ns.ApplyBackgroundTheme then ns.ApplyBackgroundTheme(themeValue) end
-        end
-        if refreshBackgroundControls then refreshBackgroundControls() end
-    end)
-
-local refreshBackgroundFill, backgroundFillDropdown = AddDropdown("Center texture", ns.BACKGROUND_FILL_CHOICES,
-    function() return ns.db.backgroundFillMode or "scale" end,
-    function(value)
-        ns.db.backgroundFillMode = value
-        if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
-    end)
-
 local textureColorChoices = {
     { "topLeft", "Top-left corner hue" }, { "top", "Top edge hue" },
     { "topRight", "Top-right corner hue" }, { "left", "Left edge hue" },
@@ -672,7 +839,7 @@ for _, entry in ipairs(textureColorChoices) do
     local x0 = LEFT + column * 270
     textureSwatches[key] = AddColorPicker(label,
         function()
-            return (ns.db.backgroundTextureColors and ns.db.backgroundTextureColors[key]) or { 1, 1, 1 }
+            return (ns.db.backgroundTextureColors and ns.db.backgroundTextureColors[key]) or WHITE_COLOR
         end,
         function(color)
             ns.db.backgroundTextureColors[key] = color
@@ -726,52 +893,30 @@ for _, entry in ipairs(textureColorChoices) do
 end
 y = textureTransformStartY - math.ceil(#textureColorChoices / 2) * 64
 
-refreshers[#refreshers + 1] = function()
-    if refreshBackgroundStyle then refreshBackgroundStyle() end
-    if refreshBackgroundFill then refreshBackgroundFill() end
-end
+AddColorPicker("Background Hue",
+    function() return ns.db and ns.db.backgroundColor or BLACK_COLOR end,
+    function(color)
+        if ns.EnsureDatabase then ns.EnsureDatabase() end
+        ns.db.backgroundColor = color
+        if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity) end
+    end, LEFT, y)
+y = y - 34
 
-refreshBackgroundControls = function()
-    local enabled = ns.db.backgroundMode == "CUSTOM" and #backgroundThemeChoices > 0
-    for _, swatch in pairs(textureSwatches) do
-        swatch:SetEnabled(enabled)
-        swatch:SetAlpha(enabled and 1 or 0.45)
-    end
-    for _, controls in ipairs(textureTransformControls) do
-        if enabled then UIDropDownMenu_EnableDropDown(controls.dropdown)
-        else UIDropDownMenu_DisableDropDown(controls.dropdown) end
-        controls.flipH:SetEnabled(enabled)
-        controls.flipV:SetEnabled(enabled)
-        controls.flipH:SetAlpha(enabled and 1 or 0.45)
-        controls.flipV:SetAlpha(enabled and 1 or 0.45)
-    end
-    if enabled then UIDropDownMenu_EnableDropDown(backgroundFillDropdown)
-    else UIDropDownMenu_DisableDropDown(backgroundFillDropdown) end
-end
-refreshers[#refreshers + 1] = refreshBackgroundControls
-refreshBackgroundControls()
-
-AddStepper("Section padding",
-    function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
-    function() return ns.db.sectionPadding end,
-    function(dir)
-        ns.db.sectionPadding = math.max(0, math.min(30, (tonumber(ns.db.sectionPadding) or 8) + dir))
-        if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
-    end)
+local fontStrataRow = y
+AddDropdown("Frame strata", ns.STRATA_CHOICES,
+    function() return ns.db.frameStrata or "HIGH" end,
+    function(value)
+        ns.db.frameStrata = value
+        ns.ApplyFrameStrata(value)
+    end, fontStrataRow, 140, LEFT, CONTROL_X)
 
 AddDropdown("Font", FONT_CHOICES,
     function() return ns.db.customFontPath or FONT_CHOICES[1].value end,
     function(value)
         ns.db.customFontPath = value
         ns.ApplyFont(value)
-    end)
-
-AddDropdown("Frame strata", ns.STRATA_CHOICES,
-    function() return ns.db.frameStrata or "HIGH" end,
-    function(value)
-        ns.db.frameStrata = value
-        ns.ApplyFrameStrata(value)
-    end)
+    end, fontStrataRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 270)
+y = fontStrataRow - 36
 
 AddCheckboxPair({
     "Lock panel location",
@@ -787,7 +932,7 @@ AddCheckboxPair({
         ns.db.compactMode = v
         if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
     end,
-})
+}, nil, nil, LEFT + 270 + APPEARANCE_SHIFT)
 
 AddButton("Reset Appearance", 150, LEFT, y, function()
     if ns.ResetAppearanceToDefaults then ns.ResetAppearanceToDefaults() end
@@ -881,10 +1026,11 @@ AddCheckbox("Show minimap button",
 y = y - 32
 
 AddCheckboxPair({
-    "Ignore Mouseover Delay (controller users)",
+    "Ignore Mouseover Delay",
     function() return ns.db.ignoreMouseoverDelay == true end,
     function(v)
         ns.db.ignoreMouseoverDelay = v
+        ns.db.ignoreMouseoverDelayUserSet = true
         if v and ns.RescheduleFadeOut and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
             ns.RescheduleFadeOut(0.15)
         end
@@ -920,25 +1066,97 @@ AddCheckbox("Show all available grimoires",
     LEFT, y, true, 32, y)
 y = y - 32
 
+AddButton("Print performance report", 170, LEFT, y, function()
+    if ns.PrintPerformanceDiagnostics then ns.PrintPerformanceDiagnostics() end
+end, true, y, 32)
+AddButton("Reset performance data", 170, LEFT + 180, y, function()
+    if ns.ResetPerformanceDiagnostics then ns.ResetPerformanceDiagnostics() end
+end, true, y, 32)
+y = y - 32
+
+AddCheckbox("Equal-width stat text",
+    function() return ns.db.equalStatWidths == true end,
+    function(v)
+        ns.db.equalStatWidths = v
+        if ns.RefreshStatTextLayout then ns.RefreshStatTextLayout() end
+    end, LEFT, y, true, 32, y)
+y = y - 32
+
+AddStepper("Portrait ring scale",
+    function(v) return string.format("%.2fx", v) end,
+    function() return tonumber(ns.db.portraitRingScale) or 1.0 end,
+    function(dir)
+        ns.db.portraitRingScale = math.max(0.5, math.min(2.0,
+            (tonumber(ns.db.portraitRingScale) or 1.0) + dir * 0.05))
+        if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end
+    end, true, y, 34)
+
+AddStepper("Portrait ring offset X",
+    function(v) return string.format("%+.0f", v) end,
+    function()
+        local offset = ns.db.portraitRingOffset or {}
+        return tonumber(offset.x) or 0
+    end,
+    function(dir)
+        ns.db.portraitRingOffset = ns.db.portraitRingOffset or {}
+        ns.db.portraitRingOffset.x = math.max(-50, math.min(50,
+            (tonumber(ns.db.portraitRingOffset.x) or 0) + dir))
+        if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end
+    end, true, y, 34)
+
+AddStepper("Portrait ring offset Y",
+    function(v) return string.format("%+.0f", v) end,
+    function()
+        local offset = ns.db.portraitRingOffset or {}
+        return tonumber(offset.y) or 0
+    end,
+    function(dir)
+        ns.db.portraitRingOffset = ns.db.portraitRingOffset or {}
+        ns.db.portraitRingOffset.y = math.max(-50, math.min(50,
+            (tonumber(ns.db.portraitRingOffset.y) or 0) + dir))
+        if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end
+    end, true, y, 34)
+
+local durationScaleRow = y
 AddStepper("Display duration",
     function(v) return string.format("%ds", v) end,
     function() return ns.db.duration end,
     function(dir)
         ns.db.duration = math.max(1, math.min(60, ns.db.duration + dir))
-    end)
+    end, nil, nil, nil, LEFT, CONTROL_X, durationScaleRow)
 
 AddStepper("Popup scale",
     function(v) return string.format("%.1fx", v) end,
     function() return ns.db.scale end,
     function(dir)
         ns.db.scale = math.max(0.5, math.min(2.0, ns.db.scale + dir * 0.1))
-    end)
+    end, nil, nil, nil, LEFT + 280, CONTROL_X + 230, durationScaleRow)
+y = durationScaleRow - 34
+
+AddDropdown("Controller glyphs", {
+    { value = "none", label = "None" },
+    { value = "xbox", label = "Xbox" },
+    { value = "playstation", label = "Playstation" },
+    { value = "nintendo", label = "Nintendo" },
+},
+    function() return ns.db.controllerGlyphStyle or "xbox" end,
+    function(value)
+        ns.db.controllerGlyphStyle = value
+        if ns.RefreshControllerGlyph then ns.RefreshControllerGlyph() end
+    end, y, 130, LEFT, CONTROL_X)
+y = y - 36
 
 AddSectionHeader("Trainer Data", "trainer_data")
 
-AddCheckbox("Auto-save trainer data",
+AddCheckboxPair({
+    "Auto-save trainer data",
     function() return ns.db.autoScanTrainers end,
-    function(v) ns.db.autoScanTrainers = v end)
+    function(v) ns.db.autoScanTrainers = v end,
+}, {
+    "Only display new skills",
+    function() return ns.db.showOnlyNewSkills == true end,
+    function(v) ns.db.showOnlyNewSkills = v end,
+})
 
 -- Keep this control for later; profession scanning is not needed for now.
 --[[
@@ -981,17 +1199,16 @@ local function IsForeverWarlock()
 end
 AddAvailabilityRefresh(petCheck, petLabel, IsForeverWarlock)
 
-local filterPetCheck, filterPetLabel = AddCheckbox(
+local filterPetCheck, filterPetLabel, scrollCheck, scrollLabel = AddCheckboxPair({
     "Filter grimoires by active pet",
     function() return ns.db.filterWarlockPetByActivePet end,
-    function(v) ns.db.filterWarlockPetByActivePet = v end)
-AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
-
--- Keep this common option in the left column when Warlock-only controls are hidden.
-local scrollCheck, scrollLabel = AddCheckbox(
+    function(v) ns.db.filterWarlockPetByActivePet = v end,
+}, {
     "Use horizontal scrolling",
     function() return ns.db.useHorizontalAbilityScroll end,
-    function(v) ns.db.useHorizontalAbilityScroll = v end)
+    function(v) ns.db.useHorizontalAbilityScroll = v end,
+})
+AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
 
 AddSectionHeader("Sound", "sound")
 
@@ -1054,6 +1271,30 @@ refreshSoundChoice = AddDropdown("Sound", ns.SOUND_CHOICES,
 AddDropdown("Sound channel", ns.SOUND_CHANNELS,
     function() return ns.db.soundChannel end,
     function(value) ns.db.soundChannel = value end)
+
+do
+    local label = AddLabel("Sound volume", y - 5)
+    local slider = CreateFrame("Slider", nil, body, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", body, "TOPLEFT", CONTROL_X, y - 2)
+    slider:SetSize(180, 18)
+    slider:SetMinMaxValues(0, 1)
+    slider:SetValueStep(0.05)
+    slider:SetObeyStepOnDrag(true)
+    slider:SetValue(tonumber(ns.db.soundVolume) or 1)
+    slider:SetScript("OnValueChanged", function(self, value)
+        ns.db.soundVolume = math.max(0, math.min(1, tonumber(value) or 1))
+    end)
+    TrackElement(slider, CONTROL_X, y - 2)
+    local value = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    value:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    value:SetText(string.format("%d%%", math.floor((ns.db.soundVolume or 1) * 100 + 0.5)))
+    slider:SetScript("OnValueChanged", function(self, v)
+        ns.db.soundVolume = math.max(0, math.min(1, tonumber(v) or 1))
+        value:SetText(string.format("%d%%", math.floor(ns.db.soundVolume * 100 + 0.5)))
+    end)
+    TrackElement(value, CONTROL_X + 200, y - 5)
+    y = y - 32
+end
 
 do
     local rowY = y
@@ -1139,7 +1380,8 @@ do
     TrackElement(hint, CONTROL_X + 6, y)
     hint:SetWidth(300)
     hint:SetJustifyH("LEFT")
-    hint:SetText("Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg")
+    hint:SetText(ns.L and ns.L("Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg")
+        or "Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg")
     y = y - 40
 end
 
@@ -1174,15 +1416,16 @@ local function RefreshCacheStatus()
     if not cacheStatusText then return end
     local status = ns.GetTrainerCacheStatus and ns.GetTrainerCacheStatus()
     if not status then
-        cacheStatusText:SetText("Cache status unavailable.")
+        cacheStatusText:SetText(ns.L and ns.L("Cache status unavailable.") or "Cache status unavailable.")
         return
     end
-    local lastScan = status.lastScanAt and date("%Y-%m-%d %H:%M", status.lastScanAt) or "Never"
-    local rescan = status.rescanRequired and "\nA trainer rescan is required." or ""
-    cacheStatusText:SetText(string.format(
+    local lastScan = status.lastScanAt and date("%Y-%m-%d %H:%M", status.lastScanAt) or ns.L("Never")
+    local rescan = status.rescanRequired and "\n" .. ns.L("A trainer rescan is required.") or ""
+    local statusText = ns.L(
         "Flavor: %s\nClass: %s\nCached abilities: %d\nLast trainer: %s\nLast scan: %s\nSchema: %d%s",
-        status.flavor or "unknown", status.classToken or "unknown", status.count or 0,
-        status.npcName or "None", lastScan, status.schemaVersion or 0, rescan))
+        status.flavor or ns.L("unknown"), status.classToken or ns.L("unknown"), status.count or 0,
+        status.npcName or ns.L("None"), lastScan, status.schemaVersion or 0, rescan)
+    cacheStatusText:SetText(statusText)
 end
 refreshers[#refreshers + 1] = RefreshCacheStatus
 RefreshCacheStatus()
@@ -1221,8 +1464,21 @@ function ns.RefreshOptionsPanel()
 end
 
 panel:SetScript("OnShow", function()
+    RefreshControllerOptionsButton()
     RefreshSeasonalWatermark()
     ns.RefreshOptionsPanel()
+end)
+panel:SetScript("OnHide", function()
+    if controllerLauncherOwner and controllerLauncherBound
+        and type(ClearOverrideBindings) == "function"
+        and not (type(InCombatLockdown) == "function" and InCombatLockdown()) then
+        pcall(ClearOverrideBindings, controllerLauncherOwner)
+    end
+    if controllerLauncherOwner then controllerLauncherOwner:Hide() end
+    controllerLauncherBound = false
+end)
+panel:SetScript("OnUpdate", function()
+    if panel:IsShown() then RefreshControllerOptionsButton() end
 end)
 
 panel.OnCommit = function() end
@@ -1278,13 +1534,26 @@ end
 
 function ns.ToggleOptions()
     if ns.EnsureDatabase then ns.EnsureDatabase() end
-    -- Forever's native gamepad settings teardown can taint Blizzard's protected
-    -- binding cleanup. Keep this addon panel out of that transition.
-    if GetCVar and GetCVar("InputDeviceInterfaceStyle") == "1" then
-        -- Let the chat edit box finish releasing gamepad focus first.
-        C_Timer.After(0, ToggleStandalone)
+    local controllerActive = ns.IsControllerUIActive and ns.IsControllerUIActive()
+    -- Read both CVar surfaces here as well. On Forever the slash command can
+    -- run during the same frame that the native UI switches input styles, so
+    -- one API may briefly report the previous value.
+    if not controllerActive and type(GetCVar) == "function" then
+        local ok, style = pcall(GetCVar, "InputDeviceInterfaceStyle")
+        controllerActive = ok and (style == "1" or style == "gamepad")
+    end
+    if not controllerActive and C_CVar and type(C_CVar.GetCVar) == "function" then
+        local ok, style = pcall(C_CVar.GetCVar, "InputDeviceInterfaceStyle")
+        controllerActive = ok and (style == "1" or style == "gamepad")
+    end
+    if controllerActive and ns.ToggleControllerOptions then
+        -- The controller page is the primary options page in this mode. Open
+        -- it directly so the first /glu options command is sufficient.
+        ns.ToggleControllerOptions(true)
         return
     end
+    -- Forever's native gamepad settings teardown can taint Blizzard's protected
+    -- binding cleanup. Keep this addon panel out of that transition.
     if registeredWith == "settings" and Settings.OpenToCategory then
         local category = ns.settingsCategory
         local id = category.GetID and category:GetID() or category.ID

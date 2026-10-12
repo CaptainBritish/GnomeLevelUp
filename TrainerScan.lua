@@ -493,6 +493,7 @@ local trainerSession = 0
 local function QueueScan()
     -- Wait briefly so the trainer list has time to finish loading.
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return end
+    if ns.PerfCount then ns.PerfCount("trainer_scan_requests") end
     if scanQueued then return end
     scanQueued = true
     local session = trainerSession
@@ -501,7 +502,15 @@ local function QueueScan()
         if trainerOpen and trainerSession == session then ScanTrainer() end
     end)
 end
-local function QueueReconcile()
+
+local QueueReconcile
+local function QueueSpellbookRefresh()
+    if ns.QueueSpellBookInvalidation then ns.QueueSpellBookInvalidation(0.10)
+    elseif ns.InvalidateSpellBookSnapshot then ns.InvalidateSpellBookSnapshot() end
+    if ns.InvalidateWeaponSkillSnapshot then ns.InvalidateWeaponSkillSnapshot() end
+    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "forever" then QueueReconcile() end
+end
+QueueReconcile = function()
     -- Recheck saved skills after the trainer window closes.
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return end
     if reconcileQueued then return end
@@ -561,6 +570,8 @@ frame:RegisterEvent("TRAINER_CLOSED")
 frame:RegisterEvent("SPELLS_CHANGED")
 frame:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
+frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 -- Keep the cache updated while the player visits trainers or learns spells.
 frame:SetScript("OnEvent", function(self, event, ...)
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever"
@@ -577,14 +588,14 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "TRAINER_UPDATE" then
         if trainerOpen then QueueScan() end
     elseif event == "LEARNED_SPELL_IN_SKILL_LINE" then
-        if ns.InvalidateSpellBookSnapshot then ns.InvalidateSpellBookSnapshot() end
-        if ns.InvalidateWeaponSkillSnapshot then ns.InvalidateWeaponSkillSnapshot() end
         ns.MarkTrainerSpellLearned((...))
-    else
-        if ns.InvalidateSpellBookSnapshot then ns.InvalidateSpellBookSnapshot() end
+        QueueSpellbookRefresh()
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_INVENTORY_CHANGED" then
+        -- Weapon proficiency display also depends on the equipped weapon.
+        -- Recompute it as soon as either equipment API reports a change.
+        if event == "UNIT_INVENTORY_CHANGED" and (...) ~= "player" then return end
         if ns.InvalidateWeaponSkillSnapshot then ns.InvalidateWeaponSkillSnapshot() end
-        if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "forever" then
-            QueueReconcile()
-        end
+    else
+        QueueSpellbookRefresh()
     end
 end)

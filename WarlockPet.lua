@@ -86,11 +86,23 @@ function ns.InvalidatePetSpellBookSnapshot()
     cachedPetRevision = -1
 end
 
+local petInvalidationQueued = false
+function ns.QueuePetSpellBookInvalidation(delay)
+    if petInvalidationQueued then return end
+    petInvalidationQueued = true
+    local function Flush()
+        petInvalidationQueued = false
+        ns.InvalidatePetSpellBookSnapshot()
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(tonumber(delay) or 0.10, Flush) else Flush() end
+end
+
 function ns.SnapshotPetSpellBook(forceRefresh)
     if not forceRefresh and cachedPetSpells and cachedPetRevision == petRevision then
         return cachedPetSpells
     end
 
+    local perf = ns.PerfStart and ns.PerfStart("pet_spellbook_snapshot")
     local known = { ids = {}, names = {}, ranks = {} }
     local petBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet
 
@@ -125,6 +137,7 @@ function ns.SnapshotPetSpellBook(forceRefresh)
 
     cachedPetSpells = known
     cachedPetRevision = petRevision
+    if ns.PerfEnd then ns.PerfEnd(perf) end
     return known
 end
 
@@ -200,5 +213,5 @@ for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "UNIT_PET", "P
     petEvents:RegisterEvent(event)
 end
 petEvents:SetScript("OnEvent", function()
-    ns.InvalidatePetSpellBookSnapshot()
+    ns.QueuePetSpellBookInvalidation(0.10)
 end)

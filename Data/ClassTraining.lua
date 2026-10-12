@@ -41,6 +41,14 @@ function ns.NormalizeTrainingName(label)
     return label ~= "" and label or nil
 end
 
+function ns.GetTrainingRankInfo(label)
+    local normalized = ns.NormalizeTrainingName(label)
+    if not normalized then return nil, nil end
+    local base, rank = normalized:match("^(.-)%s*%([^()]*?(%d+)%s*%)$")
+    if not rank then base, rank = normalized:match("^(.-)%s+rank%s*(%d+)$") end
+    return base or normalized, tonumber(rank)
+end
+
 function ns.TrainingEntryKey(entry, level)
     local id = type(entry) == "table" and entry.spellID
     if id then return "spell:" .. tostring(id) end
@@ -69,8 +77,9 @@ function ns.BuildKnownTrainingLookup(spellSnapshot)
             local subtext = C_Spell and C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(id)
             if subtext and subtext ~= "" then
                 known.names[ns.NormalizeTrainingName(name .. " (" .. subtext .. ")")] = true
-                local rank = tonumber(subtext:match("(%d+)%s*$"))
-                if rank then known.ranks[normalized] = math.max(known.ranks[normalized] or 0, rank) end
+                local baseName, nameRank = ns.GetTrainingRankInfo(normalized)
+                local rank = tonumber(subtext:match("(%d+)%s*$")) or nameRank
+                if rank then known.ranks[baseName] = math.max(known.ranks[baseName] or 0, rank) end
             else
                 known.names[normalized] = true
             end
@@ -94,8 +103,7 @@ function ns.IsTrainerSkillKnown(entry, known)
     if not name then return false end
     if known.names[name] then return true end
 
-    local base, rank = name:match("^(.-) %([^()]- (%d+)%)$")
-    rank = tonumber(rank)
+    local base, rank = ns.GetTrainingRankInfo(name)
     return rank ~= nil and (known.ranks[base] or 0) >= rank
 end
 
@@ -196,20 +204,38 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     local known = ns.BuildKnownTrainingLookup(spellSnapshot)
     local learnedStore = ns.GetLearnedTrainingStore and ns.GetLearnedTrainingStore()
     local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
+    local onlyNewSkills = ns.db and ns.db.showOnlyNewSkills == true
 
     local unlearnedAbilities = {}
+    local rankedAbilities = {}
     for _, catalogEntry in ipairs(catalog) do
         local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level, learnedStore)
         local levelMatches = not onlyCurrentLevel or catalogEntry.level == currentLevel
         if levelMatches and catalogEntry.level <= currentLevel
             and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
-            unlearnedAbilities[#unlearnedAbilities + 1] = {
+            local ability = {
                 name = catalogEntry.name,
                 icon = catalogEntry.icon,
                 id = catalogEntry.id,
                 cost = catalogEntry.cost,
             }
+            local baseName, rank = ns.GetTrainingRankInfo(catalogEntry.name)
+            if onlyNewSkills and rank then
+                if (known.ranks[baseName] or 0) == 0 then
+                    local existing = rankedAbilities[baseName]
+                    if not existing or rank < existing.rank then
+                        if existing then unlearnedAbilities[existing.index] = ability end
+                        ability.rank = rank
+                        ability.index = #unlearnedAbilities + 1
+                        rankedAbilities[baseName] = ability
+                        unlearnedAbilities[#unlearnedAbilities + 1] = ability
+                    end
+                end
+            else
+                unlearnedAbilities[#unlearnedAbilities + 1] = ability
+            end
         end
     end
+    for _, ability in ipairs(unlearnedAbilities) do ability.rank, ability.index = nil, nil end
     return unlearnedAbilities
 end
