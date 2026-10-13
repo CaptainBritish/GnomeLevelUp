@@ -1,6 +1,6 @@
 local ADDON_NAME, ns = ...
 
-local DATABASE_SCHEMA_VERSION = 5
+local DATABASE_SCHEMA_VERSION = 6
 
 -- These are the settings used when the addon starts for the first time.
 local defaults = {
@@ -45,6 +45,8 @@ local defaults = {
     sectionPadding = 8,
     bgOpacity = 0.70,           -- background darkness at its peak (0-1)
     backgroundColor = { 0.00, 0.00, 0.00 },
+    frameColor = { 1.00, 1.00, 1.00 },
+    portraitRingColor = { 1.00, 1.00, 1.00 },
     animSpeedMultiplier = 1.0,  -- higher = faster animations
     reducedMotion = false,       -- skip entrance/exit movement and fades
     statSlideDirection = "alternate", -- "alternate" | "left" | "right"
@@ -52,6 +54,7 @@ local defaults = {
     customFontPath = nil,       -- nil = default (Friz Quadrata)
     framePosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 90 },
     minimapButtonShown = true,
+    suspendPreview = true,
     minimapAngle = 225,
     portraitMode = "class",
     playerPortraitPosition = { x = 0, y = 0 }, -- offset from the current portrait top anchor
@@ -113,7 +116,7 @@ ns.defaults = defaults
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
-    "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundColor", "backgroundStyle", "backgroundFillMode",
+    "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding",
     "scale",
@@ -124,9 +127,9 @@ ns.APPEARANCE_SETTING_KEYS = {
 ns.RESETTABLE_SETTING_KEYS = {
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
     "enabled", "duration", "scale", "autoScanTrainers", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
-    "bgOpacity", "backgroundColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "customFontPath",
+    "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "customFontPath",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions", "printClassicLevelUpText", "classicLevelUpTextColor",
-    "framePosition", "lockFramePosition", "sectionPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
+    "framePosition", "lockFramePosition", "sectionPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
     "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "controllerGlyphStyle", "controllerMenuFrameStrata",
 }
@@ -257,8 +260,16 @@ function ns.RestoreModernAppearance()
     RefreshAppearanceAfterThemeChange()
 end
 
+local function NormalizePortraitRingHue()
+    local color = ns.db and ns.db.portraitRingColor
+    if type(color) == "table" and color[1] == 1 and color[2] == 0.82 and color[3] == 0.20 then
+        ns.db.portraitRingColor = { 1, 1, 1 }
+    end
+end
+
 function ns.ApplyBackgroundTheme(value)
     EnsureDatabase()
+    NormalizePortraitRingHue()
     if value == "MODERN" then
         ns.RestoreModernAppearance()
         return true
@@ -269,8 +280,12 @@ function ns.ApplyBackgroundTheme(value)
         return false
     end
 
-    -- A theme is self-contained. Reset the Appearance settings first so a
-    -- partially filled theme cannot inherit stale values from another theme.
+    -- A locked location belongs to the player, not the selected theme.
+    local locationLocked = ns.db.lockFramePosition == true
+    local lockedPosition = locationLocked and CopySetting(ns.db.framePosition)
+
+    -- Reset the other Appearance settings so a partially filled theme cannot
+    -- inherit stale values from another theme.
     ResetSettingKeys(ns.APPEARANCE_SETTING_KEYS)
     for _, key in ipairs(ns.APPEARANCE_SETTING_KEYS) do
         if theme.appearance and theme.appearance[key] ~= nil then
@@ -278,6 +293,10 @@ function ns.ApplyBackgroundTheme(value)
             -- setting whose normal value is nil, such as the default font.
             ns.db[key] = theme.appearance[key] == false and nil or CopySetting(theme.appearance[key])
         end
+    end
+    if locationLocked then
+        ns.db.lockFramePosition = true
+        ns.db.framePosition = lockedPosition
     end
     ns.db.backgroundMode = "CUSTOM"
     ns.db.backgroundTheme = value
@@ -289,6 +308,7 @@ end
 
 function ns.ApplyBackgroundPreset(value)
     EnsureDatabase()
+    NormalizePortraitRingHue()
     local theme = ns.FindBackgroundTheme(value)
     if not theme or not theme.textures or not theme.textures.center then
         ns.RestoreModernAppearance()
@@ -363,6 +383,26 @@ local function InitDB()
     local legacyFrameChoice = GnomeLevelUpDB.frameChoice
     local legacyBackgroundStyle = GnomeLevelUpDB.backgroundStyle
     local legacyBackgroundFillMode = GnomeLevelUpDB.backgroundFillMode
+    -- Early 1.3.4 builds saved a white frame default before migrating the
+    -- shared hue. Repair that case once, as well as a direct 1.3.2 upgrade.
+    local legacyHue = GnomeLevelUpDB.backgroundColor
+    local savedFrameHue = GnomeLevelUpDB.frameColor
+    local frameHueMissing = savedFrameHue == nil
+    local frameHueIsDefault = type(savedFrameHue) == "table"
+        and savedFrameHue[1] == 1 and savedFrameHue[2] == 1 and savedFrameHue[3] == 1
+    if GnomeLevelUpDB.sharedHueMigrationVersion ~= 1
+        and (frameHueMissing or (savedSchemaVersion <= 6 and frameHueIsDefault))
+        and type(legacyHue) == "table"
+        and type(legacyHue[1]) == "number" and type(legacyHue[2]) == "number"
+        and type(legacyHue[3]) == "number" then
+        -- Legacy black meant no tint, so use the new frame's neutral white.
+        if legacyHue[1] == 0 and legacyHue[2] == 0 and legacyHue[3] == 0 then
+            GnomeLevelUpDB.frameColor = { 1, 1, 1 }
+        else
+            GnomeLevelUpDB.frameColor = CopySetting(legacyHue)
+        end
+    end
+    GnomeLevelUpDB.sharedHueMigrationVersion = 1
     MergeMissingSettings(GnomeLevelUpDB, defaults)
     -- 1.3 stored one theme value for the whole custom appearance. Preserve
     -- that exact pairing while introducing independent frame/background keys.
@@ -396,6 +436,13 @@ local function InitDB()
     -- profiles before the renderer tries to resolve them.
     if savedSchemaVersion < 3 and tonumber(GnomeLevelUpDB.portraitRingScale) == 1.0 then
         GnomeLevelUpDB.portraitRingScale = 1.10
+    end
+    -- 1.3.4 uses a neutral white default for authored portrait rings. Migrate
+    -- the previous built-in gold default while preserving an intentional tint.
+    local savedRingColor = GnomeLevelUpDB.portraitRingColor
+    if type(savedRingColor) == "table"
+        and savedRingColor[1] == 1 and savedRingColor[2] == 0.82 and savedRingColor[3] == 0.20 then
+        GnomeLevelUpDB.portraitRingColor = { 1, 1, 1 }
     end
     if GnomeLevelUpDB.backgroundChoice ~= "NONE"
         and ns.BACKGROUND_TEXTURES
@@ -440,6 +487,8 @@ local function InitDB()
         if not GnomeLevelUpDB.frameChoice then GnomeLevelUpDB.frameChoice = "BLACK_METAL" end
         if not GnomeLevelUpDB.backgroundChoice then GnomeLevelUpDB.backgroundChoice = "NONE" end
     end
+    GnomeLevelUpDB.persistentOptionsPreview = nil
+    GnomeLevelUpDB.themePreview = nil
     ns.db = GnomeLevelUpDB
 
     -- Existing saved themes keep their appearance transforms in SavedVariables.
@@ -834,7 +883,7 @@ function ns.PreviewLevelUp(debugSkills)
 
     local trainerAbilities = {}
     if debugSkills then
-        trainerAbilities = BuildDebugAbilityPreview(currentLevel, 20)
+        trainerAbilities = BuildDebugAbilityPreview(currentLevel, 5)
     else
         trainerAbilities = { { id = 11362, name = "Teleport to Gnomeregan", cost = 1337 * 10000 } }
         local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
@@ -855,7 +904,7 @@ function ns.PreviewLevelUp(debugSkills)
     local _, classToken = UnitClass("player")
     local warlockPetAbilities = {}
     if debugSkills then
-        warlockPetAbilities = BuildDebugGrimoirePreview(20)
+        warlockPetAbilities = BuildDebugGrimoirePreview(5)
     elseif classToken == "WARLOCK" then
         warlockPetAbilities[1] = {
             name = "Firebolt (Rank 2)",
@@ -871,7 +920,7 @@ function ns.PreviewLevelUp(debugSkills)
         { name = STRENGTH or "Strength", old = 20, new = 23 },
         { name = STAMINA or "Stamina", old = 22, new = 27 },
         { name = INTELLECT or "Intellect", old = 15, new = 17 },
-    }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities)
+    }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities, true)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 

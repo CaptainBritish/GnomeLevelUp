@@ -592,9 +592,9 @@ do
     local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3"
-    version:SetText((ns.L and ns.L("Version %s", tostring(addonVersion or "1.3")))
-        or ("Version " .. tostring(addonVersion or "1.3")))
+    local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3.4"
+    version:SetText((ns.L and ns.L("Version %s", tostring(addonVersion or "1.3.4")))
+        or ("Version " .. tostring(addonVersion or "1.3.4")))
 
     local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
@@ -613,8 +613,9 @@ AddDropdown("Portrait", ns.PORTRAIT_CHOICES,
         if ns.RefreshClassIcon then ns.RefreshClassIcon() end
     end, appearanceRow, 140, LEFT, CONTROL_X)
 
+local portraitRingDropdown
 if ns.PORTRAIT_RING_CHOICES then
-    AddDropdown("Portrait ring", ns.PORTRAIT_RING_CHOICES,
+    portraitRingDropdown = AddDropdown("Portrait ring", ns.PORTRAIT_RING_CHOICES,
         function()
             if ns.db.portraitRingChoice and not (ns.db.portraitRingChoice == "NONE" and ns.db.portraitRingTexture) then
                 return ns.db.portraitRingChoice
@@ -738,6 +739,15 @@ AddStepper("Section padding",
     end, nil, nil, nil, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT, y)
 y = y - 34
 
+local function AddSmallSectionLabel(text)
+    local label = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y)
+    label:SetText(text)
+    label:SetTextColor(0.65, 0.65, 0.65)
+    TrackElement(label, LEFT, y)
+    y = y - 20
+end
+
 local function AddColorsSection()
     AddSectionHeader("Colors", "colors")
 
@@ -745,7 +755,38 @@ local function AddColorsSection()
         title = true, level = true, statsHeader = true, abilitiesHeader = true,
         abilityName = true, portraitBorder = true,
     }
+    local portraitHueSwatch
+    local portraitBorderButton
 
+    AddSmallSectionLabel("Textures")
+    portraitHueSwatch = AddColorPicker("Background hue",
+        function() return ns.db and ns.db.backgroundColor or BLACK_COLOR end,
+        function(color)
+            ns.db.backgroundColor = color
+            if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity) end
+        end, LEFT, y)
+    AddColorPicker("Frame hue",
+        function() return ns.db and ns.db.frameColor or WHITE_COLOR end,
+        function(color)
+            ns.db.frameColor = color
+            if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
+        end, LEFT + 270, y)
+    y = y - 34
+    portraitHueSwatch = AddColorPicker("Portrait ring hue",
+        function() return ns.db and ns.db.portraitRingColor or WHITE_COLOR end,
+        function(color)
+            ns.db.portraitRingColor = color
+            if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
+        end, LEFT, y)
+    portraitBorderButton = AddColorPicker("Portrait border",
+        function() return ns.db and ns.db.colors and ns.db.colors.portraitBorder or WHITE_COLOR end,
+        function(color)
+            ns.db.colors.portraitBorder = color
+            if ns.ApplyColors then ns.ApplyColors() end
+        end, LEFT + 270, y)
+    y = y - 38
+
+    AddSmallSectionLabel("Text")
     local colorToggleY = y
     AddCheckbox("Show Text Shadows",
         function() return ns.db.showTextShadow end,
@@ -761,17 +802,11 @@ local function AddColorsSection()
     y = y - 32
 
     local colorEntries = {
-        { "title",           "Title" },
-        { "level",           "Level number" },
-        { "statsHeader",     "Stats header" },
-        { "statLabel",       "Stat name / old value" },
-        { "statNew",         "Improved value" },
-        { "abilitiesHeader", "Abilities header" },
-        { "abilityName",     "Ability icon border" },
-        { "portraitBorder",  "Portrait border" },
-        { "divider",         "Section divider" },
+        { "title", "Title" }, { "level", "Level number" },
+        { "statsHeader", "Stats header" }, { "statLabel", "Stat name / old value" },
+        { "statNew", "Improved value" }, { "abilitiesHeader", "Abilities header" },
+        { "abilityName", "Ability icon border" }, { "divider", "Section divider" },
     }
-
     local swatches = {}
     local startY = y
     for i, colorEntry in ipairs(colorEntries) do
@@ -780,9 +815,7 @@ local function AddColorsSection()
         local row = math.floor((i - 1) / 2)
         local x0 = LEFT + col * 270
         local rowY = startY - row * 32
-
         AddLabel(text, rowY, x0)
-
         local btn = CreateFrame("Button", nil, body)
         btn:SetSize(40, 20)
         btn:SetPoint("TOPLEFT", body, "TOPLEFT", x0 + 170, rowY - 1)
@@ -808,16 +841,19 @@ local function AddColorsSection()
             local c = ns.db.colors[key]
             btn.fill:SetColorTexture(c[1], c[2], c[3], 1)
             local controlled = ns.db.useClassColors and classColorKeys[key]
-            if controlled then
-                btn:Disable()
-                btn:SetAlpha(0.55)
-            else
-                btn:Enable()
-                btn:SetAlpha(1)
-            end
+            if controlled then btn:Disable(); btn:SetAlpha(0.55) else btn:Enable(); btn:SetAlpha(1) end
+        end
+        local customRing = ns.db.portraitRingChoice and ns.db.portraitRingChoice ~= "NONE"
+        if portraitBorderButton then
+            if customRing then portraitBorderButton:Disable(); portraitBorderButton:SetAlpha(0.45)
+            else portraitBorderButton:Enable(); portraitBorderButton:SetAlpha(1) end
+        end
+        if portraitHueSwatch then
+            if customRing then portraitHueSwatch:Enable(); portraitHueSwatch:SetAlpha(1)
+            else portraitHueSwatch:Disable(); portraitHueSwatch:SetAlpha(0.45) end
         end
     end
-    y = startY - math.ceil(#colorEntries / 2) * 32 - 8
+    y = startY - math.ceil(#colorEntries / 2) * 32 - 40
 end
 
 local textureColorChoices = {
@@ -893,15 +929,6 @@ for _, entry in ipairs(textureColorChoices) do
 end
 y = textureTransformStartY - math.ceil(#textureColorChoices / 2) * 64
 
-AddColorPicker("Background Hue",
-    function() return ns.db and ns.db.backgroundColor or BLACK_COLOR end,
-    function(color)
-        if ns.EnsureDatabase then ns.EnsureDatabase() end
-        ns.db.backgroundColor = color
-        if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity) end
-    end, LEFT, y)
-y = y - 34
-
 local fontStrataRow = y
 AddDropdown("Frame strata", ns.STRATA_CHOICES,
     function() return ns.db.frameStrata or "HIGH" end,
@@ -918,21 +945,26 @@ AddDropdown("Font", FONT_CHOICES,
     end, fontStrataRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 270)
 y = fontStrataRow - 36
 
-AddCheckboxPair({
-    "Lock panel location",
+local appearanceToggleRow = y
+AddCheckbox("Lock Location",
     function() return ns.db.lockFramePosition end,
     function(v)
         ns.db.lockFramePosition = v
         if ns.ApplyFrameLock then ns.ApplyFrameLock(v) end
-    end,
-}, {
-    "Compact popup layout",
+    end, LEFT, appearanceToggleRow)
+AddCheckbox("Compact Layout",
     function() return ns.db.compactMode end,
     function(v)
         ns.db.compactMode = v
         if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
-    end,
-}, nil, nil, LEFT + 270 + APPEARANCE_SHIFT)
+    end, LEFT + 150, appearanceToggleRow)
+AddCheckbox("Suspend Preview",
+    function() return ns.db.suspendPreview ~= false end,
+    function(v)
+        ns.db.suspendPreview = v
+        if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
+    end, LEFT + 320, appearanceToggleRow)
+y = appearanceToggleRow - 32
 
 AddButton("Reset Appearance", 150, LEFT, y, function()
     if ns.ResetAppearanceToDefaults then ns.ResetAppearanceToDefaults() end
@@ -980,14 +1012,16 @@ end
 
 AddSectionHeader("Mode", "mode")
 
-AddCheckboxPair({
-    "Enable addon",
-    function() return ns.db.enabled end,
+local modeRowY = y
+AddCheckbox("Show minimap button",
+    function() return ns.db.minimapButtonShown end,
     function(v)
-        if ns.SetAddonEnabled then ns.SetAddonEnabled(v) else ns.db.enabled = v end
-    end,
-}, {
-    "Hide Blizzard level-up toast",
+        ns.db.minimapButtonShown = v
+        if ns.SetMinimapButtonShown then ns.SetMinimapButtonShown(v) end
+    end, LEFT, modeRowY)
+y = modeRowY - 32
+
+AddCheckbox("Hide Blizzard level-up toast",
     function() return ns.db.hideBlizzardLevelUp ~= false end,
     function(v)
         ns.db.hideBlizzardLevelUp = v
@@ -996,37 +1030,24 @@ AddCheckboxPair({
         elseif ns.RestoreBlizzardBanner then
             ns.RestoreBlizzardBanner()
         end
-    end,
-})
-
-AddCheckboxPair({
-    "Right-click to close the level-up popup",
+    end, LEFT, y)
+AddCheckbox("Right-click to close the level-up popup",
     function() return ns.db.rightClickClose end,
-    function(v) ns.db.rightClickClose = v end,
-}, {
-    "Show time played this level",
+    function(v) ns.db.rightClickClose = v end, LEFT + 270, y)
+y = y - 32
+
+AddCheckbox("Show time played this level",
     function() return ns.db.showLevelTime end,
     function(v)
         ns.db.showLevelTime = v
         if v then ns.RequestLevelPlayedTime() end
-    end,
-})
-
-local modeRowY = y
+    end, LEFT, y)
 AddCheckbox("Don't show until combat ends",
     function() return ns.db.waitForCombatEnd end,
-    function(v) ns.db.waitForCombatEnd = v end,
-    LEFT, modeRowY)
-AddCheckbox("Show minimap button",
-    function() return ns.db.minimapButtonShown end,
-    function(v)
-        ns.db.minimapButtonShown = v
-        if ns.SetMinimapButtonShown then ns.SetMinimapButtonShown(v) end
-    end, LEFT + 270, modeRowY)
+    function(v) ns.db.waitForCombatEnd = v end, LEFT + 270, y)
 y = y - 32
 
-AddCheckboxPair({
-    "Ignore Mouseover Delay",
+AddCheckbox("Ignore Mouseover Delay",
     function() return ns.db.ignoreMouseoverDelay == true end,
     function(v)
         ns.db.ignoreMouseoverDelay = v
@@ -1034,30 +1055,34 @@ AddCheckboxPair({
         if v and ns.RescheduleFadeOut and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
             ns.RescheduleFadeOut(0.15)
         end
-    end,
-}, {
-    "Allow click-through",
+    end, LEFT, y)
+AddCheckbox("Allow click-through",
     function() return ns.db.clickThrough == true end,
     function(v)
         ns.db.clickThrough = v
         if ns.ApplyClickThrough then ns.ApplyClickThrough(v) end
-    end,
-})
+    end, LEFT + 270, y)
+y = y - 32
 
-modeRowY = y
 AddCheckbox("Enable debug commands",
     function() return ns.db.debugEnabled end,
     function(v)
         ns.db.debugEnabled = v
         if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
-    end,
-    LEFT, modeRowY)
+    end, LEFT, y)
 AddCheckboxWithColor("Classic-style level up text",
     function() return ns.db.printClassicLevelUpText end,
     function(v) ns.db.printClassicLevelUpText = v end,
     function() return ns.db and ns.db.classicLevelUpTextColor end,
     function(color) ns.db.classicLevelUpTextColor = color end,
-    LEFT + 270, modeRowY)
+    LEFT + 270, y)
+y = y - 32
+
+AddCheckbox("Enable addon",
+    function() return ns.db.enabled end,
+    function(v)
+        if ns.SetAddonEnabled then ns.SetAddonEnabled(v) else ns.db.enabled = v end
+    end, LEFT, y)
 y = y - 32
 
 AddCheckbox("Show all available grimoires",
@@ -1463,12 +1488,19 @@ function ns.RefreshOptionsPanel()
     end
 end
 
+function ns.IsPreviewSuspensionRequested()
+    return ns.db and ns.db.suspendPreview ~= false
+        and (panel:IsShown() or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()))
+end
+
 panel:SetScript("OnShow", function()
     RefreshControllerOptionsButton()
     RefreshSeasonalWatermark()
     ns.RefreshOptionsPanel()
+    if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
 end)
 panel:SetScript("OnHide", function()
+    if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
     if controllerLauncherOwner and controllerLauncherBound
         and type(ClearOverrideBindings) == "function"
         and not (type(InCombatLockdown) == "function" and InCombatLockdown()) then
@@ -1478,7 +1510,10 @@ panel:SetScript("OnHide", function()
     controllerLauncherBound = false
 end)
 panel:SetScript("OnUpdate", function()
-    if panel:IsShown() then RefreshControllerOptionsButton() end
+    if panel:IsShown() then
+        RefreshControllerOptionsButton()
+
+    end
 end)
 
 panel.OnCommit = function() end

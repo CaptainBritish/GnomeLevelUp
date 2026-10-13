@@ -149,6 +149,8 @@ local function Appearance(ringName, backgroundStyle)
         portraitRingOffset = { x = ring.offsetX or 0, y = ring.offsetY or 0 },
         bgOpacity = 0.95,
         backgroundColor = { 0, 0, 0 },
+        frameColor = { 1, 1, 1 },
+        portraitRingColor = { 1, 1, 1 },
         backgroundStyle = backgroundStyle or "tile",
         backgroundFillMode = backgroundStyle == "tile" and "tile" or "scale",
         backgroundTextureColors = {

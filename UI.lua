@@ -67,17 +67,21 @@ local function SectionPadding()
     return math.max(0, math.min(30, padding))
 end
 
+local function IsCompactLayout()
+    return ns.db and ns.db.compactMode == true
+end
+
 local function SectionGap()
     local padding = SectionPadding()
-    return ns.db and ns.db.compactMode and math.max(2, padding - 2) or padding
+    return IsCompactLayout() and math.max(2, padding - 2) or padding
 end
 
 local function AbilityIconGap()
-    return ns.db and ns.db.compactMode and 6 or 10
+    return IsCompactLayout() and 6 or 10
 end
 
 local function UseHorizontalAbilityScroll()
-    return ns.db and (ns.db.useHorizontalAbilityScroll == true or ns.db.compactMode == true)
+    return ns.db and (ns.db.useHorizontalAbilityScroll == true or IsCompactLayout())
 end
 
 local frame = CreateFrame("Frame", "GnomeLevelUpFrame", UIParent)
@@ -429,15 +433,14 @@ end
 
 local function BackgroundPieceColor(name)
     local colors = ns.db and ns.db.backgroundTextureColors
-    local color = colors and colors[name]
-    local hue = ns.db and ns.db.backgroundColor
-    -- The historical black default means "no texture tint" for custom
-    -- artwork; any selected hue is multiplied into the texture pieces.
-    if hue and not (hue[1] == 0 and hue[2] == 0 and hue[3] == 0) then
-        color = color or WHITE_COLOR
-        return { color[1] * hue[1], color[2] * hue[2], color[3] * hue[3] }
+    local color = colors and colors[name] or WHITE_COLOR
+    local hue = ns.db and (name == "center" and ns.db.backgroundColor or ns.db.frameColor)
+    -- The historical black background default means "no texture tint".
+    if name == "center" and hue and hue[1] == 0 and hue[2] == 0 and hue[3] == 0 then
+        return color
     end
-    return color or WHITE_COLOR
+    hue = hue or WHITE_COLOR
+    return { color[1] * hue[1], color[2] * hue[2], color[3] * hue[3] }
 end
 
 local function SetBackgroundPieceColor(texture, name, alpha)
@@ -950,6 +953,10 @@ function ns.RefreshPortraitRing()
     local enabled = db.portraitRingEnabled == true
         and ((type(reference) == "string" and reference ~= "")
             or (type(reference) == "table" and reference.atlas))
+    local ringColor = enabled and (db.portraitRingColor or { 1, 1, 1 })
+        or (db.colors and db.colors.portraitBorder) or { 1, 0.82, 0.20 }
+    -- The solid ring uses Portrait Border; authored textures use Portrait Ring Hue.
+    content.classRing:SetColorTexture(ringColor[1], ringColor[2], ringColor[3], 1)
     if not enabled then
         content.classRingGraphic:Hide()
         content.classRing:Show()
@@ -966,6 +973,8 @@ function ns.RefreshPortraitRing()
         applied = pcall(content.classRingGraphic.SetTexture, content.classRingGraphic, reference)
     end
     if applied then
+        local tint = ringColor
+        content.classRingGraphic:SetVertexColor(tint[1], tint[2], tint[3], 1)
         content.classRingGraphic:SetTexCoord(0, 1, 0, 1)
         content.classRing:Hide()
         content.classRingGraphic:Show()
@@ -1154,11 +1163,13 @@ ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
 
 content.noAbilitiesText = NewText(content.abilityRow, "GameFontHighlightSmall", 1.5)
 content.noAbilitiesText:SetPoint("CENTER", content.abilityRow, "CENTER", 0, 0)
+ApplyToTextLayers(content.noAbilitiesText, "SetJustifyH", "CENTER")
+ApplyToTextLayers(content.noAbilitiesText, "SetJustifyV", "MIDDLE")
 RegisterGlowFont(content.noAbilitiesText)
 ApplyToTextLayers(content.noAbilitiesText, "SetText", ns.L("No unlearned skills available"))
 
 local function ApplyPopupWidth()
-    local compact = ns.db and ns.db.compactMode == true
+    local compact = IsCompactLayout()
     local gap = compact and 6 or 10
     local textWidth = compact
         and (COMPACT_MAX_SKILLS * ABILITY_ICON_SIZE + (COMPACT_MAX_SKILLS - 1) * gap)
@@ -1266,7 +1277,7 @@ end
 local ABILITY_POP_DISTANCE = 24  -- how far below its resting spot an icon starts
 
 local function AbilityIconColumns()
-    if ns.db and ns.db.compactMode then return COMPACT_MAX_SKILLS end
+    if IsCompactLayout() then return COMPACT_MAX_SKILLS end
     local gap = AbilityIconGap()
     return math.max(1, math.floor((TEXT_WIDTH + gap) / (ABILITY_ICON_SIZE + gap)))
 end
@@ -1484,6 +1495,25 @@ local function GetAbilityIcon(index, row, pool)
     return btn
 end
 
+local function EmptyTrainerSkillsMessage()
+    -- An empty unlearned list can also mean everything is already learned.
+    -- Check the full class catalog before asking the player to scan a trainer.
+    if ns.GetCurrentFlavor() == "forever" then
+        local hasClassData = false
+        for _, item in ipairs(ns.GetTrainerCatalogIndex()) do
+            if type(item.entry) ~= "table" or not item.entry.profession then
+                hasClassData = true
+                break
+            end
+        end
+        if not hasClassData then
+            return ns.L("No trainer data for this class.\nVisit your class trainer."), 2
+        end
+    end
+    return ns.L(ns.db and ns.db.showOnlyCurrentLevelSkills
+        and "No new skills this level" or "No unlearned skills available")
+end
+
 local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText)
     local count = #abilities
     local speed = Speed()
@@ -1505,10 +1535,15 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
             icon:Hide()
         end
         if emptyText then
-            ApplyToTextLayers(emptyText, "SetText",
-                ns.db and ns.db.showOnlyCurrentLevelSkills
-                    and "No new skills this level"
-                    or "No unlearned skills available")
+            local message, lineCount = EmptyTrainerSkillsMessage()
+            emptyText.wrapLineCount = lineCount or 0
+            ApplyToTextLayers(emptyText, "SetWidth", TEXT_WIDTH)
+            ApplyToTextLayers(emptyText, "SetWordWrap", true)
+            ApplyToTextLayers(emptyText, "SetJustifyH", "CENTER")
+            ApplyToTextLayers(emptyText, "SetText", message)
+            local emptyHeight = math.max(ABILITY_ICON_SIZE, emptyText:GetHeight() or 0, emptyText:GetStringHeight() or 0)
+            row:SetHeight(emptyHeight)
+            row.viewport:SetHeight(emptyHeight)
             ApplyToTextLayers(emptyText, showEmptyText and "Show" or "Hide")
         end
         return
@@ -1626,7 +1661,7 @@ local function UpdateWeaponSkillText(unlearnedWeaponSkills)
     end
 
     local names = {}
-    local compact = ns.db and ns.db.compactMode == true
+    local compact = IsCompactLayout()
     local maxNames = compact and 5 or math.huge
     local totalNames = 0
     for _, skill in ipairs(unlearnedWeaponSkills) do
@@ -1914,6 +1949,15 @@ fadeOutGroup:SetScript("OnFinished", function() frame:Hide() end)
 frame.fadeOutGroup = fadeOutGroup
 
 local hideToken = 0
+local previewActive = false
+local previewSuspended = false
+local fadeDeadline
+local remainingPreviewTime
+
+local function ShouldSuspendPreview()
+    return previewActive and ns.IsPreviewSuspensionRequested
+        and ns.IsPreviewSuspensionRequested() == true
+end
 
 local function IsHovered()
     if frame.IsMouseOver and frame:IsMouseOver() then return true end
@@ -1932,6 +1976,13 @@ end
 local function ScheduleFadeOut(delay)
     hideToken = hideToken + 1
     local token = hideToken
+    delay = math.max(0, delay or 0)
+    fadeDeadline = GetTime() + delay
+    if ShouldSuspendPreview() then
+        previewSuspended = true
+        remainingPreviewTime = delay
+        return
+    end
     if ns.db and ns.db.reducedMotion then
         C_Timer.After(delay, function()
             if token == hideToken and frame:IsShown() then frame:Hide() end
@@ -1942,7 +1993,29 @@ local function ScheduleFadeOut(delay)
 end
 ns.RescheduleFadeOut = ScheduleFadeOut
 
+-- Only pause the timeout for a manually requested preview. Real level-ups
+-- retain their usual timer, position, scale, animation, and layout.
+function ns.RefreshPreviewSuspension()
+    if not previewActive or not frame:IsShown() then return end
+    if ShouldSuspendPreview() then
+        if previewSuspended then return end
+        remainingPreviewTime = math.max(0, (fadeDeadline or GetTime()) - GetTime())
+        previewSuspended = true
+        hideToken = hideToken + 1
+        if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
+        frame:SetAlpha(1)
+    elseif previewSuspended then
+        local remaining = remainingPreviewTime or 0
+        previewSuspended = false
+        remainingPreviewTime = nil
+        ScheduleFadeOut(remaining)
+    end
+end
+
 function ns.CloseLevelUp()
+    previewActive = false
+    previewSuspended = false
+    remainingPreviewTime = nil
     hideToken = hideToken + 1
     for _, fs in ipairs(content.statLinePool) do StopLineAnimation(fs) end
     for _, icon in ipairs(content.abilityIconPool) do StopIconAnimation(icon) end
@@ -2029,8 +2102,11 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     ScheduleFadeOut(db.duration or 7)
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview)
     if ns.EnsureDatabase then ns.EnsureDatabase() end
+    previewActive = isPreview == true
+    previewSuspended = false
+    remainingPreviewTime = nil
     local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities)
     if not ok then
         print("|cffff4040GnomeLevelUp error:|r " .. tostring(err))

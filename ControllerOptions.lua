@@ -567,10 +567,15 @@ local function ClearBindings()
     if bindingOwner and type(ClearOverrideBindings) == "function" and not combat then pcall(ClearOverrideBindings, bindingOwner) end
 end
 
+function ns.IsControllerOptionsShown()
+    return window and window:IsShown() or false
+end
+
 local function Close()
     ClearBindings()
     SetControllerPreviewStrata(false)
     if window then window:Hide() end
+    if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
     if bindingOwner then bindingOwner:Hide() end
 end
 
@@ -584,12 +589,13 @@ local CONTROLLER_BACKDROP = {
 local function ControllerPieceColor(name)
     local colors = ns.db and ns.db.backgroundTextureColors
     local color = colors and colors[name]
-    local hue = ns.db and ns.db.backgroundColor
-    if hue and not (hue[1] == 0 and hue[2] == 0 and hue[3] == 0) then
-        color = color or { 1, 1, 1 }
-        return color[1] * hue[1], color[2] * hue[2], color[3] * hue[3]
+    local hue = ns.db and (name == "center" and ns.db.backgroundColor or ns.db.frameColor)
+    color = color or { 1, 1, 1 }
+    if name == "center" and hue and hue[1] == 0 and hue[2] == 0 and hue[3] == 0 then
+        return color[1], color[2], color[3]
     end
-    return color and color[1] or 1, color and color[2] or 1, color and color[3] or 1
+    hue = hue or { 1, 1, 1 }
+    return color[1] * hue[1], color[2] * hue[2], color[3] * hue[3]
 end
 
 local function MakeControllerSkin()
@@ -864,6 +870,9 @@ local function Build()
     availability:SetText(ns.L and ns.L("Some options are not available in the controller menu.")
         or "Some options are not available in the controller menu.")
     availability:SetTextColor(0.75, 0.75, 0.75)
+    window:SetScript("OnShow", function()
+        if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
+    end)
     window:SetScript("OnHide", Close)
     window:SetScript("OnUpdate", function(_, elapsed)
         if not IsActive() then

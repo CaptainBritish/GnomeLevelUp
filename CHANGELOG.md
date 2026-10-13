@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.4 - 13/10/2026
+
+Pushing this update early because of a critical error that broke a profile.
+
+##### New Features
+
+* Split background, frame, and portrait ring hue controls, with independent texture tint controls.
+* Added “Suspend Preview” to pause a manual preview’s timeout while options are open. 
+* When class trainer data is missing, the empty skills message now asks the player to visit their class trainer.
+
+##### Bug Fixes
+
+* Fixed critical failure if the player gets to level 6 without class trainer data.
+* Theme switching now preserves the saved frame position and lock state when Lock Location is enabled.
+* The hidden gnome has been removed.
+
 ## 1.3.2 - 11/10/2026
 
 ##### New Features
