@@ -194,7 +194,7 @@ controllerOptionsButton = CreateFrame(
     "Button", "GnomeLevelUpControllerOptionsLauncher", body, "UIPanelButtonTemplate")
 controllerOptionsButton:SetSize(240, 26)
 controllerOptionsButton:SetPoint("TOPRIGHT", body, "TOPRIGHT", -8, -8)
-controllerOptionsButton:SetText("Open Controller Options")
+controllerOptionsButton:SetText(ns.L("Open Controller Options"))
 controllerOptionsButton:SetScript("OnClick", function()
     if ns.OpenControllerOptionsWhenFree then ns.OpenControllerOptionsWhenFree() end
 end)

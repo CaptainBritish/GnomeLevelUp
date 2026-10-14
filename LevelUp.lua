@@ -111,19 +111,19 @@ local function PrintClassicLevelUpText(currentLevel, statDiff)
         elseif change.kind == "mana" then
             mana = increase
         elseif change.kind ~= "power" and increase > 0 then
-            statLines[#statLines + 1] = string.format("Your %s increased by %d", change.name, increase)
+            statLines[#statLines + 1] = ns.L("Your %s increased by %d", change.name, increase)
         end
     end
 
-    local lines = { string.format("Congratulations! You have reached level %d!", currentLevel) }
+    local lines = { ns.L("Congratulations! You have reached level %d!", currentLevel) }
     if hitPoints and hitPoints > 0 then
         if mana and mana > 0 then
-            lines[#lines + 1] = string.format("You have gained %d hit points and %d mana", hitPoints, mana)
+            lines[#lines + 1] = ns.L("You have gained %d hit points and %d mana", hitPoints, mana)
         else
-            lines[#lines + 1] = string.format("You have gained %d hit points", hitPoints)
+            lines[#lines + 1] = ns.L("You have gained %d hit points", hitPoints)
         end
     elseif mana and mana > 0 then
-        lines[#lines + 1] = string.format("You have gained %d mana", mana)
+        lines[#lines + 1] = ns.L("You have gained %d mana", mana)
     end
 
     for _, line in ipairs(statLines) do

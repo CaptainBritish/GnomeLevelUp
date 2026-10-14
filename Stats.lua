@@ -2,11 +2,11 @@ local ADDON_NAME, ns = ...
 
 -- UnitStat uses the same five indexes on the supported clients.
 local STAT_NAMES = {
-    [1] = STRENGTH or "Strength",
-    [2] = AGILITY or "Agility",
-    [3] = STAMINA or "Stamina",
-    [4] = INTELLECT or "Intellect",
-    [5] = SPIRIT or "Spirit",
+    [1] = ns.L(STRENGTH or "Strength"),
+    [2] = ns.L(AGILITY or "Agility"),
+    [3] = ns.L(STAMINA or "Stamina"),
+    [4] = ns.L(INTELLECT or "Intellect"),
+    [5] = ns.L(SPIRIT or "Spirit"),
 }
 
 function ns.SnapshotStats()
@@ -14,7 +14,7 @@ function ns.SnapshotStats()
     local _, powerToken = UnitPowerType("player")
     local powerLabel = "Power"
     if type(powerToken) == "string" and type(_G[powerToken]) == "string" then
-        powerLabel = _G[powerToken]
+        powerLabel = ns.L(_G[powerToken])
     end
     local snap = {
         level = UnitLevel("player"),
