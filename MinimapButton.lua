@@ -30,9 +30,9 @@ end
 
 local function OnTooltipShow(tooltip)
     tooltip:AddLine("GnomeLevelUp")
-    tooltip:AddLine("Click to open options", 1, 1, 1)
-    tooltip:AddLine("Right-click to toggle the addon", 1, 1, 1)
-    tooltip:AddLine("Drag to move", 1, 1, 1)
+    tooltip:AddLine(ns.L("Click to open options"), 1, 1, 1)
+    tooltip:AddLine(ns.L("Right-click to toggle the addon"), 1, 1, 1)
+    tooltip:AddLine(ns.L("Drag to move"), 1, 1, 1)
 end
 
 function ns.SetMinimapButtonShown(shown)

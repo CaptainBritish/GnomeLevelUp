@@ -1683,7 +1683,7 @@ local function UpdateWeaponSkillText(unlearnedWeaponSkills)
         return false
     end
 
-    local more = totalNames > #names and " & more..." or ""
+    local more = totalNames > #names and ns.L(" & more...") or ""
     local maxCharacters = compact and 30 or 54
     local maxItemsPerLine = compact and 2 or 3
     local lines, currentLine = {}, ""
@@ -2105,6 +2105,16 @@ end
 function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview)
     if ns.EnsureDatabase then ns.EnsureDatabase() end
     previewActive = isPreview == true
+    -- The options window sits in DIALOG strata and would swallow clicks on the preview's X button.
+    if previewActive then
+        frame:SetFrameStrata("FULLSCREEN_DIALOG")
+        -- A preview must stay closable even when click-through is enabled.
+        frame:EnableMouse(true)
+        closeButton:EnableMouse(true)
+    elseif ns.ApplyFrameStrata then
+        ns.ApplyFrameStrata(ns.db and ns.db.frameStrata)
+        ns.ApplyClickThrough(ns.db and ns.db.clickThrough)
+    end
     previewSuspended = false
     remainingPreviewTime = nil
     local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities)

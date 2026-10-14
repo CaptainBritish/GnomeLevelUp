@@ -917,9 +917,9 @@ function ns.PreviewLevelUp(debugSkills)
     end
     if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
     ns.ShowLevelUp(currentLevel, {
-        { name = STRENGTH or "Strength", old = 20, new = 23 },
-        { name = STAMINA or "Stamina", old = 22, new = 27 },
-        { name = INTELLECT or "Intellect", old = 15, new = 17 },
+        { name = ns.L(STRENGTH or "Strength"), old = 20, new = 23 },
+        { name = ns.L(STAMINA or "Stamina"), old = 22, new = 27 },
+        { name = ns.L(INTELLECT or "Intellect"), old = 15, new = 17 },
     }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities, true)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
