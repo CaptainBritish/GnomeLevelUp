@@ -63,8 +63,8 @@ function ns.DiffStats(before, after)
         diff.stats[#diff.stats + 1] = { name = name, old = oldVal, new = newVal, kind = kind }
     end
 
-    AddStat("Health", before.health, after.health, "health")
-    AddStat(after.powerLabel or "Power", before.power, after.power,
+    AddStat(ns.L("Health"), before.health, after.health, "health")
+    AddStat(ns.L(after.powerLabel or "Power"), before.power, after.power,
         after.powerToken == "MANA" and "mana" or "power")
 
     for _, i in ipairs(GetDisplayedStatIndexes()) do
