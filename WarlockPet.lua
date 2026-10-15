@@ -5,6 +5,7 @@ local ADDON_NAME, ns = ...
 local petRevision = 0
 local cachedPetSpells
 local cachedPetRevision = -1
+local GetNumSpellBookItems = rawget(_G, "GetNumSpellBookItems")
 
 local function IsSecretValue(value)
     return type(issecretvalue) == "function" and issecretvalue(value)
@@ -53,14 +54,23 @@ local function AddModernPetSpell(known, index, petBank, itemInfo)
     if not name and C_Spell and C_Spell.GetSpellInfo then
         local ok, info = pcall(C_Spell.GetSpellInfo, itemInfo.spellID)
         if ok then
-            name = type(info) == "table" and info.name or info
-            subText = subText or (type(info) == "table" and (info.subText or info.subtext))
+            if type(info) == "table" then
+                name = rawget(info, "name") or name
+                subText = subText or (rawget(info, "subText") or rawget(info, "subtext"))
+            else
+                name = info
+            end
         end
+    end
+    if not subText and C_Spell and C_Spell.GetSpellSubtext then
+        local ok, value = pcall(C_Spell.GetSpellSubtext, itemInfo.spellID)
+        if ok then subText = value end
     end
     AddKnownSpell(known, itemInfo.spellID, name, subText)
 end
 
 local function AddLegacyPetSpell(known, index, spellBank)
+    local GetSpellBookItemInfo = rawget(_G, "GetSpellBookItemInfo")
     if type(GetSpellBookItemInfo) ~= "function" then return end
     local ok, spellType, spellID = pcall(GetSpellBookItemInfo, index, spellBank)
     -- Classic pet spellbooks report learned abilities as PETACTION rather than
@@ -71,12 +81,14 @@ local function AddLegacyPetSpell(known, index, spellBank)
         return
     end
     local name, subText
+    local GetSpellBookItemName = rawget(_G, "GetSpellBookItemName")
     if type(GetSpellBookItemName) == "function" then
         local nameOK
         nameOK, name, subText = pcall(GetSpellBookItemName, index, spellBank)
         if not nameOK then name, subText = nil, nil end
     end
-    if not name and GetSpellInfo then name = GetSpellInfo(spellID) end
+    local GetSpellInfo = rawget(_G, "GetSpellInfo")
+    if not name and type(GetSpellInfo) == "function" then name = GetSpellInfo(spellID) end
     AddKnownSpell(known, spellID, name, subText)
 end
 
@@ -106,26 +118,23 @@ function ns.SnapshotPetSpellBook(forceRefresh)
     local known = { ids = {}, names = {}, ranks = {} }
     local petBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet
 
-    if C_SpellBook and petBank and C_SpellBook.GetNumSpellBookSkillLines
-        and C_SpellBook.GetSpellBookSkillLineInfo and C_SpellBook.GetSpellBookItemInfo then
-        local okCount, skillLineCount = pcall(C_SpellBook.GetNumSpellBookSkillLines)
-        if okCount and tonumber(skillLineCount) then
-            for skillLineIndex = 1, skillLineCount do
-                local okLine, skillLineInfo = pcall(C_SpellBook.GetSpellBookSkillLineInfo, skillLineIndex)
-                if okLine and type(skillLineInfo) == "table" and not skillLineInfo.isGuild then
-                    local offset = tonumber(skillLineInfo.itemIndexOffset) or 0
-                    local count = tonumber(skillLineInfo.numSpellBookItems) or 0
-                    for index = offset + 1, offset + count do
-                        local okItem, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, index, petBank)
-                        if okItem then AddModernPetSpell(known, index, petBank, itemInfo) end
-                    end
-                end
+    -- Pet entries use their own 1-based index range, not the player's
+    -- skill-line offsets. HasPetSpells returns that pet-book entry count.
+    if C_SpellBook and petBank and C_SpellBook.HasPetSpells
+        and C_SpellBook.GetSpellBookItemInfo then
+        local okCount, count = pcall(C_SpellBook.HasPetSpells)
+        if okCount and not IsSecretValue(count) and tonumber(count) then
+            for index = 1, count do
+                local okItem, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, index, petBank)
+                if okItem then AddModernPetSpell(known, index, petBank, itemInfo) end
             end
         end
     end
 
     if next(known.names) == nil and type(GetNumSpellBookItems) == "function" then
-        local petBook = BOOKTYPE_PET or "pet"
+        -- BOOKTYPE_PET is not defined in all client builds, so guard access to
+        -- avoid undefined-global warnings and use the fallback pet book name.
+        local petBook = rawget(_G, "BOOKTYPE_PET") or "pet"
         local okCount, count = pcall(GetNumSpellBookItems, petBook)
         if not okCount or not tonumber(count) then
             okCount, count = pcall(GetNumSpellBookItems)

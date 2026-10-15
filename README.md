@@ -1,4 +1,4 @@
-## Release notes
+## Release notes — 1.3.8
 
 - Profiles upgrading from older releases may need to visit a trainer again if their cached trainer data is incomplete or outdated.
 - If a custom theme contains missing or invalid texture references, use **Reset Appearance** or select the theme again to restore valid defaults.
@@ -6,6 +6,8 @@
 
 
 # GnomeLevelUp
+
+**Version: 1.3.8**
 
 A fancy level-up screen for World of Warcraft that shows the stats you
 gained and the trainer skills you have not learned yet inspired by CRPGs.
@@ -21,6 +23,16 @@ the 54 Sky Elf warriors that were created and killed to help me test this addon.
 - **Retail**  Currently untested but should work okay.
 - **WoW: Forever** — the active target.
 
+### API checks for 1.3.8
+
+On the tested Forever build, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInfo`,
+and `C_Spell.GetSpellTexture` are available. Their corresponding legacy global
+functions are absent, so this release retains the reviewed modern API paths.
+`C_SpellBook.IsSpellKnown`, `IsSpellKnown`, and `IsPlayerSpell` are also available;
+initial player testing reported no learned-spell issue. These checks confirm
+API availability on that build, not full compatibility with every client.
+
+
 
 ## Installation
 
@@ -35,6 +47,10 @@ the 54 Sky Elf warriors that were created and killed to help me test this addon.
    trainer once after the update. You can also reset it manually from the
    options menu or with `/glu cleartraining`.
 
+
+## Hunter pet skills
+
+Under **Trainer Data**, turn off **Show Hunter pet abilities** to hide pet-training skills while keeping ordinary Hunter abilities visible. The option is enabled by default and greyed out for other classes and on Retail. Hunter pet-training skills appear only at the level each rank becomes available, regardless of the general current-level filter or which pet is summoned.
 
 ## Usage
 

@@ -44,7 +44,7 @@ end
 function ns.GetTrainingRankInfo(label)
     local normalized = ns.NormalizeTrainingName(label)
     if not normalized then return nil, nil end
-    local base, rank = normalized:match("^(.-)%s*%([^()]*?(%d+)%s*%)$")
+    local base, rank = normalized:match("^(.-)%s*%([^()]-(%d+)%s*%)$")
     if not rank then base, rank = normalized:match("^(.-)%s+rank%s*(%d+)$") end
     return base or normalized, tonumber(rank)
 end
@@ -195,6 +195,26 @@ function ns.GetTrainerCatalogIndex()
     return entries
 end
 
+-- Pet training records share the Hunter trainer catalog. Match complete
+-- ability names, never the word "pet", so Mend Pet/Revive Pet stay visible.
+local HUNTER_PET_TRAINING_NAMES = {
+    ["great stamina"] = true, ["natural armor"] = true,
+    ["arcane resistance"] = true, ["fire resistance"] = true,
+    ["frost resistance"] = true, ["nature resistance"] = true,
+    ["shadow resistance"] = true, ["growl"] = true, ["cower"] = true,
+    ["bite"] = true, ["claw"] = true, ["dash"] = true, ["dive"] = true,
+    ["screech"] = true, ["scorpid poison"] = true, ["furious howl"] = true,
+    ["lightning breath"] = true, ["prowl"] = true, ["charge"] = true,
+    ["shell shield"] = true, ["thunderstomp"] = true,
+}
+
+function ns.IsHunterPetTrainingEntry(entry)
+    if type(entry) == "table" and entry.hunterPet == true then return true end
+    local base = ns.GetTrainingRankInfo(GetTrainingName(entry))
+    if base and HUNTER_PET_TRAINING_NAMES[base] then return true end
+    return false
+end
+
 function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     -- Return only skills that fit the player's level and are not learned.
     currentLevel = tonumber(currentLevel) or 0
@@ -202,6 +222,7 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     if #catalog == 0 then return {} end
     spellSnapshot = spellSnapshot or (ns.SnapshotSpellBook and ns.SnapshotSpellBook()) or {}
     local known = ns.BuildKnownTrainingLookup(spellSnapshot)
+    local _, classToken = UnitClass("player")
     local learnedStore = ns.GetLearnedTrainingStore and ns.GetLearnedTrainingStore()
     local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
     local onlyNewSkills = ns.db and ns.db.showOnlyNewSkills == true
@@ -210,9 +231,16 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
     local rankedAbilities = {}
     for _, catalogEntry in ipairs(catalog) do
         local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level, learnedStore)
-        local levelMatches = not onlyCurrentLevel or catalogEntry.level == currentLevel
+        local hunterPetSkill = classToken == "HUNTER"
+            and ns.IsHunterPetTrainingEntry(catalogEntry.entry)
+        -- Pet training knowledge cannot be inferred from the summoned pet.
+        -- Show each rank only at its unlock level instead of accumulating it.
+        local levelMatches = catalogEntry.level == currentLevel
+            or (not onlyCurrentLevel and not hunterPetSkill)
+        local hiddenHunterPetSkill = hunterPetSkill
+            and ns.db and ns.db.showHunterPetSkills == false
         if levelMatches and catalogEntry.level <= currentLevel
-            and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
+            and not hiddenHunterPetSkill and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
             local ability = {
                 name = catalogEntry.name,
                 icon = catalogEntry.icon,

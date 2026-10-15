@@ -2,11 +2,11 @@ local ADDON_NAME, ns = ...
 
 -- UnitStat uses the same five indexes on the supported clients.
 local STAT_NAMES = {
-    [1] = STRENGTH or "Strength",
-    [2] = AGILITY or "Agility",
-    [3] = STAMINA or "Stamina",
-    [4] = INTELLECT or "Intellect",
-    [5] = SPIRIT or "Spirit",
+    [1] = _G["STRENGTH"] or "Strength",
+    [2] = _G["AGILITY"] or "Agility",
+    [3] = _G["STAMINA"] or "Stamina",
+    [4] = _G["INTELLECT"] or "Intellect",
+    [5] = _G["SPIRIT"] or "Spirit",
 }
 
 function ns.SnapshotStats()

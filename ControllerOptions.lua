@@ -432,6 +432,19 @@ local function Toggle(label, key, after)
     }
 end
 
+local function PetClassToggle(label, key, class)
+    local entry = Toggle(label, key)
+    entry.isAvailable = function()
+        local _, token = UnitClass("player")
+        return token == class and (not ns.GetCurrentFlavor or ns.GetCurrentFlavor() == "forever")
+    end
+    local activate = entry.activate
+    entry.activate = function()
+        if entry.isAvailable() then activate() end
+    end
+    return entry
+end
+
 local function EntriesFor(key)
     if key == "appearance" then
         return {
@@ -500,8 +513,9 @@ local function EntriesFor(key)
             Toggle("Show trainer costs", "showTrainerCosts"),
             Toggle("Only current-level skills", "showOnlyCurrentLevelSkills"),
             Toggle("Only new skills", "showOnlyNewSkills"),
-            Toggle("Show warlock grimoires", "showWarlockPetSkills"),
-            Toggle("Filter by active pet", "filterWarlockPetByActivePet"),
+            PetClassToggle("Show warlock grimoires", "showWarlockPetSkills", "WARLOCK"),
+            PetClassToggle("Filter by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
+            PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
         }
     elseif key == "sound" then
         return {
@@ -730,6 +744,10 @@ local function Render()
             row.text:SetTextColor(entryIndex == selected and 1 or 0.75, entryIndex == selected and 0.82 or 0.75, entryIndex == selected and 0.15 or 0.75)
             row.value:SetTextColor(entryIndex == selected and 1 or 0.75, entryIndex == selected and 0.82 or 0.75, entryIndex == selected and 0.15 or 0.75)
             row.background:SetColorTexture(0.45, 0.32, 0.12, entryIndex == selected and 0.42 or 0.08)
+            if entry.isAvailable and not entry.isAvailable() then
+                row.text:SetTextColor(0.45, 0.45, 0.45)
+                row.value:SetTextColor(0.45, 0.45, 0.45)
+            end
         end
     end
 end

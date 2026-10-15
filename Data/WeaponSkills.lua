@@ -132,9 +132,13 @@ local function EquippedWeaponMatches(slot, definition)
 
     local subtype
     local subclassID
-    if itemID and type(GetItemInfoInstant) == "function" then
+    -- Prefer the modern C_Item API, which avoids deprecated legacy item-info
+    -- access while preserving the same tuple layout used by the Classic/Forever
+    -- client.
+    local getItemInfoInstant = C_Item and C_Item.GetItemInfoInstant
+    if itemID and type(getItemInfoInstant) == "function" then
         local instantOK, _, _, itemSubType, _, _, _, itemSubclassID =
-            pcall(GetItemInfoInstant, itemID)
+            pcall(getItemInfoInstant, itemID)
         if instantOK then
             subtype = itemSubType
             subclassID = itemSubclassID
@@ -144,8 +148,9 @@ local function EquippedWeaponMatches(slot, definition)
     -- Some Forever builds expose the item link APIs while the Instant API is
     -- missing or returns an incomplete tuple. Read the regular item record as
     -- a second path so equipped wands are still recognized reliably.
-    if type(GetItemInfo) == "function" and (not subtype or not subclassID) then
-        local info = { pcall(GetItemInfo, itemLink or itemID) }
+    local getItemInfo = C_Item and C_Item.GetItemInfo
+    if type(getItemInfo) == "function" and (not subtype or not subclassID) then
+        local info = { pcall(getItemInfo, itemLink or itemID) }
         if info[1] then
             -- pcall adds one leading result: itemSubType is result 8 and
             -- subclassID is result 14 in the standard GetItemInfo tuple.
@@ -183,18 +188,23 @@ end
 local function SnapshotKnownWeaponSkills(forceRefresh)
     if knownWeaponSkills and not forceRefresh then return knownWeaponSkills, knownWeaponSkillSource end
     local known = {}
-    if type(GetNumSkillLines) ~= "function" or type(GetSkillLineInfo) ~= "function" then
+    -- Some clients expose the skill-line API only conditionally, so access it
+    -- through the global table to avoid undefined-field warnings while still
+    -- checking for availability at runtime.
+    local getNumSkillLines = _G["GetNumSkillLines"]
+    local getSkillLineInfo = _G["GetSkillLineInfo"]
+    if type(getNumSkillLines) ~= "function" or type(getSkillLineInfo) ~= "function" then
         knownWeaponSkills, knownWeaponSkillSource = known, "unavailable"
         return known, knownWeaponSkillSource
     end
 
-    local ok, count = pcall(GetNumSkillLines)
+    local ok, count = pcall(getNumSkillLines)
     if not ok or type(count) ~= "number" then
         knownWeaponSkills, knownWeaponSkillSource = known, "unavailable"
         return known, knownWeaponSkillSource
     end
     for index = 1, count do
-        local readOK, name, isHeader = pcall(GetSkillLineInfo, index)
+        local readOK, name, isHeader = pcall(getSkillLineInfo, index)
         if readOK and not isHeader then
             local normalized = NormalizeSkillName(name)
             if normalized then known[normalized] = true end

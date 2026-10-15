@@ -548,7 +548,7 @@ local function AddAvailabilityRefresh(checkButton, label, isAvailable)
     local section = currentSection
     refreshers[#refreshers + 1] = function()
         local available = isAvailable()
-        local visible = available and not (section and section.collapsed)
+        local visible = not (section and section.collapsed)
         checkButton:SetShown(visible)
         label:SetShown(visible)
         if checkButton.SetEnabled then checkButton:SetEnabled(available) end
@@ -592,9 +592,9 @@ do
     local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3.4"
-    version:SetText((ns.L and ns.L("Version %s", tostring(addonVersion or "1.3.4")))
-        or ("Version " .. tostring(addonVersion or "1.3.4")))
+    local addonVersion = GetAddOnMetadata and GetAddOnMetadata(ADDON_NAME, "Version") or "1.3.8"
+    version:SetText((ns.L and ns.L("Version %s", tostring(addonVersion or "1.3.8")))
+        or ("Version " .. tostring(addonVersion or "1.3.8")))
 
     local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
@@ -1224,6 +1224,16 @@ local function IsForeverWarlock()
 end
 AddAvailabilityRefresh(petCheck, petLabel, IsForeverWarlock)
 
+local hunterPetCheck, hunterPetLabel = AddCheckbox("Show Hunter pet abilities",
+    function() return ns.db.showHunterPetSkills ~= false end,
+    function(v) ns.db.showHunterPetSkills = v end)
+local function IsForeverHunter()
+    if not IsForeverClient() then return false end
+    local _, classToken = UnitClass("player")
+    return classToken == "HUNTER"
+end
+AddAvailabilityRefresh(hunterPetCheck, hunterPetLabel, IsForeverHunter)
+
 local filterPetCheck, filterPetLabel, scrollCheck, scrollLabel = AddCheckboxPair({
     "Filter grimoires by active pet",
     function() return ns.db.filterWarlockPetByActivePet end,
@@ -1593,9 +1603,14 @@ function ns.ToggleOptions()
         local category = ns.settingsCategory
         local id = category.GetID and category:GetID() or category.ID
         Settings.OpenToCategory(id)
-    elseif registeredWith == "interface" and InterfaceOptionsFrame_OpenToCategory then
-        InterfaceOptionsFrame_OpenToCategory(panel)
-        InterfaceOptionsFrame_OpenToCategory(panel)
+    elseif registeredWith == "interface" then
+        local InterfaceOptionsFrame_OpenToCategory = _G["InterfaceOptionsFrame_OpenToCategory"]
+        if type(InterfaceOptionsFrame_OpenToCategory) == "function" then
+            InterfaceOptionsFrame_OpenToCategory(panel)
+            InterfaceOptionsFrame_OpenToCategory(panel)
+        else
+            ToggleStandalone()
+        end
     else
         ToggleStandalone()
     end

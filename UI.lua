@@ -638,14 +638,16 @@ function ns.ApplyBackgroundAppearance()
     backgroundLayoutVersion = backgroundLayoutVersion + 1
     local theme = GetBackgroundTheme()
     local useCustom = ns.db and ns.db.backgroundMode == "CUSTOM" and theme ~= nil
+    local themeTextures = theme and theme.textures or nil
     for _, layer in ipairs(bg.layers) do
         layer:SetShown(not useCustom)
     end
-    if not useCustom then theme = nil end
+    if not useCustom then themeTextures = nil end
     for _, name in ipairs(BACKGROUND_PIECES) do
         local piece = bg.customPieces[name]
         if useCustom and name ~= "center" then
-            SetBackgroundPiece(piece, name, theme.textures and theme.textures[name], (ns.db and ns.db.bgOpacity) or 0.70, true)
+            local texture = themeTextures and themeTextures[name]
+            SetBackgroundPiece(piece, name, texture, (ns.db and ns.db.bgOpacity) or 0.70, true)
         else
             -- The authored center slice is rendered by the dedicated backing
             -- layer so it is never double-blended. That backing extends beneath
@@ -658,7 +660,8 @@ function ns.ApplyBackgroundAppearance()
     -- transparent corner pixels reveal theme artwork instead of the world.
     local alpha = (ns.db and ns.db.bgOpacity) or 0.70
     if useCustom then
-        SetBackgroundPiece(bg.customBackingPieces.center, "center", theme.textures and theme.textures.center, alpha, false)
+        local centerTexture = themeTextures and themeTextures.center
+        SetBackgroundPiece(bg.customBackingPieces.center, "center", centerTexture, alpha, false)
         for _, info in ipairs(CORNER_UNDERLAYS) do
             bg.customBackingPieces[info.key]:Hide()
         end
@@ -1484,7 +1487,7 @@ local function GetAbilityIcon(index, row, pool)
         if self.spellID and GameTooltip.SetSpellByID then
             GameTooltip:SetSpellByID(self.spellID)
         elseif self.spellName then
-            GameTooltip:SetText(self.spellName)
+            GameTooltip:SetText(self.spellName, 1, 1, 1, 1)
         end
         GameTooltip:Show()
     end)
@@ -1598,10 +1601,11 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         if not texture and icon.textureSpellID == spellID then
             texture = icon.texturePath
         elseif not texture then
-            texture = spellID and (
-                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID))
-                or (GetSpellTexture and GetSpellTexture(spellID))
-            )
+            local spellTextureFunc = C_Spell and C_Spell.GetSpellTexture
+            if not spellTextureFunc then
+                spellTextureFunc = rawget(_G, "GetSpellTexture")
+            end
+            texture = spellID and spellTextureFunc and spellTextureFunc(spellID)
             icon.textureSpellID = spellID
         else
             icon.textureSpellID = nil

@@ -1,4 +1,5 @@
 local ADDON_NAME, ns = ...
+local GetSpellLevelLearned = rawget(_G, "GetSpellLevelLearned")
 
 -- Keep spellbook differences in one place so the rest of the addon can use names and IDs.
 local spellbookRevision = 0
@@ -84,8 +85,9 @@ function ns.IsSpellKnownAcrossClients(spellID)
             knownSpell = true
         end
     end
-    if not knownSpell and type(IsPlayerSpell) == "function" then
-        local ok, known = pcall(IsPlayerSpell, spellID)
+    local legacyIsSpellKnown = rawget(_G, "IsSpellKnown")
+    if not knownSpell and type(legacyIsSpellKnown) == "function" then
+        local ok, known = pcall(legacyIsSpellKnown, spellID)
         if ok and not IsSecretValue(known) and known == true then
             knownSpell = true
         end
@@ -116,7 +118,7 @@ function ns.SnapshotSpellBook(forceRefresh)
             local count = skillLineInfo.numSpellBookItems or 0
             for j = offset + 1, offset + count do
                 local itemInfo = C_SpellBook.GetSpellBookItemInfo(j, playerBank)
-                local isSpell = itemInfo and itemInfo.spellID
+                local isSpell = itemInfo and itemInfo.spellID ~= nil
                 if isSpell and Enum.SpellBookItemType then
                     isSpell = itemInfo.itemType == Enum.SpellBookItemType.Spell
                 end
@@ -126,8 +128,11 @@ function ns.SnapshotSpellBook(forceRefresh)
                         local spellInfo = C_Spell.GetSpellInfo(itemInfo.spellID)
                         name = type(spellInfo) == "table" and spellInfo.name or spellInfo
                     end
-                    if not name and GetSpellInfo then
-                        name = GetSpellInfo(itemInfo.spellID)
+                    if not name and type(GetSpellInfo) == "function" then
+                        local ok, spellName = pcall(GetSpellInfo, itemInfo.spellID)
+                        if ok then
+                            name = spellName
+                        end
                     end
                     known[itemInfo.spellID] = name
                 end
@@ -269,7 +274,10 @@ function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells)
                 name = spell.name,
                 icon = spell.icon,
             }
-            local baseName, rank = ns.GetTrainingRankInfo and ns.GetTrainingRankInfo(spell.name)
+            local baseName, rank
+            if ns.GetTrainingRankInfo then
+                baseName, rank = ns.GetTrainingRankInfo(spell.name)
+            end
             if onlyNewSkills and rank then
                 local existing = ranked[baseName]
                 if not existing or rank < existing.rank then

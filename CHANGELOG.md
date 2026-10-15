@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.8 - 15/10/2026
+
+##### New Features
+
+* Added Show Hunter pet abilities, enabled by default, under Trainer Data. Pet options remain visible but disabled for other classes.
+* Further prepared addon for localization, coming in the next update.
+
+##### Bug Fixes and Optimization
+
+* Hunter pet-training skills now appear only at their unlock level, independently of the general current-level setting. Filtering no longer depends on the summoned pet’s spellbook.
+* Corrected the Lua pattern used to parse parenthesized skill ranks.
+* Updated API access and optional-global checks after review with Ketho's WoW API extension.
+* Updated the legacy learned-spell check.
+* Improved rank filtering.
+* Improved the legacy options-menu fallback.
+
+
 ## 1.3.4 - 13/10/2026
 
 Pushing this update early because of a critical error that broke a profile.

@@ -64,7 +64,7 @@ local function CreateMinimapButton()
     })
 
     db.showInCompartment = true
-    dbIcon:Register(BUTTON_NAME, dataObject, db, ICON_PATH)
+    dbIcon:Register(BUTTON_NAME, dataObject, db)
     iconButton = dbIcon:GetMinimapButton(BUTTON_NAME)
     ns.minimapButton = iconButton
     ns.SetMinimapButtonShown(ns.db.minimapButtonShown ~= false)

@@ -455,6 +455,12 @@ local function ScanTrainer()
                     and (not professionService or (ns.db and ns.db.scanProfessionTrainers)) then
                     local savedEntry, isNew, wasChanged = RecordAbility(
                         store[flavor], classToken, level, label, icon, spellID, professionService, serviceCost, recordIndex)
+                    if classToken == "HUNTER" and ns.IsHunterPetTrainingEntry
+                        and ns.IsHunterPetTrainingEntry(savedEntry)
+                        and savedEntry.hunterPet ~= true then
+                        savedEntry.hunterPet = true
+                        wasChanged = true
+                    end
                     if isNew then added = added + 1 end
                     changed = changed or wasChanged
                     if status == "used" then MarkLearned(savedEntry, level) end
