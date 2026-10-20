@@ -79,8 +79,7 @@ local ITEM_SUBCLASS_WEAPONS = {
     [19] = { ["wands"] = true },
 }
 
--- Every bow, crossbow, gun, thrown weapon, and wand uses the ranged slot.
--- Their individual subtype IDs are still checked below so one ranged weapon
+-- Ranged individual subtype IDs are still checked below so one ranged weapon
 -- does not incorrectly suppress the other ranged training entries.
 local RANGED_WEAPON_SPELLS = {
     [264] = true,  -- Bows
@@ -145,9 +144,7 @@ local function EquippedWeaponMatches(slot, definition)
         end
     end
 
-    -- Some Forever builds expose the item link APIs while the Instant API is
-    -- missing or returns an incomplete tuple. Read the regular item record as
-    -- a second path so equipped wands are still recognized reliably.
+    -- Read the full item record if the instant lookup missed the weapon subtype.
     local getItemInfo = C_Item and C_Item.GetItemInfo
     if type(getItemInfo) == "function" and (not subtype or not subclassID) then
         local info = { pcall(getItemInfo, itemLink or itemID) }
@@ -188,9 +185,7 @@ end
 local function SnapshotKnownWeaponSkills(forceRefresh)
     if knownWeaponSkills and not forceRefresh then return knownWeaponSkills, knownWeaponSkillSource end
     local known = {}
-    -- Some clients expose the skill-line API only conditionally, so access it
-    -- through the global table to avoid undefined-field warnings while still
-    -- checking for availability at runtime.
+    -- Stop here if the skill-line API is unavailable.
     local getNumSkillLines = _G["GetNumSkillLines"]
     local getSkillLineInfo = _G["GetSkillLineInfo"]
     if type(getNumSkillLines) ~= "function" or type(getSkillLineInfo) ~= "function" then

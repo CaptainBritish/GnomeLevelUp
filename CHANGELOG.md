@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.0 — Unreleased
+
+##### New Features
+
+* Added a bundled Forever trainer catalogue for all nine classes, including
+updated Hunter and Warlock pet training. Available skills no longer require trainer scans. If you encounter any issues or are prompted for updated data, please let me know.
+* Added trainer change detection and `/glu trainerreport` exports.
+* Added translations for all supported Forever clients. Only French and Spanish (ES) have been human reviewed, if you're a native speaker and see any errors in the machine translation please let me know!
+
+##### Customization Options
+* Added a host of new animations, all customizable and togglable depending on your likes!
+* Added profile import/export options and per-character profile saving.
+
+##### Bug Fixes and Optimization
+
+* Improved API compatibility, animation performance and popup cleanup. 
+* Removed the Classic level-up chat option now provided by Blizzard.
+* Improved performance across all options, even with new animations enabled less resources are consumed!
+
+
 ## 1.3.8 - 15/10/2026
 
 ##### New Features
@@ -15,6 +35,8 @@
 * Updated the legacy learned-spell check.
 * Improved rank filtering.
 * Improved the legacy options-menu fallback.
+* Removed the hidden gnome (for real.)
+
 
 
 ## 1.3.4 - 13/10/2026
@@ -24,7 +46,7 @@ Pushing this update early because of a critical error that broke a profile.
 ##### New Features
 
 * Split background, frame, and portrait ring hue controls, with independent texture tint controls.
-* Added “Suspend Preview” to pause a manual preview’s timeout while options are open. 
+* Added “Suspend Preview” to pause a manual preview’s timeout while options are open.
 * When class trainer data is missing, the empty skills message now asks the player to visit their class trainer.
 
 ##### Bug Fixes
@@ -50,7 +72,7 @@ Pushing this update early because of a critical error that broke a profile.
 * Added controller glyph selection.
 * Added two more player icon frames.
 
-##### Optimization & Bug Fixes
+##### Optimization \& Bug Fixes
 
 * Weapon skills should now correctly reflect the player's current state.
 * Options menu has been reformatted for better readability and alignment.
@@ -136,3 +158,4 @@ Pushing this update early because of a critical error that broke a profile.
 * Improved trainer-service parsing, caching and reset behavior.
 * Added hardcoded Forever weapon skills.
 * Improved Blizzard's level-up popup suppression and anchoring.
+

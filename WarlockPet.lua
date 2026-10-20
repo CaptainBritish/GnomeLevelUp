@@ -31,9 +31,8 @@ local function AddKnownSpell(known, spellID, name, subText)
     normalized = normalized:gsub("%s*%(rank%s*%d+%)$", "")
         :gsub("%s+rank%s*%d+$", "")
     known.names[normalized] = true
-    -- Some Forever spellbook entries expose the spell name but omit the rank
-    -- text. Treat that entry as rank 1 so a consumed rank-1 grimoire is still
-    -- recognized, while later ranks remain available until their rank is seen.
+    -- A name without rank text counts as rank 1. Higher ranks stay available
+    -- until the spellbook confirms they are learned.
     known.ranks[normalized] = math.max(known.ranks[normalized] or 0, rank or 1)
     if spellID then known.ids[tonumber(spellID) or spellID] = true end
 end
@@ -211,6 +210,8 @@ function ns.GetUnlearnedWarlockPetAbilities(currentLevel)
                 itemID = grimoire.itemID,
                 pet = grimoire.pet,
                 kind = "warlockPet",
+                trainingRank = grimoire.rank,
+                isNewAbility = grimoire.rank == nil or grimoire.rank == 1,
             }
         end
     end

@@ -1,8 +1,6 @@
 local ADDON_NAME, ns = ...
 
--- Keep exceptional Forever trainer skills here when they are missing from scans.
-ns.ClassTrainingForever = {
-}
+-- The bundled Forever catalogue is loaded before this shared query layer.
 
 -- Decide which trainer data path is active.
 function ns.GetCurrentFlavor()
@@ -25,6 +23,9 @@ function ns.GetCurrentFlavor()
 end
 
 local function GetTrainingName(entry)
+    if type(entry) == "table" and not entry.name and ns.ResolveTrainingEntry then
+        return ns.ResolveTrainingEntry(entry)
+    end
     return type(entry) == "table" and entry.name or entry
 end
 ns.TrainingEntryName = GetTrainingName
@@ -79,7 +80,7 @@ function ns.BuildKnownTrainingLookup(spellSnapshot)
                 known.names[ns.NormalizeTrainingName(name .. " (" .. subtext .. ")")] = true
                 local baseName, nameRank = ns.GetTrainingRankInfo(normalized)
                 local rank = tonumber(subtext:match("(%d+)%s*$")) or nameRank
-                if rank then known.ranks[baseName] = math.max(known.ranks[baseName] or 0, rank) end
+                if rank and baseName then known.ranks[baseName] = math.max(known.ranks[baseName] or 0, rank) end
             else
                 known.names[normalized] = true
             end
@@ -96,6 +97,9 @@ function ns.IsTrainerSkillKnown(entry, known)
     if spellID then
         if known.spells[spellID] then return true end
         if ns.IsSpellKnownAcrossClients and ns.IsSpellKnownAcrossClients(spellID) then return true end
+        for _, higher in ipairs(entry.replacedBy or {}) do
+            if known.spells[higher] or (ns.IsSpellKnownAcrossClients and ns.IsSpellKnownAcrossClients(higher)) then return true end
+        end
         return false
     end
 
@@ -119,13 +123,15 @@ local function GetClassSources()
     if ns.GetCurrentFlavor() ~= "forever" then return nil, nil end
     local _, classToken = UnitClass("player")
     local static = ns.ClassTrainingForever[classToken]
+    -- Old character scans must not change bundled levels, costs or restrictions.
+    if static then return static, nil end
     local scanned = GnomeLevelUpDB and GnomeLevelUpDB.scannedTraining
     scanned = scanned and scanned.forever and scanned.forever[classToken]
     return static, scanned
 end
 
 function ns.GetTrainerCatalogIndex()
-    -- Merge hand-written skills and skills found at visited trainers.
+    -- Use the bundled catalogue where available, otherwise legacy scan data.
     if catalogIndex and catalogIndex.revision == catalogRevision then
         return catalogIndex.entries
     end
@@ -147,8 +153,8 @@ function ns.GetTrainerCatalogIndex()
                     local nameKey = ns.NormalizeTrainingName(name)
                     local idKey = id and ("spell:" .. tostring(id)) or nil
                     local key = idKey or nameKey
-                    if name and key then
-                        local existing = byKey[idKey] or byKey[nameKey]
+                    if name and key and (not ns.IsTrainingEntryEligible or ns.IsTrainingEntryEligible(entry)) then
+                        local existing = byKey[idKey or nameKey]
                         if not existing then
                             existing = {
                                 entry = entry,
@@ -229,17 +235,34 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
 
     local unlearnedAbilities = {}
     local rankedAbilities = {}
+    local knownFamilies = {}
+    if onlyNewSkills then
+        for _, item in ipairs(catalog) do
+            local family = item.entry.familyID
+            if family and (ns.IsTrainerSkillKnown(item.entry, known)
+                or known.spells[family]
+                or (ns.IsSpellKnownAcrossClients and ns.IsSpellKnownAcrossClients(family))) then
+                knownFamilies[family] = true
+            end
+        end
+    end
     for _, catalogEntry in ipairs(catalog) do
-        local learned = ns.IsTrainerSkillLearned and ns.IsTrainerSkillLearned(catalogEntry.entry, catalogEntry.level, learnedStore)
+        local entry = catalogEntry.entry
+        local learned = not entry.bundled and ns.IsTrainerSkillLearned
+            and ns.IsTrainerSkillLearned(entry, catalogEntry.level, learnedStore)
+        local talentMatches = not entry.requiredTalentId or known.spells[entry.requiredTalentId]
+            or (ns.IsSpellKnownAcrossClients and ns.IsSpellKnownAcrossClients(entry.requiredTalentId))
         local hunterPetSkill = classToken == "HUNTER"
             and ns.IsHunterPetTrainingEntry(catalogEntry.entry)
         -- Pet training knowledge cannot be inferred from the summoned pet.
-        -- Show each rank only at its unlock level instead of accumulating it.
-        local levelMatches = catalogEntry.level == currentLevel
+        -- Hunters first obtain pets at level 10; defer earlier pet ranks to
+        -- that level, then show later ranks only when they unlock.
+        local displayLevel = hunterPetSkill and math.max(10, catalogEntry.level) or catalogEntry.level
+        local levelMatches = displayLevel == currentLevel
             or (not onlyCurrentLevel and not hunterPetSkill)
         local hiddenHunterPetSkill = hunterPetSkill
             and ns.db and ns.db.showHunterPetSkills == false
-        if levelMatches and catalogEntry.level <= currentLevel
+        if talentMatches and levelMatches and displayLevel <= currentLevel
             and not hiddenHunterPetSkill and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
             local ability = {
                 name = catalogEntry.name,
@@ -248,8 +271,12 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
                 cost = catalogEntry.cost,
             }
             local baseName, rank = ns.GetTrainingRankInfo(catalogEntry.name)
-            if onlyNewSkills and rank then
-                if (known.ranks[baseName] or 0) == 0 then
+            if entry.familyID then baseName, rank = "spell:" .. entry.familyID, entry.rank end
+            -- Retain display metadata separately from the temporary filter rank.
+            ability.trainingRank = rank
+            ability.isNewAbility = rank == nil or rank == 1
+            if onlyNewSkills and rank and baseName then
+                if not knownFamilies[entry.familyID] and (known.ranks[baseName] or 0) == 0 then
                     local existing = rankedAbilities[baseName]
                     if not existing or rank < existing.rank then
                         if existing then unlearnedAbilities[existing.index] = ability end

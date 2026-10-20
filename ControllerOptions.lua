@@ -1,26 +1,22 @@
 local ADDON_NAME, ns = ...
 
--- Retail does not expose the Forever controller options/input API reliably.
--- Leave this module inert there so it cannot create bindings, glyph handlers,
--- or controller frames on that client.
-if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "retail" then
-    return
-end
-
 -- This controller page is deliberately separate from Options.lua. Blizzard's
 -- dropdowns and checkboxes do not provide a dependable focus model on Forever,
 -- while a small page with explicit rows can use the same override-click input
 -- pattern as the native controller UI. Nothing is built until it is opened.
 local window
+local setupMode, manualOpen = false, false
 local bindingOwner
+local bindingsConfigured = false
 local rows, tabs, inputButtons = {}, {}, {}
+local Close
 local refreshCloseButton
 local portraitPreview
 local tabIndex, selected = 1, 1
 local rowOffset = 0
 local VISIBLE_ROWS = 12
-local ROW_HEIGHT = 34
-local ROW_SPACING = 36
+local ROW_HEIGHT = 42
+local controllerLayoutRunning = false
 local savedPreviewStrata
 
 local TAB_DEFS = {
@@ -30,44 +26,26 @@ local TAB_DEFS = {
     { key = "sound", label = "Sound" },
     { key = "animation", label = "Animation" },
     { key = "colors", label = "Colors" },
-    { key = "debug", label = "Debug" },
+    { key = "profile", label = "Profile" },
 }
 
 local function IsActive()
-    return ns.IsControllerUIActive and ns.IsControllerUIActive()
+    return ns.GetCurrentFlavor() ~= "retail" and ns.IsControllerUIActive()
 end
 
 local function SetControllerIgnoreMouseoverDelay(value)
     ns.db.ignoreMouseoverDelay = value == true
     ns.db.ignoreMouseoverDelayUserSet = true
-    if value and ns.RescheduleFadeOut and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
+    if value and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
         ns.RescheduleFadeOut(0.15)
     end
 end
-
-local CONTROLLER_GLYPHS = {
-    xbox = { atlases = { "gamepad_ltr_b_64", "Gamepad_Ltr_B_64" }, file = "Interface\\Gamepad\\gamepadltr.blp" },
-    playstation = { atlases = { "gamepad_shp_circle_64", "Gamepad_Shp_Circle_64" }, file = "Interface\\Gamepad\\gamepadshp.blp" },
-    -- Nintendo face labels are reversed relative to Xbox/PlayStation. The
-    -- physical cancel/back position is therefore represented by A here.
-    nintendo = { atlases = { "gamepad_rev_a_64", "Gamepad_Rev_A_64" }, file = "Interface\\Gamepad\\gamepadrev.blp" },
-}
 
 local function ControllerGlyphChoice()
     local value = ns.db and ns.db.controllerGlyphStyle
     if value == "none" then return "none" end
     if value == "playstation" or value == "nintendo" then return value end
     return "xbox"
-end
-
-local function SetGlyphTexture(texture, path)
-    local ok = pcall(texture.SetTexture, texture, path)
-    if not ok then return false end
-    if texture.GetTextureFileID then
-        local idOK, fileID = pcall(texture.GetTextureFileID, texture)
-        if idOK then return fileID ~= nil and fileID ~= 0 end
-    end
-    return true
 end
 
 local CONTROLLER_HINT_ATLASES = {
@@ -98,28 +76,9 @@ local CONTROLLER_HINT_ATLASES = {
 }
 
 local function ApplyHintAtlas(texture, candidates)
-    if C_Texture and type(C_Texture.GetAtlasInfo) == "function" then
-        for _, atlas in ipairs(candidates or {}) do
-            local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
-            if ok and info and (info.file or info.filename)
-                and info.leftTexCoord and info.rightTexCoord
-                and info.topTexCoord and info.bottomTexCoord then
-                local applied = SetGlyphTexture(texture, info.file or info.filename)
-                if applied then
-                    texture:SetTexCoord(info.leftTexCoord, info.rightTexCoord,
-                        info.topTexCoord, info.bottomTexCoord)
-                    return true
-                end
-            end
-        end
-    end
-    if texture.SetAtlas then
-        for _, atlas in ipairs(candidates or {}) do
-            local applied = pcall(texture.SetAtlas, texture, atlas, false)
-            if applied then return true end
-        end
-    end
-    return false
+    local applied, left, right, top, bottom = ns.ApplyAtlasCandidates(texture, candidates, false, true)
+    if applied and left then texture:SetTexCoord(left, right, top, bottom) end
+    return applied
 end
 
 local function CreateControllerHintItem(parent, action, label, fallback, index)
@@ -144,7 +103,8 @@ local function CreateControllerHintItem(parent, action, label, fallback, index)
     else
         item.label:SetPoint("LEFT", item.icon, "RIGHT", 3, 0)
     end
-    item.label:SetText(ns.L and ns.L(label) or label)
+    item.labelKey = label
+    item.label:SetText(ns.L(label))
     item.action = action
     item.fallbackText = fallback
     item.icon:Hide()
@@ -183,7 +143,7 @@ local function SetControllerPreviewStrata(active)
     if not preview or not preview.GetFrameStrata then return end
     if active then
         if not savedPreviewStrata then savedPreviewStrata = preview:GetFrameStrata() end
-        preview:SetFrameStrata("DIALOG")
+        if preview:GetFrameStrata() ~= "DIALOG" then preview:SetFrameStrata("DIALOG") end
     else
         local strata = savedPreviewStrata or (ns.db and ns.db.frameStrata) or "HIGH"
         preview:SetFrameStrata(strata)
@@ -225,33 +185,7 @@ local function CreateControllerCloseButton(parent, onClose)
             text:Show()
             return
         end
-        local reference = CONTROLLER_GLYPHS[ControllerGlyphChoice()] or CONTROLLER_GLYPHS.xbox
-        local applied = false
-        if C_Texture and type(C_Texture.GetAtlasInfo) == "function" then
-            for _, atlas in ipairs(reference.atlases or {}) do
-                local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
-                if ok and info and (info.file or info.filename)
-                    and info.leftTexCoord and info.rightTexCoord
-                    and info.topTexCoord and info.bottomTexCoord then
-                    applied = pcall(icon.SetTexture, icon, info.file or info.filename)
-                    if applied then
-                        icon:SetTexCoord(info.leftTexCoord, info.rightTexCoord,
-                            info.topTexCoord, info.bottomTexCoord)
-                        break
-                    end
-                end
-            end
-        end
-        if not applied and icon.SetAtlas then
-            for _, atlas in ipairs(reference.atlases or {}) do
-                applied = pcall(icon.SetAtlas, icon, atlas, false)
-                if applied then break end
-            end
-        end
-        if not applied then
-            applied = SetGlyphTexture(icon, reference.file)
-            if applied then icon:SetTexCoord(0, 1, 0, 1) end
-        end
+        local applied = ns.ApplyControllerGlyph(icon, "back", ControllerGlyphChoice())
         if applied then
             icon:SetSize(24, 24)
             icon:Show()
@@ -298,14 +232,6 @@ local function PlaceControllerBelowPreview()
     end
 end
 
-local function ControllerStrataChoices()
-    local choices = { { value = "AUTO", label = "Auto (below preview)" } }
-    for _, choice in ipairs(ns.STRATA_CHOICES or {}) do
-        choices[#choices + 1] = { value = choice.value, label = choice.label }
-    end
-    return choices
-end
-
 local PREVIEW_CLASS_COORDS = {
     WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.5, 0, 0.25 },
     ROGUE = { 0.5, 0.75, 0, 0.25 }, DRUID = { 0.75, 1, 0, 0.25 },
@@ -326,7 +252,7 @@ local function RefreshPortraitPreview()
     local enabled = db.portraitRingEnabled == true
         and ((type(reference) == "string" and reference ~= "")
             or (type(reference) == "table" and reference.atlas))
-    if not enabled then
+    if not enabled or db.portraitMode == "none" then
         portraitPreview:Hide()
         return
     end
@@ -370,14 +296,7 @@ local function RefreshPortraitPreview()
         end
     end
 
-    local applied = false
-    if type(reference) == "table" and reference.atlas and portraitPreview.ring.SetAtlas then
-        applied = pcall(portraitPreview.ring.SetAtlas, portraitPreview.ring, reference.atlas, reference.useAtlasSize == true)
-    elseif type(reference) == "string" then
-        -- Portrait rings are complete circular images; keep the same direct
-        -- texture path used by the popup and never apply tiling here.
-        applied = pcall(portraitPreview.ring.SetTexture, portraitPreview.ring, reference)
-    end
+    local applied = ns.ApplyPortraitRingTexture(portraitPreview.ring, reference)
     if not applied then
         portraitPreview:Hide()
         return
@@ -394,13 +313,13 @@ local function PlacePortraitPreviewBelowPopup()
 end
 
 local function Apply()
-    if ns.ApplyCurrentAppearance then ns.ApplyCurrentAppearance() end
-    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+    ns.ApplyCurrentAppearance()
+    ns.RefreshOptionsPanel()
 end
 
 local function ChoiceLabel(value, choices)
     for _, choice in ipairs(choices or {}) do
-        if choice.value == value then return ns.L and ns.L(choice.label) or choice.label end
+        if choice.value == value then return ns.LocalizeChoiceLabel(choice) end
     end
     return tostring(value or "")
 end
@@ -408,8 +327,9 @@ end
 local function CycleChoice(label, get, set, choices, after)
     return {
         label = label,
-        get = function() return ChoiceLabel(get(), choices) end,
+        get = function() return ChoiceLabel(get(), type(choices) == "function" and choices() or choices) end,
         activate = function(direction)
+            local choices = type(choices) == "function" and choices() or choices
             local current, index = get(), 1
             for i, choice in ipairs(choices) do
                 if choice.value == current then index = i break end
@@ -422,10 +342,16 @@ local function CycleChoice(label, get, set, choices, after)
 end
 
 local function Toggle(label, key, after)
+    local function available()
+        if key == "frameEdgeGlow" then return ns.db.backgroundMode ~= "MODERN" end
+        return key ~= "autoScanTrainers" or ns.CanCaptureTrainerData()
+    end
     return {
         label = label,
-        get = function() return ns.db[key] == true and "On" or "Off" end,
+        isAvailable = available,
+        get = function() return available() and ns.db[key] == true and "On" or "Off" end,
         activate = function()
+            if not available() then return end
             ns.db[key] = not (ns.db[key] == true)
             if after then after(ns.db[key]) end
         end,
@@ -436,7 +362,7 @@ local function PetClassToggle(label, key, class)
     local entry = Toggle(label, key)
     entry.isAvailable = function()
         local _, token = UnitClass("player")
-        return token == class and (not ns.GetCurrentFlavor or ns.GetCurrentFlavor() == "forever")
+        return token == class and ns.GetCurrentFlavor() == "forever"
     end
     local activate = entry.activate
     entry.activate = function()
@@ -446,23 +372,62 @@ local function PetClassToggle(label, key, class)
 end
 
 local function EntriesFor(key)
-    if key == "appearance" then
+    if key == "setup" then
+        local entries = {
+            CycleChoice("Language", function() return ns.GetLanguageSelection(ns.db.language) end,
+                function(v)
+                    ns.db.language = v
+                    ns.SetLocale(v)
+                    if ns.RefreshLocalizedPopupText then ns.RefreshLocalizedPopupText() end
+                end, ns.GetLanguageChoices),
+            CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
+                function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
+            Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
+            Toggle("Show time played this level", "showLevelTime"),
+        }
+        entries[#entries + 1] = { label = "Show pet skills",
+            get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
+            activate = function()
+                local enabled = not (ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills)
+                ns.db.showHunterPetSkills, ns.db.showWarlockPetSkills = enabled, enabled
+            end }
+        entries[#entries + 1] = { label = "Enable animations",
+            get = function() return not ns.db.reducedMotion and "On" or "Off" end,
+            activate = function()
+                ns.db.reducedMotion = not ns.db.reducedMotion
+                ns.RefreshVisualEffects()
+            end }
+        entries[#entries + 1] = Toggle("Right-click to close", "rightClickClose")
+        entries[#entries + 1] = { label = "Ignore mouseover delay",
+            get = function() return ns.db.ignoreMouseoverDelay and "On" or "Off" end,
+            activate = function() SetControllerIgnoreMouseoverDelay(not ns.db.ignoreMouseoverDelay) end }
+        entries[#entries + 1] = { label = "Use class colors",
+            get = function() return ns.db.useClassColors and "On" or "Off" end,
+            activate = function() ns.SetClassColorsEnabled(not ns.db.useClassColors) end }
+        entries[#entries + 1] = CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or "xbox" end,
+            function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
+            { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
+              { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } })
+        entries[#entries + 1] = Toggle("Show unlearned weapon skills", "showWeaponSkills")
+        entries[#entries + 1] = Toggle("Show learning costs", "showTrainerCosts")
+        return entries
+    elseif key == "appearance" then
         return {
             CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
-                function(v) if ns.ApplyBackgroundTheme then ns.ApplyBackgroundTheme(v) end end, ns.THEME_CHOICES or {}),
+                function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
             CycleChoice("Portrait", function() return ns.db.portraitMode or "class" end,
-                function(v) ns.db.portraitMode = v; if ns.RefreshClassIcon then ns.RefreshClassIcon() end end, ns.PORTRAIT_CHOICES),
+                function(v) ns.db.portraitMode = v; ns.RefreshClassIcon(); ns.RefreshPopupLayout() end, ns.PORTRAIT_CHOICES),
             CycleChoice("Portrait ring", function() return ns.db.portraitRingChoice or "NONE" end,
                 function(v)
                     ns.db.portraitRingChoice = v
-                    ns.db.portraitRingTexture = ns.GetPortraitRingReference and ns.GetPortraitRingReference(v)
+                    ns.db.portraitRingTexture = ns.GetPortraitRingReference(v)
                     ns.db.portraitRingEnabled = ns.db.portraitRingTexture ~= nil
-                    if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
+                    ns.RefreshPortraitRing()
                 end, ns.PORTRAIT_RING_CHOICES),
             CycleChoice("Background", function() return ns.db.backgroundChoice or "NONE" end,
-                function(v) if ns.ApplyBackgroundChoice then ns.ApplyBackgroundChoice(v) end end, ns.BACKGROUND_TEXTURE_CHOICES or {}),
+                function(v) ns.ApplyBackgroundChoice(v) end, ns.BACKGROUND_TEXTURE_CHOICES or {}),
             CycleChoice("Frame", function() return ns.db.frameChoice or "BLACK_METAL" end,
-                function(v) if ns.ApplyFrameChoice then ns.ApplyFrameChoice(v) end end, ns.FRAME_CHOICES or {}),
+                function(v) ns.ApplyFrameChoice(v) end, ns.FRAME_CHOICES or {}),
             CycleChoice("Background texture", function() return ns.db.backgroundStyle or "stretch" end,
                 function(v)
                     ns.db.backgroundStyle = v
@@ -472,70 +437,79 @@ local function EntriesFor(key)
             { label = "Background opacity", get = function() return string.format("%d%%", (tonumber(ns.db.bgOpacity) or 0.7) * 100) end,
                 activate = function(direction)
                     ns.db.bgOpacity = math.max(0, math.min(1, (tonumber(ns.db.bgOpacity) or 0.7) + direction * 0.05))
-                    if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity) end
+                    ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
                 end },
-            Toggle("Lock frame position", "lockFramePosition", function(v) if ns.ApplyFrameLock then ns.ApplyFrameLock(v) end end),
-            { label = "Preview level-up", get = function() return "A to preview" end,
-                activate = function() if ns.PreviewLevelUp then ns.PreviewLevelUp() end end },
-            { label = "Reset appearance", get = function() return "A to reset" end,
-                activate = function() if ns.ResetAppearanceToDefaults then ns.ResetAppearanceToDefaults() end end },
+            Toggle("Lock Location", "lockFramePosition", function(v) ns.ApplyFrameLock(v) end),
+            { label = "Preview Level-Up", get = function() return "A to preview" end,
+                activate = function() ns.PreviewLevelUp() end },
+            { label = "Reset Appearance", get = function() return "A to reset" end,
+                activate = function() ns.ResetAppearanceToDefaults() end },
         }
     elseif key == "mode" then
         return {
             { label = "Enable addon", get = function() return ns.db.enabled ~= false and "On" or "Off" end,
-                activate = function() if ns.SetAddonEnabled then ns.SetAddonEnabled(not (ns.db.enabled ~= false)) end end },
+                activate = function() ns.SetAddonEnabled(not (ns.db.enabled ~= false)) end },
             { label = "Hide Blizzard level-up toast", get = function() return ns.db.hideBlizzardLevelUp ~= false and "On" or "Off" end,
                 activate = function()
                     ns.db.hideBlizzardLevelUp = not (ns.db.hideBlizzardLevelUp ~= false)
-                    if ns.ApplyAddonState then ns.ApplyAddonState(true) end
+                    ns.ApplyAddonState(true)
                 end },
             Toggle("Don't show until combat ends", "waitForCombatEnd"),
             Toggle("Show time played this level", "showLevelTime"),
-            Toggle("Show minimap button", "minimapButtonShown", function(v) if ns.SetMinimapButtonShown then ns.SetMinimapButtonShown(v) end end),
-            Toggle("Compact layout", "compactMode", function() if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end end),
+            Toggle("Show minimap button", "minimapButtonShown", function(v) ns.SetMinimapButtonShown(v) end),
+            Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
             Toggle("Right-click to close", "rightClickClose"),
-            Toggle("Allow click-through (recommended for gamepad)", "clickThrough", function(v) if ns.ApplyClickThrough then ns.ApplyClickThrough(v) end end),
-            { label = "Ignore mouseover delay (recommended for gamepad)",
+            Toggle(ns.L("%s (recommended for gamepad)", ns.L("Allow click-through")), "clickThrough", function(v) ns.ApplyClickThrough(v) end),
+            { label = ns.L("%s (recommended for gamepad)", ns.L("Ignore mouseover delay")),
                 get = function() return ns.db.ignoreMouseoverDelay == true and "On" or "Off" end,
                 activate = function() SetControllerIgnoreMouseoverDelay(not (ns.db.ignoreMouseoverDelay == true)) end },
             CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or "xbox" end,
-                function(v) ns.db.controllerGlyphStyle = v; if ns.RefreshControllerGlyph then ns.RefreshControllerGlyph() end end,
+                function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
                 { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
                   { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } }),
             CycleChoice("Frame strata", function() return ns.db.frameStrata or "HIGH" end,
-                function(v) ns.db.frameStrata = v; if ns.ApplyFrameStrata then ns.ApplyFrameStrata(v) end end, ns.STRATA_CHOICES),
+                function(v) ns.db.frameStrata = v; ns.ApplyFrameStrata(v) end, ns.STRATA_CHOICES),
         }
     elseif key == "trainer" then
         return {
-            Toggle("Auto-save trainer data", "autoScanTrainers"),
-            Toggle("Scan profession trainers", "scanProfessionTrainers"),
-            Toggle("Show weapon skills", "showWeaponSkills"),
-            Toggle("Show trainer costs", "showTrainerCosts"),
-            Toggle("Only current-level skills", "showOnlyCurrentLevelSkills"),
-            Toggle("Only new skills", "showOnlyNewSkills"),
-            PetClassToggle("Show warlock grimoires", "showWarlockPetSkills", "WARLOCK"),
-            PetClassToggle("Filter by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
+            Toggle("Automatically save trainer data", "autoScanTrainers"),
+            Toggle("Include profession trainers", "scanProfessionTrainers"),
+            Toggle("Show unlearned weapon skills", "showWeaponSkills"),
+            Toggle("Show learning costs", "showTrainerCosts"),
+            Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
+            Toggle("Only display new skills", "showOnlyNewSkills"),
+            PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
+            PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
             PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
         }
     elseif key == "sound" then
         return {
-            Toggle("Play a sound", "playSound"),
-            Toggle("Mute native Ding", "muteNativeDing", function() if ns.ApplyAddonState then ns.ApplyAddonState(false) end end),
+            Toggle("Play sound on level up", "playSound"),
+            Toggle("Mute Blizzard level-up sound", "muteNativeDing", function() ns.ApplyAddonState(false) end),
             CycleChoice("Sound", function() return ns.db.soundChoice or "LEVELUP" end,
                 function(v) ns.db.soundChoice = v; ns.db.customSoundFile = nil end, ns.SOUND_CHOICES or {}),
             CycleChoice("Sound channel", function() return ns.db.soundChannel or "Master" end,
                 function(v) ns.db.soundChannel = v end, ns.SOUND_CHANNELS or {}),
             { label = "Sound volume", get = function() return string.format("%d%%", (tonumber(ns.db.soundVolume) or 1) * 100) end,
                 activate = function(direction) ns.db.soundVolume = math.max(0, math.min(1, (tonumber(ns.db.soundVolume) or 1) + direction * 0.05)) end },
-            { label = "Play selected sound", get = function() return "A to play" end,
-                activate = function() if ns.PlayLevelUpSound then ns.PlayLevelUpSound(true) end end },
+            { label = "Play sound", get = function() return "A to play" end,
+                activate = function() ns.PlayLevelUpSound(true) end },
         }
     elseif key == "animation" then
         return {
-            Toggle("Reduced motion", "reducedMotion"),
-            CycleChoice("Stat slide direction", function() return ns.db.statSlideDirection or "alternate" end,
+            Toggle("Portrait pulse and starburst", "portraitAnimation", function() ns.RefreshVisualEffects() end),
+            Toggle("Highlight new abilities", "highlightNewAbilities", function() ns.RefreshVisualEffects() end),
+            Toggle("Emphasize stat gains", "emphasizeStatGains", function() ns.RefreshVisualEffects() end),
+            Toggle("Portrait sparks", "portraitSparks", function() ns.RefreshVisualEffects() end),
+            Toggle("New ability sparkles", "newAbilitySparkles", function() ns.RefreshVisualEffects() end),
+            Toggle("Background embers", "backgroundEmbers", function() ns.RefreshVisualEffects() end),
+            Toggle("Frame edge glow", "frameEdgeGlow", function() ns.RefreshVisualEffects() end),
+            Toggle("Portrait and ring settle", "portraitRingSettle", function() ns.RefreshVisualEffects() end),
+            Toggle("Reveal dividers", "dividerReveal", function() ns.RefreshVisualEffects() end),
+            Toggle("Reduced motion", "reducedMotion", function() ns.RefreshVisualEffects() end),
+            CycleChoice("Slide direction", function() return ns.db.statSlideDirection or "alternate" end,
                 function(v) ns.db.statSlideDirection = v end,
-                { { value = "alternate", label = "Alternate" }, { value = "left", label = "Left" }, { value = "right", label = "Right" } }),
+                { { value = "none", label = "None" }, { value = "alternate", label = "Alternate" }, { value = "left", label = "Left" }, { value = "right", label = "Right" } }),
             { label = "Animation speed", get = function() return string.format("%.1fx", tonumber(ns.db.animSpeedMultiplier) or 1) end,
                 activate = function(direction) ns.db.animSpeedMultiplier = math.max(0.25, math.min(3, (tonumber(ns.db.animSpeedMultiplier) or 1) + direction * 0.1)) end },
             { label = "Display duration", get = function() return string.format("%ds", tonumber(ns.db.duration) or 7) end,
@@ -545,32 +519,30 @@ local function EntriesFor(key)
         }
     elseif key == "colors" then
         return {
-            Toggle("Use class colors", "useClassColors", function(v) if ns.SetClassColorsEnabled then ns.SetClassColorsEnabled(v) end end),
-            Toggle("Text shadow", "showTextShadow", function(v) if ns.ApplyTextShadow then ns.ApplyTextShadow(v) end end),
-            Toggle("Equal-width stat text", "equalStatWidths", function() if ns.RefreshStatTextLayout then ns.RefreshStatTextLayout() end end),
-            Toggle("Classic level-up text", "printClassicLevelUpText"),
+            Toggle("Use class colors", "useClassColors", function(v) ns.SetClassColorsEnabled(v) end),
+            Toggle("Show text shadows", "showTextShadow", function(v) ns.ApplyTextShadow(v) end),
+            Toggle("Equal-width stat text", "equalStatWidths", function() ns.RefreshStatTextLayout() end),
         }
-    elseif key == "debug" then
+    elseif key == "profile" then
         return {
-            Toggle("Debug commands", "debugEnabled"),
-            CycleChoice("Controller Menu Frame Strata",
-                function() return ns.db.controllerMenuFrameStrata or "AUTO" end,
-                function(v) ns.db.controllerMenuFrameStrata = v; PlaceControllerBelowPreview() end,
-                ControllerStrataChoices()),
-            { label = "Portrait ring scale", get = function() return string.format("%.2fx", tonumber(ns.db.portraitRingScale) or 1.1) end,
-                activate = function(direction) ns.db.portraitRingScale = math.max(0.5, math.min(2, (tonumber(ns.db.portraitRingScale) or 1.1) + direction * 0.05)); if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end end },
-            { label = "Portrait offset X", get = function() return string.format("%+.0f", tonumber(ns.db.portraitRingOffset and ns.db.portraitRingOffset.x) or 0) end,
-                activate = function(direction) ns.db.portraitRingOffset.x = math.max(-50, math.min(50, (tonumber(ns.db.portraitRingOffset.x) or 0) + direction)); if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end end },
-            { label = "Portrait offset Y", get = function() return string.format("%+.0f", tonumber(ns.db.portraitRingOffset and ns.db.portraitRingOffset.y) or 0) end,
-                activate = function(direction) ns.db.portraitRingOffset.y = math.max(-50, math.min(50, (tonumber(ns.db.portraitRingOffset.y) or 0) + direction)); if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end end },
-            { label = "Print performance report", get = function() return "A to print" end,
-                activate = function() if ns.PrintPerformanceDiagnostics then ns.PrintPerformanceDiagnostics() end end },
-            { label = "Reset performance data", get = function() return "A to reset" end,
-                activate = function() if ns.ResetPerformanceDiagnostics then ns.ResetPerformanceDiagnostics() end end },
-            { label = "Clear trainer cache", get = function() return "A to clear" end,
-                activate = function() if ns.ClearScannedTrainerData then ns.ClearScannedTrainerData() end end },
-            { label = "Reset all options", get = function() return "A to reset" end,
-                activate = function() if ns.ResetOptionsToDefaults then ns.ResetOptionsToDefaults() end end },
+            { label = "Save per Character", get = function() return ns.L(ns.GetSavePerCharacter() and "On" or "Off") end,
+                activate = function() ns.SetSavePerCharacter(not ns.GetSavePerCharacter()) end },
+            CycleChoice("Profile", ns.GetActiveProfileName, ns.SelectProfile, ns.GetProfileChoices),
+            { label = "Clear trainer cache", get = function() return "" end,
+                activate = function() ns.ClearScannedTrainerData() end },
+            { label = "Reset all options", get = function() return "" end,
+                activate = function() ns.ResetOptionsToDefaults() end },
+            { label = "Manage profiles", get = function() return "" end,
+                activate = function() window:Hide(); ns.OpenProfileOptions() end },
+            CycleChoice("Language", function() return ns.GetLanguageSelection(ns.db.language) end,
+                function(value) ns.db.language = value end, ns.GetLanguageChoices()),
+            { label = "Changes apply after reloading the UI.", get = function() return "" end },
+            { label = "Reload UI", get = function() return "" end, activate = function() ReloadUI() end },
+            { label = "Import / export", get = function() return "" end,
+                activate = function()
+                    window:Hide()
+                    ns.OpenProfileTransfer()
+                end },
         }
     end
     return {}
@@ -578,18 +550,21 @@ end
 
 local function ClearBindings()
     local combat = type(InCombatLockdown) == "function" and InCombatLockdown()
-    if bindingOwner and type(ClearOverrideBindings) == "function" and not combat then pcall(ClearOverrideBindings, bindingOwner) end
+    if bindingOwner and not combat then
+        if type(ClearOverrideBindings) == "function" then pcall(ClearOverrideBindings, bindingOwner) end
+        bindingsConfigured = false
+    end
 end
 
 function ns.IsControllerOptionsShown()
     return window and window:IsShown() or false
 end
 
-local function Close()
+Close = function()
     ClearBindings()
     SetControllerPreviewStrata(false)
     if window then window:Hide() end
-    if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
+    ns.RefreshPreviewSuspension()
     if bindingOwner then bindingOwner:Hide() end
 end
 
@@ -629,10 +604,7 @@ local function SetControllerTexture(texture, name, path, alpha, tileH, tileV)
         texture:Hide()
         return false
     end
-    local horizontalWrap = tileH and "REPEAT" or "CLAMP"
-    local verticalWrap = tileV and "REPEAT" or "CLAMP"
-    local ok = pcall(texture.SetTexture, texture, path, horizontalWrap, verticalWrap)
-    if not ok then ok = pcall(texture.SetTexture, texture, path) end
+    local ok = ns.SetTextureFile(texture, path, tileH, tileV)
     if not ok then
         texture:Hide()
         return false
@@ -659,7 +631,7 @@ end
 local function SkinControllerWindow()
     if not window then return end
     local skin = MakeControllerSkin()
-    local theme = ns.GetSelectedCompositeTheme and ns.GetSelectedCompositeTheme()
+    local theme = ns.GetSelectedCompositeTheme()
     if not theme or not theme.textures or not theme.textures.center then
         for _, texture in pairs(skin.pieces) do texture:Hide() end
         skin.backing:Hide()
@@ -710,62 +682,243 @@ local function SkinControllerWindow()
     end
 end
 
-local function Render()
-    if not window then return end
-    PlaceControllerBelowPreview()
-    if refreshCloseButton then refreshCloseButton() end
-    RefreshPortraitPreview()
-    PlacePortraitPreviewBelowPopup()
-    SkinControllerWindow()
-    local def = TAB_DEFS[tabIndex]
-    window.entries = EntriesFor(def.key)
-    local entryCount = #window.entries
-    selected = math.min(selected, math.max(1, entryCount))
-    if selected <= rowOffset then
-        rowOffset = selected - 1
-    elseif selected > rowOffset + VISIBLE_ROWS then
-        rowOffset = selected - VISIBLE_ROWS
-    end
-    rowOffset = math.max(0, math.min(rowOffset, math.max(0, entryCount - VISIBLE_ROWS)))
-    for i, tab in ipairs(tabs) do
-        local tabLabel = ns.L and ns.L(TAB_DEFS[i].label) or TAB_DEFS[i].label
-        tab.text:SetText((i == tabIndex and "[ " or "") .. tabLabel .. (i == tabIndex and " ]" or ""))
-        tab.text:SetTextColor(i == tabIndex and 1 or 0.65, i == tabIndex and 0.82 or 0.65, i == tabIndex and 0.15 or 0.65)
-        tab.background:SetColorTexture(0.45, 0.32, 0.12, i == tabIndex and 0.38 or 0.10)
-    end
-    for i, row in ipairs(rows) do
-        local entryIndex = rowOffset + i
-        local entry = window.entries[entryIndex]
-        row:SetShown(entry ~= nil)
-        if entry then
-            row.text:SetText((entryIndex == selected and "> " or "  ") .. (ns.L and ns.L(entry.label) or entry.label))
-            local value = entry.get and tostring(entry.get()) or ""
-            row.value:SetText(ns.L and ns.L(value) or value)
-            row.text:SetTextColor(entryIndex == selected and 1 or 0.75, entryIndex == selected and 0.82 or 0.75, entryIndex == selected and 0.15 or 0.75)
-            row.value:SetTextColor(entryIndex == selected and 1 or 0.75, entryIndex == selected and 0.82 or 0.75, entryIndex == selected and 0.15 or 0.75)
-            row.background:SetColorTexture(0.45, 0.32, 0.12, entryIndex == selected and 0.42 or 0.08)
-            if entry.isAvailable and not entry.isAvailable() then
-                row.text:SetTextColor(0.45, 0.45, 0.45)
-                row.value:SetTextColor(0.45, 0.45, 0.45)
+-- Tabs, hints and rows share the same measured text policy as the normal
+-- menu. Pagination uses remaining height rather than an assumed row count.
+local function LayoutControllerChrome()
+    local width = window:GetWidth() - 48
+    local titleTop = 18
+    if setupMode then titleTop = math.max(24, portraitPreview and portraitPreview:IsShown() and portraitPreview:GetHeight() / 2 - 24 + 12 or 24) + 8 end
+    window.title:ClearAllPoints()
+    window.title:SetPoint(setupMode and "TOP" or "TOPLEFT", window, setupMode and "TOP" or "TOPLEFT", setupMode and 0 or 24, -titleTop)
+    local titleHeight = ns.WrapOptionsText(window.title, width - 40, setupMode and "CENTER" or "LEFT")
+    local top = titleTop + titleHeight + 16
+    local tabCount = setupMode and 0 or #tabs
+    local columns = math.max(1, math.min(tabCount, math.max(1, math.floor((width + 6) / 100))))
+    local tabWidth = (width - (columns - 1) * 6) / columns
+    for first = 1, tabCount, columns do
+        local height = 28
+        for column = 0, columns - 1 do
+            local tab = tabs[first + column]
+            if tab then height = math.max(height, ns.WrapOptionsText(tab.text, tabWidth - 12, "CENTER") + 12) end
+        end
+        for column = 0, columns - 1 do
+            local tab = tabs[first + column]
+            if tab then
+                tab:SetSize(tabWidth, height)
+                tab:ClearAllPoints()
+                tab:SetPoint("TOPLEFT", window, "TOPLEFT", 24 + column * (tabWidth + 6), -top)
+                tab.text:ClearAllPoints()
+                tab.text:SetPoint("TOPLEFT", tab, "TOPLEFT", 6, -6)
+                tab.text:SetJustifyH("CENTER")
             end
+        end
+        top = top + height + 6
+    end
+    local hint = window.controllerHint
+    hint:SetWidth(width)
+    local visibleHints = {}
+    local showHints = ControllerGlyphChoice() ~= "none"
+    hint:SetShown(showHints)
+    for _, item in ipairs(hint.items) do
+        local visible = showHints and not (setupMode and item.labelKey == "Tabs")
+        item:SetShown(visible)
+        if visible then visibleHints[#visibleHints + 1] = item end
+    end
+    local hintColumns = math.max(1, math.min(#visibleHints, math.floor((width + 8) / 132)))
+    local hintWidth = math.min(160, (width - (hintColumns - 1) * 8) / hintColumns)
+    local hintTop = 0
+    for first = 1, #visibleHints, hintColumns do
+        local height, rowWidth = 34, 0
+        local rowCount = math.min(hintColumns, #visibleHints - first + 1)
+        for column = 0, rowCount - 1 do
+            local item = visibleHints[first + column]
+            local glyphWidth
+            if item.fallback:IsShown() then
+                glyphWidth = math.max(1, item.fallback:GetStringWidth())
+                item.fallback:SetWidth(glyphWidth)
+            else
+                glyphWidth = item.icon:GetWidth()
+                if item.secondaryIcon:IsShown() then glyphWidth = glyphWidth + item.secondaryIcon:GetWidth() - 2 end
+            end
+            local iconWidth = glyphWidth + 8
+            ns.WrapOptionsText(item.label, hintWidth - iconWidth)
+            local labelWidth = math.max(1, math.min(hintWidth - iconWidth, item.label:GetStringWidth()))
+            height = math.max(height, ns.WrapOptionsText(item.label, labelWidth) + 8)
+            item.contentWidth = iconWidth + labelWidth
+            item.label:ClearAllPoints()
+            item.label:SetPoint("LEFT", item, "LEFT", iconWidth, 0)
+            rowWidth = rowWidth + item.contentWidth
+        end
+        local gap = math.min(24, math.max(8, (width - rowWidth) / math.max(1, rowCount - 1)))
+        rowWidth = rowWidth + (rowCount - 1) * gap
+        local cursor = (width - rowWidth) / 2
+        for column = 0, rowCount - 1 do
+            local item = visibleHints[first + column]
+            item:SetSize(item.contentWidth, height)
+            item:ClearAllPoints()
+            item:SetPoint("TOPLEFT", hint, "TOPLEFT", cursor, -hintTop)
+            cursor = cursor + item.contentWidth + gap
+        end
+        hintTop = hintTop + height + 4
+    end
+    hint:SetHeight(hintTop)
+    local availabilityHeight = ns.WrapOptionsText(window.availability, width, setupMode and "CENTER" or "LEFT")
+    window.availability:ClearAllPoints()
+    window.availability:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop)
+    local footerTop = hintTop + availabilityHeight + 36
+    if window.finishButton then
+        window.finishButton:SetShown(setupMode)
+        window.finishButton:ClearAllPoints()
+        window.finishButton:SetPoint("BOTTOM", window, "BOTTOM", 0, footerTop + 8)
+        window.finishButton.text:SetText(ns.L("Finish setup"))
+        local focused = selected == #window.entries + 1
+        window.finishButton.text:SetTextColor(1, focused and 0.82 or 1, focused and 0.15 or 1)
+    end
+    return top + 8, window:GetHeight() - footerTop - (setupMode and 56 or 0)
+end
+
+local function RefreshRowHighlight(row, entryIndex, entry)
+    local focused = entryIndex == selected or row.hovered == true
+    row.selectionIndicator:SetText(entryIndex == selected and ">" or "")
+    row.selectionIndicator:SetTextColor(focused and 1 or 0.75, focused and 0.82 or 0.75, focused and 0.15 or 0.75)
+    row.text:SetTextColor(focused and 1 or 0.75, focused and 0.82 or 0.75, focused and 0.15 or 0.75)
+    row.value:SetTextColor(focused and 1 or 0.75, focused and 0.82 or 0.75, focused and 0.15 or 0.75)
+    row.background:SetColorTexture(0.45, 0.32, 0.12, focused and 0.42 or 0.08)
+    if entry.isAvailable and not entry.isAvailable() then
+        row.selectionIndicator:SetTextColor(0.45, 0.45, 0.45)
+        row.text:SetTextColor(0.45, 0.45, 0.45)
+        row.value:SetTextColor(0.45, 0.45, 0.45)
+    end
+end
+
+local function SelectVisibleEntry(entryIndex)
+    if controllerLayoutRunning or not window.entries or not window.entries[entryIndex] then return end
+    selected = entryIndex
+    for _, row in ipairs(rows) do
+        if row:IsShown() and row.entryIndex and window.entries[row.entryIndex] then
+            RefreshRowHighlight(row, row.entryIndex, window.entries[row.entryIndex])
         end
     end
 end
 
+local function Render()
+    if not window or controllerLayoutRunning then return end
+    controllerLayoutRunning = true
+    PlaceControllerBelowPreview()
+    if refreshCloseButton then refreshCloseButton() end
+    RefreshPortraitPreview()
+    PlacePortraitPreviewBelowPopup()
+    local def = TAB_DEFS[tabIndex]
+    window.entries = EntriesFor(setupMode and "setup" or def.key)
+    window.title:SetText(ns.L(setupMode and "Welcome to GnomeLevelUp!" or "GnomeLevelUp - Controller options"))
+    for _, item in ipairs(window.controllerHint and window.controllerHint.items or {}) do
+        item.label:SetText(ns.L(item.labelKey))
+    end
+    window.availability:SetText(ns.L(setupMode and "Change these choices anytime in Options." or "Some options are not available in the controller menu."))
+    local entryCount = #window.entries
+    selected = math.min(selected, math.max(1, entryCount + (setupMode and 1 or 0)))
+    for i, tab in ipairs(tabs) do
+        tab:SetShown(not setupMode)
+        local tabLabel = ns.L(TAB_DEFS[i].label)
+        tab.text:SetText(tabLabel)
+        tab.text:SetTextColor(i == tabIndex and 1 or 0.65, i == tabIndex and 0.82 or 0.65, i == tabIndex and 0.15 or 0.75)
+        tab.background:SetColorTexture(0.45, 0.32, 0.12, i == tabIndex and 0.38 or 0.10)
+    end
+    local top, bottom = LayoutControllerChrome()
+    local width = window:GetWidth() - 66
+    local valueWidth = math.max(80, math.floor(width * 0.36))
+    local labelWidth = width - valueWidth - 40
+    rowOffset = math.max(0, math.min(rowOffset, math.max(0, selected - 1)))
+    local selectedVisible
+    repeat
+        local cursor = top
+        selectedVisible = entryCount == 0 or (setupMode and selected == entryCount + 1)
+        window.visibleEntryCount = 0
+        for i, row in ipairs(rows) do
+            local entryIndex = rowOffset + i
+            local entry = window.entries[entryIndex]
+            row:Hide()
+            if entry then
+                row.text:SetText(ns.L(entry.label))
+                local value = entry.get and tostring(entry.get()) or ""
+                row.value:SetText(ns.L(value))
+                local height = math.max(ROW_HEIGHT, math.max(ns.WrapOptionsText(row.text, labelWidth), ns.WrapOptionsText(row.value, valueWidth, "RIGHT")) + 12)
+                if cursor + height > bottom then break end
+                row:SetSize(width, height)
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", window, "TOPLEFT", 24, -cursor)
+                row.text:ClearAllPoints()
+                row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 20, -6)
+                row.value:ClearAllPoints()
+                row.value:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -6)
+                row.value:SetJustifyH("RIGHT")
+                row.entryIndex = entryIndex
+                RefreshRowHighlight(row, entryIndex, entry)
+                row:Show()
+                if entryIndex == selected then selectedVisible = true end
+                window.visibleEntryCount = window.visibleEntryCount + 1
+                cursor = cursor + height + 2
+            end
+        end
+        -- Rows after the first one that did not fit may still have been shown
+        -- by the previous page; clear those stale hit targets as well.
+        for i = window.visibleEntryCount + 1, #rows do rows[i]:Hide() end
+        if not selectedVisible then rowOffset = rowOffset + 1 end
+    until selectedVisible or rowOffset >= selected
+    if window.scrollbar then
+        local bar = window.scrollbar
+        local hidden = entryCount > window.visibleEntryCount
+        -- Leave the native slider's range and thumb untouched during a drag.
+        if not bar.dragging then
+            local height = math.max(48, window:GetHeight() - 64)
+            if bar.layoutHeight ~= height then
+                bar:ClearAllPoints()
+                bar:SetPoint("TOPRIGHT", window, "TOPRIGHT", -12, -44)
+                bar:SetHeight(height)
+                bar.layoutHeight = height
+            end
+            bar:SetMinMaxValues(0, math.max(0, entryCount - math.max(1, window.visibleEntryCount)))
+            if bar.inputRowOffset ~= rowOffset then bar.inputValue, bar.inputRowOffset = nil, nil end
+            bar:SetValue(bar.inputValue or rowOffset)
+            bar:GetThumbTexture():SetHeight(math.max(28, math.min(64, height * window.visibleEntryCount / math.max(1, entryCount))))
+        end
+        bar:SetShown(hidden)
+    end
+    SkinControllerWindow()
+    ns.RefreshControllerOptionsWatermark()
+    controllerLayoutRunning = false
+end
+
 local function Move(direction)
-    local count = #window.entries
+    local count = #window.entries + (setupMode and 1 or 0)
     selected = ((selected - 1 + direction) % count) + 1
     Render()
 end
 
+local function Scroll(delta)
+    if not window or not window.entries then return end
+    local visible = math.max(1, window.visibleEntryCount or 1)
+    local maxOffset = math.max(0, #window.entries - visible)
+    rowOffset = math.max(0, math.min(maxOffset, rowOffset + (delta > 0 and -1 or 1)))
+    selected = math.max(rowOffset + 1, math.min(selected, rowOffset + visible))
+    Render()
+end
+
 local function ChangeTab(direction)
+    if setupMode then return end
     tabIndex = ((tabIndex - 1 + direction) % #TAB_DEFS) + 1
     selected = 1
     rowOffset = 0
+    if window.scrollbar then window.scrollbar.inputValue, window.scrollbar.inputRowOffset = nil, nil end
     Render()
 end
 
 local function Activate()
+    if setupMode and selected == #window.entries + 1 then
+        ns.SaveActiveProfile()
+        Close()
+        return
+    end
     local entry = window.entries[selected]
     if entry and entry.activate then entry.activate(1) end
     Render()
@@ -792,14 +945,59 @@ local function Bind(key, action)
     end
 end
 
+local function UpdateBindings(active)
+    if type(InCombatLockdown) == "function" and InCombatLockdown() then return end
+    if not active then
+        if bindingsConfigured then ClearBindings() end
+        bindingOwner:Hide()
+        return
+    end
+    bindingOwner:Show()
+    if bindingsConfigured then return end
+    -- Forever uses PADD* for the D-pad and PAD*SHOULDER for bumpers.
+    Bind("PADDUP", function() Move(-1) end)
+    Bind("PADDDOWN", function() Move(1) end)
+    Bind("PADDLEFT", function() Adjust(-1) end)
+    Bind("PADDRIGHT", function() Adjust(1) end)
+    Bind("PADLSHOULDER", function() ChangeTab(-1) end)
+    Bind("PADRSHOULDER", function() ChangeTab(1) end)
+    Bind("PAD1", Activate)
+    Bind("PAD2", Close)
+    bindingsConfigured = true
+end
+
 local function Build()
     if window then return end
     bindingOwner = CreateFrame("Frame", "GnomeLevelUpControllerOptionsBindings", UIParent)
     bindingOwner:Hide()
     window = CreateFrame("Frame", "GnomeLevelUpControllerOptions", UIParent, "BackdropTemplate")
-    window:SetSize(760, 620)
+    window:Hide()
+    local specialFrames = _G["UISpecialFrames"]
+    if type(specialFrames) == "table" then specialFrames[#specialFrames + 1] = "GnomeLevelUpControllerOptions" end
+    window:SetSize(math.min(760, UIParent:GetWidth() - 40), math.min(620, UIParent:GetHeight() - 40))
     window:SetPoint("CENTER")
     window:SetFrameStrata("HIGH")
+    window:EnableKeyboard(true)
+    window:SetScript("OnKeyDown", function(self, key)
+        local focus = type(GetCurrentKeyBoardFocus) == "function" and GetCurrentKeyBoardFocus()
+        local editing = focus and focus.IsObjectType and focus:IsObjectType("EditBox")
+        local handled = not editing and (key == "UP" or key == "DOWN" or key == "LEFT"
+            or key == "RIGHT" or key == "ENTER" or key == "NUMPADENTER" or key == "ESCAPE" or key == "TAB")
+        if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(not handled) end
+        if not handled then return end
+        if key == "UP" then Move(-1)
+        elseif key == "DOWN" then Move(1)
+        elseif key == "LEFT" then Adjust(-1)
+        elseif key == "RIGHT" then Adjust(1)
+        elseif key == "ENTER" or key == "NUMPADENTER" then Activate()
+        elseif key == "ESCAPE" then Close()
+        elseif key == "TAB" then
+            local direction = IsShiftKeyDown and IsShiftKeyDown() and -1 or 1
+            if setupMode then Move(direction) else ChangeTab(direction) end
+        end
+    end)
+    window:EnableMouseWheel(true)
+    window:SetScript("OnMouseWheel", function(_, delta) Scroll(delta) end)
     window:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 } })
     _, refreshCloseButton = CreateControllerCloseButton(window, Close)
     portraitPreview = CreateFrame("Frame", nil, window)
@@ -819,7 +1017,8 @@ local function Build()
     portraitPreview:Hide()
     local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 24, -18)
-    title:SetText(ns.L and ns.L("GnomeLevelUp - Controller Options") or "GnomeLevelUp - Controller Options")
+    title:SetText(ns.L("GnomeLevelUp - Controller options"))
+    window.title = title
     for i, def in ipairs(TAB_DEFS) do
         local tab = CreateFrame("Button", nil, window)
         local tabNumber = i
@@ -829,7 +1028,7 @@ local function Build()
         tab.background:SetAllPoints()
         tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         tab.text:SetPoint("CENTER")
-        tab.text:SetText(def.label)
+        tab.text:SetText(ns.L(def.label))
         tab:SetScript("OnClick", function()
             tabIndex, selected = i, 1
             rowOffset = 0
@@ -849,23 +1048,93 @@ local function Build()
         local row = CreateFrame("Button", nil, window)
         local rowNumber = i
         row:SetSize(700, ROW_HEIGHT)
-        row:SetPoint("TOPLEFT", 24, -84 - (i - 1) * ROW_SPACING)
+        row:SetPoint("TOPLEFT", 24, -84)
         row.background = row:CreateTexture(nil, "BACKGROUND")
         row.background:SetAllPoints()
-        row:SetScript("OnEnter", function()
-            local entryIndex = rowOffset + rowNumber
-            if window.entries and window.entries[entryIndex] then selected = entryIndex; Render() end
+        row:SetScript("OnEnter", function(self)
+            self.hovered = true
+            local entry = window.entries and window.entries[self.entryIndex]
+            if entry then RefreshRowHighlight(self, self.entryIndex, entry) end
         end)
+        row:SetScript("OnLeave", function(self)
+            self.hovered = false
+            local entry = window.entries and window.entries[self.entryIndex]
+            if entry then RefreshRowHighlight(self, self.entryIndex, entry) end
+        end)
+        row:SetScript("OnHide", function(self) self.hovered = false end)
+        row:EnableMouseWheel(true)
+        row:SetScript("OnMouseWheel", function(_, delta) Scroll(delta) end)
         row:SetScript("OnClick", function()
             local entryIndex = rowOffset + rowNumber
             if window.entries and window.entries[entryIndex] then selected = entryIndex; Activate() end
         end)
-        row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        row.text:SetPoint("LEFT")
-        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        row.value:SetPoint("RIGHT")
+        row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 20, -6)
+        row.text:SetJustifyH("LEFT")
+        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        row.value:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -6)
+        row.value:SetJustifyH("RIGHT")
+        row.selectionIndicator = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        row.selectionIndicator:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -6)
+        row.selectionIndicator:SetSize(14, 16)
+        row.selectionIndicator:SetJustifyH("LEFT")
         rows[i] = row
     end
+    local scrollbar = CreateFrame("Slider", nil, window)
+    scrollbar:EnableMouse(true)
+    scrollbar:SetWidth(16)
+    scrollbar:SetHitRectInsets(-4, -4, 0, 0)
+    scrollbar:SetOrientation("VERTICAL")
+    scrollbar:SetValueStep(0)
+    scrollbar:SetObeyStepOnDrag(false)
+    local track = scrollbar:CreateTexture(nil, "BACKGROUND")
+    track:SetAllPoints()
+    track:SetColorTexture(0.25, 0.25, 0.25, 0.65)
+    scrollbar:SetThumbTexture("Interface\\Buttons\\WHITE8X8")
+    scrollbar:GetThumbTexture():SetWidth(12)
+    scrollbar:GetThumbTexture():SetVertexColor(0.9, 0.76, 0.45, 1)
+    local function EndScrollDrag()
+        scrollbar.dragging = false
+        scrollbar:SetScript("OnUpdate", nil)
+        if window:IsShown() then Render() end
+    end
+    scrollbar:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" then return end
+        scrollbar.dragging = true
+        scrollbar:SetScript("OnUpdate", function()
+            if type(IsMouseButtonDown) == "function" and not IsMouseButtonDown("LeftButton") then EndScrollDrag() end
+        end)
+    end)
+    scrollbar:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" then EndScrollDrag() end
+    end)
+    scrollbar:SetScript("OnHide", function()
+        scrollbar.dragging = false
+        scrollbar:SetScript("OnUpdate", nil)
+    end)
+    scrollbar:SetScript("OnValueChanged", function(_, value)
+        if controllerLayoutRunning or not window.entries then return end
+        local nextOffset = math.floor(value + 0.5)
+        scrollbar.inputValue, scrollbar.inputRowOffset = value, nextOffset
+        if nextOffset == rowOffset then return end
+        rowOffset = nextOffset
+        selected = rowOffset + 1
+        Render()
+    end)
+    scrollbar:EnableMouseWheel(true)
+    scrollbar:SetScript("OnMouseWheel", function(_, delta) Scroll(delta) end)
+    window.scrollbar = scrollbar
+    local finish = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+    finish:SetSize(220, 36)
+    finish:SetNormalFontObject("GameFontNormalLarge")
+    finish:SetHighlightFontObject("GameFontNormalLarge")
+    finish:SetDisabledFontObject("GameFontNormalLarge")
+    finish.text = finish:GetFontString()
+    finish.text:SetFontObject("GameFontNormalLarge")
+    finish:SetScript("OnClick", function() ns.SaveActiveProfile(); Close() end)
+    window.finishButton = finish
+    window.watermark = window:CreateTexture(nil, "BACKGROUND", nil, -5)
+    window.watermark:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -24, 18)
     local hint = CreateFrame("Frame", nil, window)
     hint:SetSize(680, 34)
     hint:SetPoint("BOTTOM", 0, 10)
@@ -885,47 +1154,61 @@ local function Build()
     window.controllerHintStyle = hintStyle
     local availability = window:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     availability:SetPoint("BOTTOM", 0, 62)
-    availability:SetText(ns.L and ns.L("Some options are not available in the controller menu.")
-        or "Some options are not available in the controller menu.")
+    availability:SetText(ns.L("Some options are not available in the controller menu."))
     availability:SetTextColor(0.75, 0.75, 0.75)
+    window.availability = availability
+    window:HookScript("OnSizeChanged", Render)
+    local controllerPollElapsed = 0
+    local lastCloseGlyphStyle
     window:SetScript("OnShow", function()
-        if ns.RefreshPreviewSuspension then ns.RefreshPreviewSuspension() end
+        controllerPollElapsed = 0
+        lastCloseGlyphStyle = ControllerGlyphChoice()
+        if refreshCloseButton then refreshCloseButton() end
+        SetControllerPreviewStrata(true)
+        ns.RefreshPreviewSuspension()
     end)
     window:SetScript("OnHide", Close)
     window:SetScript("OnUpdate", function(_, elapsed)
-        if not IsActive() then
+        controllerPollElapsed = controllerPollElapsed + (elapsed or 0)
+        if controllerPollElapsed < 0.20 then return end
+        controllerPollElapsed = 0
+        local controllerActive = IsActive()
+        if not controllerActive and not manualOpen then
             Close()
             return
         end
+        UpdateBindings(controllerActive)
         SetControllerPreviewStrata(true)
-        if refreshCloseButton then refreshCloseButton() end
-        if window.controllerHint and window.controllerHintStyle ~= ControllerGlyphChoice() then
+        local glyphStyle = ControllerGlyphChoice()
+        if glyphStyle ~= lastCloseGlyphStyle then
+            if refreshCloseButton then refreshCloseButton() end
+            lastCloseGlyphStyle = glyphStyle
+        end
+        if window.controllerHint and window.controllerHintStyle ~= glyphStyle then
             RefreshControllerHints(window.controllerHint.items)
-            window.controllerHintStyle = ControllerGlyphChoice()
+            window.controllerHintStyle = glyphStyle
+            Render()
         end
     end)
 end
 
-function ns.ToggleControllerOptions(force)
-    if not IsActive() or (type(InCombatLockdown) == "function" and InCombatLockdown()) then
+function ns.ToggleControllerOptions(force, allowKeyboard, firstTime)
+    if (not IsActive() and not allowKeyboard) or (type(InCombatLockdown) == "function" and InCombatLockdown()) then
         if window then Close() end
         return false
+    end
+    setupMode, manualOpen = firstTime == true, allowKeyboard == true
+    if setupMode then
+        selected, rowOffset = 1, 0
+        if window and window.scrollbar then window.scrollbar.inputValue, window.scrollbar.inputRowOffset = nil, nil end
     end
     Build()
     if force == false then Close() return false end
     if window:IsShown() and force ~= true then Close() return false end
-    bindingOwner:Show()
+    bindingOwner:SetShown(IsActive())
     SetControllerPreviewStrata(true)
     ClearBindings()
-    -- Forever uses PADD* for the D-pad and PAD*SHOULDER for bumpers.
-    Bind("PADDUP", function() Move(-1) end)
-    Bind("PADDDOWN", function() Move(1) end)
-    Bind("PADDLEFT", function() Adjust(-1) end)
-    Bind("PADDRIGHT", function() Adjust(1) end)
-    Bind("PADLSHOULDER", function() ChangeTab(-1) end)
-    Bind("PADRSHOULDER", function() ChangeTab(1) end)
-    Bind("PAD1", Activate)
-    Bind("PAD2", Close)
+    UpdateBindings(IsActive())
     Render()
     window:Show()
     return true
@@ -938,7 +1221,7 @@ function ns.OpenControllerOptionsWhenFree()
     local function open()
         if IsActive() then ns.ToggleControllerOptions(true) end
     end
-    local panel = _G.SettingsPanel or _G.InterfaceOptionsFrame
+    local panel = _G["SettingsPanel"] or _G["InterfaceOptionsFrame"]
     if panel and panel:IsShown() then
         if type(HideUIPanel) == "function" then pcall(HideUIPanel, panel) else panel:Hide() end
         if C_Timer and C_Timer.After then C_Timer.After(0.15, open) else open() end
@@ -946,4 +1229,25 @@ function ns.OpenControllerOptionsWhenFree()
         open()
     end
     return true
+end
+
+-- Share the existing measured rows, theme skin and controller navigation.
+function ns.OpenFirstTimeSetup()
+    ns.EnsureDatabase()
+    if ns.ToggleControllerOptions(true, true, true) then
+        ns.db.firstTimeSetupShown = true
+        return true
+    end
+    return false
+end
+
+function ns.ShowFirstTimeSetupIfNeeded()
+    if not ns.db.firstTimeSetupShown then return ns.OpenFirstTimeSetup() end
+end
+
+function ns.RefreshControllerOptionsWatermark()
+    if window and window.watermark and ns.RefreshOptionsWatermark then
+        ns.RefreshOptionsWatermark(window.watermark)
+        window.watermark:SetAlpha(0.36)
+    end
 end

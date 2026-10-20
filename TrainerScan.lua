@@ -10,6 +10,13 @@ local TRAINER_RECONCILE_DELAY = 0.25
 function ns.GetTrainerCacheStatus()
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "unknown"
     local _, classToken = UnitClass("player")
+    if ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData() then
+        return {
+            flavor = flavor, classToken = classToken,
+            count = #ns.GetTrainerCatalogIndex(), schemaVersion = TRAINER_SCHEMA_VERSION,
+            rescanRequired = false, bundled = true,
+        }
+    end
     local count = 0
     local store = GnomeLevelUpDB and GnomeLevelUpDB.scannedTraining
     local levelMap = store and store[flavor] and classToken and store[flavor][classToken]
@@ -158,6 +165,11 @@ function ns.MigrateTrainerData()
     -- Rebuild old caches when their record format cannot provide trainer costs.
     if not GnomeLevelUpDB then return end
     local store = EnsureSavedStore()
+    if ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData() then
+        GnomeLevelUpDB.trainerRescanRequired = false
+        GnomeLevelUpDB.trainerSchemaVersion = TRAINER_SCHEMA_VERSION
+        return
+    end
     store.classic = nil
     store.retail = nil
     if GnomeLevelUpDB.learnedTraining then
@@ -187,7 +199,7 @@ function ns.MigrateTrainerData()
 
     GnomeLevelUpDB.trainerSchemaVersion = TRAINER_SCHEMA_VERSION
     if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
-    print("|cff3fe0ffGnomeLevelUp|r: trainer data was updated. Visit your class trainer once to rescan skills and costs.")
+    print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Trainer data was updated. Visit your class trainer once to rescan skills and costs."))
 end
 
 local function MarkLearned(entry, level)
@@ -419,17 +431,50 @@ local function RecordAbility(classMap, classToken, level, label, icon, spellID, 
     return savedEntry, true, true
 end
 
+-- Compare only positively identified offered spells. Filtered/missing rows and
+-- reputation-adjusted prices are not evidence of a catalogue change.
+local function CheckTrainerCatalogue(npcName)
+    if not ns.RecordTrainerObservation then return end
+    local _, classToken = UnitClass("player")
+    local newChanges = 0
+    for i = 1, GetNumTrainerServices() do
+        local name, subtext, status, infoLevel, _, spellID, category, cost, professionCost = ReadService(i)
+        if name and spellID and (status == "available" or status == "unavailable" or status == "used")
+            and category ~= "profession" and not IsProfessionService(i, professionCost)
+            and not (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(name)) then
+            local level = GetRequiredLevel(i, infoLevel, status)
+            local label = subtext and subtext ~= "" and (name .. " (" .. subtext .. ")") or name
+            if ns.RecordTrainerObservation({classToken=classToken,spellID=spellID,level=level,
+                name=label,status=status,cost=cost,npcName=npcName}) then
+                newChanges = newChanges + 1
+            end
+        end
+    end
+    if newChanges > 0 then
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("A change in the trainer data has been detected, please type /glu trainerreport and submit the file to me!"))
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Report options: type %s to open the export window and copy report-only JSON.", "|cffffff00/glu trainerreport|r"))
+        if ns.PrintTrainerReportLocation then ns.PrintTrainerReportLocation() end
+    end
+end
+
 local function ScanTrainer()
     -- Read the trainer window and save valid class skills.
     if not GetNumTrainerServices or not GetTrainerServiceInfo then return end
-    if ns.db and ns.db.autoScanTrainers == false
-        and not GnomeLevelUpDB.trainerRescanRequired then return end
-    local store = EnsureSavedStore()
-    if not store then return end
     local flavor = ns.GetCurrentFlavor()
     if flavor ~= "forever" then return end
     local npcName = UnitName("npc")
     local trainerIsProfession = IsProfessionTrainer()
+    if not trainerIsProfession and ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData()
+        and ns.db and ns.db.monitorTrainerChanges ~= false then
+        CheckTrainerCatalogue(npcName)
+    end
+    if ns.db and ns.db.autoScanTrainers == false
+        and not GnomeLevelUpDB.trainerRescanRequired then return end
+    local store = EnsureSavedStore()
+    if not store then return end
+    -- Keep class scanning available for development captures, not normal play.
+    if not trainerIsProfession and ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData()
+        and not (ns.IsDebugEnabled and ns.IsDebugEnabled()) then return end
     if trainerIsProfession and not (ns.db and ns.db.scanProfessionTrainers) then return end
     local _, classToken = UnitClass("player")
     if not classToken then return end
@@ -484,10 +529,10 @@ local function ScanTrainer()
         ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook())
     end
     if added > 0 then
-        print(string.format("|cff3fe0ffGnomeLevelUp|r: saved %d new trainer %s from %s.",
-            added, added == 1 and "entry" or "entries", npcName or "this trainer"))
+        print(("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("New trainer entries saved: %d (%s).",
+            added, npcName or ns.L("this trainer"))))
     elseif skippedNoLevel > 0 then
-        print(string.format("|cff3fe0ffGnomeLevelUp|r: skipped %d future skills without a readable required level.", skippedNoLevel))
+        print(("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Skipped %d future skills without a readable required level.", skippedNoLevel)))
     end
 end
 ns.ScanTrainer = ScanTrainer

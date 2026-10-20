@@ -5,4 +5,8 @@ enable-nolib-creation: no
 ignore:
   - .github
   - .git
+  - .vscode
+  - .git
   - changes.txt
+  - Tools
+  - CONTRIBUTING.md

@@ -2,8 +2,8 @@ local ADDON_NAME, ns = ...
 
 local DATABASE_SCHEMA_VERSION = 6
 
--- These are the settings used when the addon starts for the first time.
 local defaults = {
+    language = "auto",
     schemaVersion = DATABASE_SCHEMA_VERSION,
     enabled = true,
     playSound = true,
@@ -12,8 +12,6 @@ local defaults = {
     scale = 1.0,
     frameStrata = "HIGH",
     printInstructions = true,
-    printClassicLevelUpText = false,
-    classicLevelUpTextColor = { 1.00, 1.00, 159 / 255 }, -- #FFFF9F
     introShown = false,
     waitForCombatEnd = true, -- delay showing the screen until combat ends
     soundChoice = "LEVELUP",  -- key into ns.SOUND_CHOICES
@@ -23,6 +21,7 @@ local defaults = {
     customSoundChoice = nil,
     forceFlavor = "auto", -- "auto" | "retail" | "forever"
     autoScanTrainers = true,
+    monitorTrainerChanges = true,
     scanProfessionTrainers = false,
     showWeaponSkills = false,
     showTrainerCosts = false,
@@ -34,14 +33,14 @@ local defaults = {
     showAllWarlockGrimoires = false,
     useHorizontalAbilityScroll = false,
     compactMode = false,
-    showLevelTime = false,
+    showLevelTime = true,
     ignoreMouseoverDelay = false,
     ignoreMouseoverDelayUserSet = false,
     clickThrough = false,
     hideBlizzardLevelUp = true,
     showTextShadow = true,
     useClassColors = false,
-    rightClickClose = false,
+    rightClickClose = true,
     lockFramePosition = false,
     sectionPadding = 8,
     bgOpacity = 0.70,           -- background darkness at its peak (0-1)
@@ -50,6 +49,31 @@ local defaults = {
     portraitRingColor = { 1.00, 1.00, 1.00 },
     animSpeedMultiplier = 1.0,  -- higher = faster animations
     reducedMotion = false,       -- skip entrance/exit movement and fades
+    portraitAnimation = true,
+    portraitRingSettle = true,
+    dividerReveal = true,
+    highlightNewAbilities = true,
+    emphasizeStatGains = true,
+    portraitSparks = true,
+    newAbilitySparkles = true,
+    backgroundEmbers = true,
+    frameEdgeGlow = true,
+    particlePortraitCount = 5,
+    particlePortraitSize = 200,
+    particlePortraitOpacity = 65,
+    particleStarburstCount = 5,
+    particleStarburstSize = 100,
+    particleStarburstOpacity = 65,
+    particleEmberCount = 20,
+    particleEmberSize = 150,
+    particleEmberOpacity = 30,
+    particleSparkleCount = 2,
+    particleSparkleSize = 200,
+    particleSparkleOpacity = 90,
+    starburstOpacity = 50,
+    portraitPulseOpacity = 71.5,
+    frameEdgeGlowOpacity = 33,
+
     statSlideDirection = "alternate", -- "alternate" | "left" | "right"
     equalStatWidths = false, -- add measured tracking so every stat row has the same visual width
     customFontPath = nil,       -- nil = default (Friz Quadrata)
@@ -57,7 +81,7 @@ local defaults = {
     minimapButtonShown = true,
     suspendPreview = true,
     minimapAngle = 225,
-    portraitMode = "class",
+    portraitMode = "player",
     playerPortraitPosition = { x = 0, y = 0 }, -- offset from the current portrait top anchor
     playerPortraitScale = 1.0,                 -- theme-controlled multiplier for the player portrait
     portraitRingEnabled = false,
@@ -72,8 +96,8 @@ local defaults = {
 
     backgroundMode = "MODERN", -- "MODERN" or "CUSTOM"
     backgroundTheme = nil,
-    backgroundChoice = nil,
-    frameChoice = nil,
+    backgroundChoice = "NONE",
+    frameChoice = "BLACK_METAL",
     backgroundStyle = "stretch", -- "fill", "tile", or "stretch"
     backgroundFillMode = "scale", -- legacy center-texture setting
     backgroundTextureColors = {
@@ -109,6 +133,7 @@ local defaults = {
         abilitiesHeader = { 1.00, 0.82, 0.00 },
         abilityName     = { 0.25, 0.88, 1.00 }, -- doubles as the icon border colour
         portraitBorder  = { 1.00, 0.82, 0.20 },
+        animatedElements = { 1.00, 0.82, 0.20 },
         divider         = { 106 / 255, 106 / 255, 106 / 255 },
     },
 }
@@ -117,6 +142,9 @@ ns.defaults = defaults
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
+    "portraitSparks", "newAbilitySparkles", "backgroundEmbers", "frameEdgeGlow",
+    "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
+    "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding",
@@ -126,10 +154,15 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
+    "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity",
+    "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
+    "portraitSparks", "newAbilitySparkles", "backgroundEmbers", "frameEdgeGlow",
+    "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
+    "portraitRingSettle", "dividerReveal",
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
-    "enabled", "duration", "scale", "autoScanTrainers", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
+    "enabled", "duration", "scale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "customFontPath",
-    "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions", "printClassicLevelUpText", "classicLevelUpTextColor",
+    "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "lockFramePosition", "sectionPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
     "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "controllerGlyphStyle", "controllerMenuFrameStrata",
@@ -143,7 +176,6 @@ local function ResetSettingKeys(keys)
 end
 ns.ResetSettingKeys = ResetSettingKeys
 
--- Blizzard's class colors are used when class-color mode is enabled.
 ns.CLASS_COLORS = {
     DEATHKNIGHT = { 196 / 255, 30 / 255, 58 / 255 },
     DEMONHUNTER = { 163 / 255, 48 / 255, 201 / 255 },
@@ -155,18 +187,14 @@ ns.CLASS_COLORS = {
     PALADIN     = { 244 / 255, 140 / 255, 186 / 255 },
     PRIEST      = { 1, 1, 1 },
     ROGUE       = { 255 / 255, 244 / 255, 104 / 255 },
-    SHAMAN      = { 0, 112 / 255, 221 / 255 },
+    SHAMAN      = { 99 / 255, 129 / 255, 255 / 255 },
     WARLOCK     = { 135 / 255, 136 / 255, 238 / 255 },
     WARRIOR     = { 198 / 255, 155 / 255, 109 / 255 },
 }
 
 local function PrintStartupInstructions()
     if not ns.db or ns.db.printInstructions == false or ns.db.introShown then return end
-    if ns.GetCurrentFlavor and ns.GetCurrentFlavor() == "retail" then
-        print('GnomeLevelUp active! Retail spell unlocks are read from your spellbook. If you\'re updating to a new version and experiencing any issues, use the "Clear Scanned Data" option in the menu or type /glu cleartraining.')
-    else
-        print('GnomeLevelUp active! Make sure to visit your class trainer to cache available skills. If you\'re updating to a new version and experiencing any issues, use the "Clear Scanned Data" option in the menu or type /glu cleartraining.')
-    end
+    print(ns.L("Welcome to GnomeLevelUp! As of 1.4.0 you no longer need to scan trainers manually, the list is pre-populated! Please report any issues you encounter to me on GitHub or Curseforge!"))
     ns.db.introShown = true
 end
 ns.PrintStartupInstructions = PrintStartupInstructions
@@ -208,9 +236,7 @@ local function ApplyAppearanceNow()
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
--- Theme and independent appearance controls often change several settings in
--- one click. Coalesce those changes into one render pass to avoid repeatedly
--- rebuilding nine-slice textures and portrait geometry in the same frame.
+-- Combine appearance changes from one click into a single render pass.
 local appearanceRefreshQueued = false
 local function RefreshAppearanceAfterThemeChange()
     if appearanceRefreshQueued then return end
@@ -231,9 +257,7 @@ ns.FlushAppearanceRefresh = function()
         ApplyAppearanceNow()
     end
 end
--- All theme and independent appearance selectors use the same refresh path.
--- This prevents one selector from leaving stale texture, font, or geometry
--- state behind when another selector changes.
+-- Refresh themes and individual appearance settings through the same path.
 ns.ApplyCurrentAppearance = RefreshAppearanceAfterThemeChange
 
 function ns.FindBackgroundTheme(value)
@@ -253,11 +277,14 @@ ns.GetSelectedCompositeTheme = SelectedCompositeTheme
 
 function ns.RestoreModernAppearance()
     EnsureDatabase()
-    -- The background dropdown controls only the background. Keep the user's
-    -- portrait, frame position, font, and other appearance settings intact.
+    -- Modern starts without a portrait ring. Keep portrait artwork, position
+    -- and font choices when switching backgrounds.
     ns.db.backgroundMode = "MODERN"
     ns.db.backgroundTheme = nil
     ns.db.backgroundChoice = "NONE"
+    ns.db.portraitRingEnabled = false
+    ns.db.portraitRingTexture = nil
+    ns.db.portraitRingChoice = "NONE"
     RefreshAppearanceAfterThemeChange()
 end
 
@@ -292,7 +319,12 @@ function ns.ApplyBackgroundTheme(value)
         if theme.appearance and theme.appearance[key] ~= nil then
             -- false is the serializable ThemeList.lua representation of a
             -- setting whose normal value is nil, such as the default font.
-            ns.db[key] = theme.appearance[key] == false and nil or CopySetting(theme.appearance[key])
+            local value = theme.appearance[key]
+            if value == false and defaults[key] == nil then
+                ns.db[key] = nil
+            else
+                ns.db[key] = CopySetting(value)
+            end
         end
     end
     if locationLocked then
@@ -404,15 +436,45 @@ local function InitDB()
         end
     end
     GnomeLevelUpDB.sharedHueMigrationVersion = 1
+    -- Combine the two portrait effects, retaining a fully disabled old profile.
+    if GnomeLevelUpDB.portraitAnimation == nil
+        and (GnomeLevelUpDB.portraitRingPulse ~= nil or GnomeLevelUpDB.portraitStarburst ~= nil) then
+        GnomeLevelUpDB.portraitAnimation = GnomeLevelUpDB.portraitRingPulse ~= false
+            or GnomeLevelUpDB.portraitStarburst ~= false
+    end
+    GnomeLevelUpDB.portraitRingPulse = nil
+    GnomeLevelUpDB.portraitStarburst = nil
+    -- Emphasis now controls counting too; preserve its existing preference.
+    GnomeLevelUpDB.countStatGains = nil
+    -- Migrate the particle defaults once; preserve later debug edits.
+    if GnomeLevelUpDB.particleTuningPresetVersion ~= 1 then
+        GnomeLevelUpDB.particlePortraitCount = 5
+        GnomeLevelUpDB.particlePortraitSize = 200
+        GnomeLevelUpDB.particleStarburstCount = 5
+        GnomeLevelUpDB.particleEmberCount = 20
+        GnomeLevelUpDB.particleEmberSize = 150
+        GnomeLevelUpDB.particleTuningPresetVersion = 1
+    end
+    -- Apply the new visual preset once, then preserve later debug tuning.
+    if GnomeLevelUpDB.effectReadabilityPresetVersion ~= 1 then
+        GnomeLevelUpDB.starburstOpacity = 50
+        GnomeLevelUpDB.particleSparkleSize = 200
+        GnomeLevelUpDB.particleEmberOpacity = 30
+        GnomeLevelUpDB.effectReadabilityPresetVersion = 1
+    end
     MergeMissingSettings(GnomeLevelUpDB, defaults)
     -- 1.3 stored one theme value for the whole custom appearance. Preserve
     -- that exact pairing while introducing independent frame/background keys.
     -- This is deliberately based on the values captured above; using the
-    -- merged defaults here would make an old profile look like a new Modern
+    -- merged defaults here would make an old profile look like a fresh default
     -- profile and leave the background renderer without a valid nine-slice.
     local oldTheme = ns.FindBackgroundTheme(legacyBackgroundTheme)
     local hadIndependentSelectors = legacyBackgroundChoice ~= nil or legacyFrameChoice ~= nil
-    if oldTheme and (not hadIndependentSelectors or savedSchemaVersion < 2) then
+    if legacyBackgroundMode == "MODERN" and not legacyBackgroundTheme then
+        GnomeLevelUpDB.backgroundTheme = nil
+        GnomeLevelUpDB.backgroundChoice = legacyBackgroundChoice or "NONE"
+        GnomeLevelUpDB.frameChoice = legacyFrameChoice or "BLACK_METAL"
+    elseif oldTheme and (not hadIndependentSelectors or savedSchemaVersion < 2) then
         GnomeLevelUpDB.backgroundMode = "CUSTOM"
         GnomeLevelUpDB.backgroundTheme = oldTheme.value
         GnomeLevelUpDB.backgroundChoice = oldTheme.backgroundName
@@ -429,7 +491,11 @@ local function InitDB()
         GnomeLevelUpDB.backgroundTheme = nil
         GnomeLevelUpDB.backgroundChoice = "NONE"
         GnomeLevelUpDB.frameChoice = "BLACK_METAL"
-    elseif not hadIndependentSelectors then
+    elseif hadIndependentSelectors and not legacyBackgroundTheme then
+        GnomeLevelUpDB.backgroundTheme = nil
+    elseif not hadIndependentSelectors and (legacyBackgroundMode ~= nil or legacyBackgroundTheme ~= nil or savedSchemaVersion > 0) then
+        GnomeLevelUpDB.backgroundMode = "MODERN"
+        GnomeLevelUpDB.backgroundTheme = nil
         GnomeLevelUpDB.backgroundChoice = "NONE"
         GnomeLevelUpDB.frameChoice = "BLACK_METAL"
     end
@@ -457,7 +523,8 @@ local function InitDB()
     end
     -- Older profiles only stored the center fill mode. Preserve that choice
     -- when introducing the per-theme style setting.
-    if not legacyBackgroundStyle and not oldTheme then
+    if not legacyBackgroundStyle and not oldTheme
+        and (legacyBackgroundMode ~= nil or legacyBackgroundFillMode ~= nil or hadIndependentSelectors) then
         GnomeLevelUpDB.backgroundStyle = GnomeLevelUpDB.backgroundFillMode == "tile"
             and "tile" or "stretch"
     end
@@ -488,9 +555,22 @@ local function InitDB()
         if not GnomeLevelUpDB.frameChoice then GnomeLevelUpDB.frameChoice = "BLACK_METAL" end
         if not GnomeLevelUpDB.backgroundChoice then GnomeLevelUpDB.backgroundChoice = "NONE" end
     end
+    -- Blizzard owns level-up chat now; retire the addon-only settings.
+    GnomeLevelUpDB.printClassicLevelUpText = nil
+    GnomeLevelUpDB.classicLevelUpTextColor = nil
+    GnomeLevelUpDB.levelNumberReveal = nil
     GnomeLevelUpDB.persistentOptionsPreview = nil
     GnomeLevelUpDB.themePreview = nil
     ns.db = GnomeLevelUpDB
+
+    -- Retire the deleted placeholder in profiles saved by older theme builds.
+    local savedRingTexture = ns.db.portraitRingTexture
+    if type(savedRingTexture) == "string"
+        and savedRingTexture:lower():match("portrait%-ring%-placeholder%.tga$") then
+        ns.db.portraitRingTexture = nil
+        ns.db.portraitRingChoice = "NONE"
+        ns.db.portraitRingEnabled = false
+    end
 
     -- Existing saved themes keep their appearance transforms in SavedVariables.
     -- Refresh only the nine-slice transform map so the shared corner/edge
@@ -515,7 +595,7 @@ end
 ns.EnsureDatabase = EnsureDatabase
 
 local CLASS_COLOR_KEYS = {
-    "title", "level", "statsHeader", "abilitiesHeader", "abilityName", "portraitBorder",
+    "title", "level", "statsHeader", "abilitiesHeader", "abilityName", "portraitBorder", "animatedElements",
 }
 
 local function ApplyCurrentClassColors()
@@ -524,8 +604,26 @@ local function ApplyCurrentClassColors()
     if not classColor then return end
 
     for _, key in ipairs(CLASS_COLOR_KEYS) do
-        ns.db.colors[key] = CopySetting(classColor)
+        local overrides = ns.db.classColorOverrides and ns.db.classColorOverrides[classToken]
+        ns.db.colors[key] = CopySetting(overrides and overrides[key] or classColor)
     end
+end
+
+function ns.SetOptionColor(key, color)
+    EnsureDatabase()
+    if ns.db.useClassColors then
+        for _, classKey in ipairs(CLASS_COLOR_KEYS) do
+            if key == classKey then
+                local _, token = UnitClass("player")
+                ns.db.classColorOverrides = ns.db.classColorOverrides or {}
+                ns.db.classColorOverrides[token] = ns.db.classColorOverrides[token] or {}
+                ns.db.classColorOverrides[token][key] = CopySetting(color)
+                break
+            end
+        end
+    end
+    ns.db.colors[key] = CopySetting(color)
+    if ns.ApplyColors then ns.ApplyColors() end
 end
 
 function ns.SyncClassColors()
@@ -533,7 +631,10 @@ function ns.SyncClassColors()
     if ns.db.useClassColors then
         if not ns.db.classColorBackup then
             ns.db.classColorBackup = {}
-            for _, key in ipairs(CLASS_COLOR_KEYS) do
+        end
+        -- Include keys introduced while an older class-colour backup exists.
+        for _, key in ipairs(CLASS_COLOR_KEYS) do
+            if ns.db.classColorBackup[key] == nil then
                 ns.db.classColorBackup[key] = CopySetting(ns.db.colors[key])
             end
         end
@@ -543,9 +644,18 @@ function ns.SyncClassColors()
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
+function ns.InvalidateColorPicker()
+    ns.colorPaletteRevision = (ns.colorPaletteRevision or 0) + 1
+    if ColorPickerFrame and ColorPickerFrame:IsShown() then ColorPickerFrame:Hide() end
+end
+
 function ns.SetClassColorsEnabled(enabled)
     EnsureDatabase()
+    ns.InvalidateColorPicker()
     if enabled then
+        -- The controller menu updates the flag before calling this setter.
+        -- A missing backup also marks the start of a fresh class-colour session.
+        if not ns.db.useClassColors or not ns.db.classColorBackup then ns.db.classColorOverrides = nil end
         ns.db.useClassColors = true
         ns.SyncClassColors()
         return
@@ -564,18 +674,20 @@ function ns.SetClassColorsEnabled(enabled)
 end
 
 function ns.ResetAppearanceToDefaults()
+    ns.InvalidateColorPicker()
     ResetSettingKeys(ns.APPEARANCE_SETTING_KEYS)
     -- Explicitly clear legacy and composed-theme selectors so old texture
     -- pieces cannot remain active after the reset.
-    ns.db.backgroundMode = "MODERN"
-    ns.db.backgroundTheme = nil
-    ns.db.backgroundChoice = "NONE"
-    ns.db.frameChoice = "BLACK_METAL"
+    ns.db.backgroundMode = defaults.backgroundMode
+    ns.db.backgroundTheme = defaults.backgroundTheme
+    ns.db.backgroundChoice = defaults.backgroundChoice
+    ns.db.frameChoice = defaults.frameChoice
     ns.db.showTextShadow = CopySetting(defaults.showTextShadow)
     ns.db.collapsedSections = CopySetting(defaults.collapsedSections)
     ns.db.colors = CopySetting(defaults.colors)
     ns.db.useClassColors = false
     ns.db.classColorBackup = nil
+    ns.db.classColorOverrides = nil
 
     if ns.ApplyCurrentAppearance then ns.ApplyCurrentAppearance() end
     if ns.ApplyColors then ns.ApplyColors() end
@@ -586,9 +698,7 @@ function ns.IsDebugEnabled()
     return ns.db and ns.db.debugEnabled == true
 end
 
--- Performance counters stay dormant unless debug mode is enabled. This keeps
--- the normal popup path free of timing allocations while still making reports
--- useful when a user is investigating a stutter.
+-- Collect performance counters only in debug mode.
 local performanceMetrics = {}
 local function PerformanceClock()
     if type(GetTimePreciseSec) == "function" then return GetTimePreciseSec() * 1000 end
@@ -630,7 +740,7 @@ end
 
 function ns.PrintPerformanceDiagnostics()
     if not ns.IsDebugEnabled() then
-        print("|cff3fe0ffGnomeLevelUp|r: debug is OFF. Use /glu debug on first.")
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
         return
     end
     local labels = {}
@@ -681,9 +791,11 @@ end
 
 function ns.ResetOptionsToDefaults()
     -- Restore the settings page to the default values.
+    ns.InvalidateColorPicker()
     ResetSettingKeys(ns.RESETTABLE_SETTING_KEYS)
     ns.db.colors = CopySetting(defaults.colors)
     ns.db.classColorBackup = nil
+    ns.db.classColorOverrides = nil
     ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
     ns.ApplyFont(ns.db.customFontPath)
     ns.ApplyColors()
@@ -710,7 +822,6 @@ ns.SOUND_CHOICES = {
     { value = "ALARM",   label = "Alarm Clock",         id = (SOUNDKIT and SOUNDKIT.ALARM_CLOCK_WARNING_3) or 18871 },
     { value = "CUSTOM",  label = "Custom sound" },
 }
--- Sound channels that the player can choose from.
 ns.SOUND_CHANNELS = {
     { value = "Master",   label = "Master" },
     { value = "SFX",      label = "Sound Effects" },
@@ -720,13 +831,40 @@ ns.SOUND_CHANNELS = {
 }
 
 ns.MODE_CHOICES = {
-    { value = "auto",    label = "Auto-detect" },
+    { value = "auto",    label = "Auto Detect" },
     { value = "retail",  label = "Retail" },
     { value = "forever", label = "WoW: Forever" },
 }
 
--- The two portrait styles shown at the top of the level-up panel.
+-- Bounded numeric tuning shared by the options fields and visible-only effects.
+ns.PARTICLE_SETTINGS = {
+    { group = "portrait", countLabel = "Portrait mote count", sizeLabel = "Portrait mote size (%)", opacityLabel = "Portrait mote opacity (%)",
+        count = "particlePortraitCount", size = "particlePortraitSize", opacity = "particlePortraitOpacity", maxCount = 30 },
+    { group = "starburst", countLabel = "Starburst mote count", sizeLabel = "Starburst mote size (%)", opacityLabel = "Starburst mote opacity (%)",
+        count = "particleStarburstCount", size = "particleStarburstSize", opacity = "particleStarburstOpacity", maxCount = 30 },
+    { group = "ember", countLabel = "Background ember count", sizeLabel = "Background ember size (%)", opacityLabel = "Background ember opacity (%)",
+        count = "particleEmberCount", size = "particleEmberSize", opacity = "particleEmberOpacity", maxCount = 200 },
+    { group = "sparkle", countLabel = "Ability sparkle count", sizeLabel = "Ability sparkle size (%)", opacityLabel = "Ability sparkle opacity (%)",
+        count = "particleSparkleCount", size = "particleSparkleSize", opacity = "particleSparkleOpacity", maxCount = 8 },
+}
+ns.EFFECT_OPACITY_SETTINGS = {
+    { opacity = "starburstOpacity", opacityLabel = "Starburst opacity (%)", precision = 10 },
+    { opacity = "portraitPulseOpacity", opacityLabel = "Portrait pulse opacity (%)", precision = 10 },
+    { opacity = "frameEdgeGlowOpacity", opacityLabel = "Frame edge glow opacity (%)", precision = 10 },
+}
+function ns.GetParticleValue(spec, kind)
+    local key = spec[kind]
+    local value = tonumber(ns.db and ns.db[key])
+    if not value or value ~= value then value = ns.defaults[key] end
+    local minimum = kind == "size" and 25 or 0
+    local maximum = kind == "count" and spec.maxCount or (kind == "size" and 400 or 100)
+    local precision = spec.precision or 1
+    local rounded = math.floor(math.max(minimum, math.min(maximum, value)) * precision + 0.5)
+    return spec.precision and rounded / precision or rounded
+end
+
 ns.PORTRAIT_CHOICES = {
+    { value = "none", label = "None" },
     { value = "class",  label = "Class icon" },
     { value = "player", label = "Player portrait" },
 }
@@ -819,7 +957,10 @@ end
 
 local function BuildDebugAbilityPreview(currentLevel, limit)
     local previewCost = 1337 * 10000
-    local abilities = { { id = 11362, name = "Teleport to Gnomeregan", cost = previewCost } }
+    local abilities = {
+        { id = 11362, name = "Teleport to Gnomeregan", cost = previewCost, trainingRank = 1, isNewAbility = true, preview = true },
+        { id = 432423, name = "Gnomeregan Smash", cost = previewCost, trainingRank = 2, isNewAbility = false, preview = true },
+    }
     local availableAbilities = {}
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
     if flavor == "retail" and ns.GetRetailUnlearnedSpells then
@@ -857,6 +998,8 @@ local function BuildDebugGrimoirePreview(limit)
             cost = previewCost,
             itemID = grimoire.itemID,
             kind = "warlockPet",
+            trainingRank = grimoire.rank,
+            isNewAbility = grimoire.rank == nil or grimoire.rank == 1,
             preview = true,
         }
     end
@@ -886,7 +1029,11 @@ function ns.PreviewLevelUp(debugSkills)
     if debugSkills then
         trainerAbilities = BuildDebugAbilityPreview(currentLevel, 5)
     else
-        trainerAbilities = { { id = 11362, name = "Teleport to Gnomeregan", cost = 1337 * 10000 } }
+        -- Always include both styles, even if this character has no trainer data.
+        trainerAbilities = {
+            { id = 11362, name = "Teleport to Gnomeregan", cost = 1337 * 10000, trainingRank = 1, isNewAbility = true, preview = true },
+            { id = 432423, name = "Gnomeregan Smash", cost = 1337 * 10000, trainingRank = 2, isNewAbility = false, preview = true },
+        }
         local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
         local availableAbilities
         if flavor == "retail" and ns.GetRetailUnlearnedSpells then
@@ -913,6 +1060,8 @@ function ns.PreviewLevelUp(debugSkills)
             cost = 1337 * 10000,
             itemID = 16302,
             kind = "warlockPet",
+            trainingRank = 2,
+            isNewAbility = false,
             preview = true,
         }
     end
@@ -921,6 +1070,10 @@ function ns.PreviewLevelUp(debugSkills)
         { name = STRENGTH or "Strength", old = 20, new = 23 },
         { name = STAMINA or "Stamina", old = 22, new = 27 },
         { name = INTELLECT or "Intellect", old = 15, new = 17 },
+        { name = _G["AGILITY"] or "Agility", old = 18, new = 19 },
+        { name = _G["SPIRIT"] or "Spirit", old = 16, new = 18 },
+        { name = _G["HEALTH"] or "Health", old = 200, new = 217, kind = "health" },
+        { name = _G["MANA"] or "Mana", old = 150, new = 170, kind = "mana" },
     }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities, true)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
@@ -929,9 +1082,9 @@ end
 local frame = CreateFrame("Frame")
 ns.eventFrame = frame
 
--- Listen for addon setup, login, and level-up events.
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
 
@@ -940,6 +1093,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
         local loadedAddon = ...
         if loadedAddon == ADDON_NAME then
             InitDB()
+            if ns.InitializeProfiles then ns.InitializeProfiles() end
+            ns.SetLocale(ns.db.language)
+            if ns.RefreshLocalizedPopupText then ns.RefreshLocalizedPopupText() end
+            if ns.InitializeOptions then ns.InitializeOptions() end
             ns.ApplyAddonState(true)
             if ns.MergeSavedTrainerData then
                 ns.MergeSavedTrainerData()
@@ -973,7 +1130,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
             and ns.MarkKnownTrainerSkills and ns.SnapshotSpellBook then
             ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook())
         end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if ns.ShowFirstTimeSetupIfNeeded then ns.ShowFirstTimeSetupIfNeeded() end
     elseif event == "PLAYER_ENTERING_WORLD" then
+        if ns.ShowFirstTimeSetupIfNeeded then ns.ShowFirstTimeSetupIfNeeded() end
         ns.ApplyAddonState(false)
         if ns.SyncClassColors then ns.SyncClassColors() elseif ns.ApplyColors then ns.ApplyColors() end
     elseif event == "PLAYER_LEVEL_UP" then
@@ -984,19 +1144,27 @@ frame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 
+local function PrintSettingStatus(label, enabled)
+    print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L(label) .. ": " .. ns.L(enabled and "On" or "Off"))
+end
+
 SLASH_GNOMELEVELUP1 = "/glu"
 SlashCmdList["GNOMELEVELUP"] = function(msg)
     EnsureDatabase()
     msg = (msg or ""):lower()
     msg = msg:match("^%s*(.-)%s*$") -- trim
 
-    if msg == "debugskills" then
+    if msg == "firsttime" then
+        if ns.OpenFirstTimeSetup then ns.OpenFirstTimeSetup() end
+    elseif msg == "controlleroptions" then
+        if ns.ToggleControllerOptions then ns.ToggleControllerOptions(true, true) end
+    elseif msg == "debugskills" then
         ns.PreviewLevelUp(true)
     elseif msg == "test" then
         ns.PreviewLevelUp()
     elseif msg == "sound" then
         ns.db.playSound = not ns.db.playSound
-        print("|cff3fe0ffGnomeLevelUp|r: sound " .. (ns.db.playSound and "ON" or "OFF"))
+        PrintSettingStatus("Play sound on level up", ns.db.playSound)
     elseif msg:match("^duration") then
         local n = tonumber(msg:match("(%d+)"))
         if n then
@@ -1018,12 +1186,16 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         end
     elseif msg == "scan" then
         ns.db.autoScanTrainers = not ns.db.autoScanTrainers
-        print("|cff3fe0ffGnomeLevelUp|r: trainer auto-scan " .. (ns.db.autoScanTrainers and "ON" or "OFF"))
+        PrintSettingStatus("Automatically save trainer data", ns.db.autoScanTrainers)
     elseif msg:match("^scanprof") then
         ns.db.scanProfessionTrainers = not ns.db.scanProfessionTrainers
         if ns.InvalidateTrainerIndex then ns.InvalidateTrainerIndex() end
-        print("|cff3fe0ffGnomeLevelUp|r: scanning profession trainers "
-            .. (ns.db.scanProfessionTrainers and "ON" or "OFF"))
+        PrintSettingStatus("Include profession trainers", ns.db.scanProfessionTrainers)
+    elseif msg == "trainerreport" then
+        if ns.OpenTrainerReport then ns.OpenTrainerReport() end
+    elseif msg == "trainerreport clear" then
+        if ns.ClearTrainerReports then ns.ClearTrainerReports() end
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Trainer reports cleared."))
     elseif msg == "cleartraining" then
         if ns.ClearScannedTrainerData then
             ns.ClearScannedTrainerData()
@@ -1044,7 +1216,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
             ns.db.debugEnabled = not ns.db.debugEnabled
         end
         if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
-        print("|cff3fe0ffGnomeLevelUp|r: debug " .. (ns.db.debugEnabled and "ON" or "OFF"))
+        PrintSettingStatus("Enable debug commands", ns.db.debugEnabled)
     elseif msg == "perf reset" or msg == "performance reset" then
         if ns.ResetPerformanceDiagnostics then ns.ResetPerformanceDiagnostics() end
         print("|cff3fe0ffGnomeLevelUp|r: performance counters reset")
@@ -1052,7 +1224,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         if ns.PrintPerformanceDiagnostics then ns.PrintPerformanceDiagnostics() end
     elseif msg == "dumptraining" then
         if not ns.IsDebugEnabled() then
-            print("|cff3fe0ffGnomeLevelUp|r: debug is OFF. Use /glu debug on first.")
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
         elseif ns.DumpTrainerData then
             ns.DumpTrainerData()
         end
@@ -1060,14 +1232,13 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         if ns.DumpWeaponSkills then ns.DumpWeaponSkills() end
     elseif msg == "testtrainer" then
         if not ns.IsDebugEnabled() then
-            print("|cff3fe0ffGnomeLevelUp|r: debug is OFF. Use /glu debug on first.")
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
         elseif ns.TestTrainerList then
             ns.TestTrainerList()
         end
     elseif msg == "combat" then
         ns.db.waitForCombatEnd = not ns.db.waitForCombatEnd
-        print("|cff3fe0ffGnomeLevelUp|r: waiting for combat to end before showing - "
-            .. (ns.db.waitForCombatEnd and "ON" or "OFF"))
+        PrintSettingStatus("Don't show until combat ends", ns.db.waitForCombatEnd)
     elseif msg == "options" or msg == "config" then
         if ns.ToggleOptions then
             ns.ToggleOptions()
@@ -1081,6 +1252,8 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu mode <x>      - use retail/forever training data, or auto-detect")
         print("  /glu scan          - toggle auto-saving trainer data when you visit a trainer")
         print("  /glu scanprof      - toggle including profession trainers in that scan")
+        print("  /glu trainerreport - export observed trainer catalogue changes")
+        print("  /glu trainerreport clear - clear saved change reports")
         print("  /glu cleartraining - wipe all scanned trainer data (fixes old bad/duplicate entries)")
         print("  /glu debug [on|off] - enable or disable debug commands (off by default)")
         print("  /glu dumptraining - print cached skills and learned status")

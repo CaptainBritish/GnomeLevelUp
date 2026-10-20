@@ -128,8 +128,9 @@ function ns.SnapshotSpellBook(forceRefresh)
                         local spellInfo = C_Spell.GetSpellInfo(itemInfo.spellID)
                         name = type(spellInfo) == "table" and spellInfo.name or spellInfo
                     end
-                    if not name and type(GetSpellInfo) == "function" then
-                        local ok, spellName = pcall(GetSpellInfo, itemInfo.spellID)
+                    local getSpellInfo = rawget(_G, "GetSpellInfo")
+                    if not name and type(getSpellInfo) == "function" then
+                        local ok, spellName = pcall(getSpellInfo, itemInfo.spellID)
                         if ok then
                             name = spellName
                         end
@@ -157,8 +158,9 @@ local function GetSpellName(spellID, itemInfo)
             return type(spellInfo) == "table" and spellInfo.name or spellInfo
         end
     end
-    if type(GetSpellInfo) == "function" then
-        local ok, name = pcall(GetSpellInfo, spellID)
+    local getSpellInfo = rawget(_G, "GetSpellInfo")
+    if type(getSpellInfo) == "function" then
+        local ok, name = pcall(getSpellInfo, spellID)
         if ok then return name end
     end
 end
@@ -278,6 +280,8 @@ function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells)
             if ns.GetTrainingRankInfo then
                 baseName, rank = ns.GetTrainingRankInfo(spell.name)
             end
+            ability.trainingRank = rank
+            ability.isNewAbility = rank == nil or rank == 1
             if onlyNewSkills and rank then
                 local existing = ranked[baseName]
                 if not existing or rank < existing.rank then
