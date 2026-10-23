@@ -2919,3 +2919,169 @@ ns.RegisterLocale("ruRU", { ["Welcome to GnomeLevelUp!"] = "Добро пожа�
 ns.RegisterLocale("koKR", { ["Welcome to GnomeLevelUp!"] = "GnomeLevelUp에 오신 것을 환영합니다!" })
 ns.RegisterLocale("zhCN", { ["Welcome to GnomeLevelUp!"] = "欢迎使用 GnomeLevelUp！" })
 ns.RegisterLocale("zhTW", { ["Welcome to GnomeLevelUp!"] = "歡迎使用 GnomeLevelUp！" })
+
+-- Decorative effects master switch.
+ns.RegisterLocale("frFR", { ["Background animations"] = "Animations de fond" })
+ns.RegisterLocale("esES", { ["Background animations"] = "Animaciones de fondo" })
+ns.RegisterLocale("esMX", { ["Background animations"] = "Animaciones de fondo" })
+ns.RegisterLocale("deDE", { ["Background animations"] = "Hintergrundanimationen" })
+ns.RegisterLocale("itIT", { ["Background animations"] = "Animazioni di sfondo" })
+ns.RegisterLocale("ptBR", { ["Background animations"] = "Animações de fundo" })
+ns.RegisterLocale("ruRU", { ["Background animations"] = "Фоновые анимации" })
+ns.RegisterLocale("koKR", { ["Background animations"] = "배경 애니메이션" })
+ns.RegisterLocale("zhCN", { ["Background animations"] = "背景动画" })
+ns.RegisterLocale("zhTW", { ["Background animations"] = "背景動畫" })
+
+-- Popup orientation, independent of Compact Layout.
+ns.RegisterLocale("frFR", { ["Horizontal layout"] = "Disposition horizontale" })
+ns.RegisterLocale("esES", { ["Horizontal layout"] = "Diseño horizontal" })
+ns.RegisterLocale("esMX", { ["Horizontal layout"] = "Diseño horizontal" })
+ns.RegisterLocale("deDE", { ["Horizontal layout"] = "Horizontales Layout" })
+ns.RegisterLocale("itIT", { ["Horizontal layout"] = "Disposizione orizzontale" })
+ns.RegisterLocale("ptBR", { ["Horizontal layout"] = "Layout horizontal" })
+ns.RegisterLocale("ruRU", { ["Horizontal layout"] = "Горизонтальная компоновка" })
+ns.RegisterLocale("koKR", { ["Horizontal layout"] = "가로 배치" })
+ns.RegisterLocale("zhCN", { ["Horizontal layout"] = "横向布局" })
+ns.RegisterLocale("zhTW", { ["Horizontal layout"] = "橫向配置" })
+
+ns.RegisterLocale("frFR", { ["Player 3D portrait"] = "Portrait 3D du joueur" })
+
+ns.RegisterLocale("esES", { ["Player 3D portrait"] = "Retrato 3D del jugador" })
+
+ns.RegisterLocale("esMX", { ["Player 3D portrait"] = "Retrato 3D del jugador" })
+
+ns.RegisterLocale("deDE", { ["Player 3D portrait"] = "3D-Spielerporträt" })
+
+ns.RegisterLocale("itIT", { ["Player 3D portrait"] = "Ritratto 3D del giocatore" })
+
+ns.RegisterLocale("ptBR", { ["Player 3D portrait"] = "Retrato 3D do jogador" })
+
+ns.RegisterLocale("ruRU", { ["Player 3D portrait"] = "3D-портрет игрока" })
+
+ns.RegisterLocale("koKR", { ["Player 3D portrait"] = "플레이어 3D 초상화" })
+
+ns.RegisterLocale("zhCN", { ["Player 3D portrait"] = "玩家3D头像" })
+
+ns.RegisterLocale("zhTW", { ["Player 3D portrait"] = "玩家3D頭像" })
+
+ns.RegisterLocale("frFR", { ["3D model rotation (degrees)"] = "Rotation du modèle 3D (degrés)", ["3D model depth"] = "Profondeur du modèle 3D", ["3D model horizontal position"] = "Position horizontale du modèle 3D", ["3D model vertical position"] = "Position verticale du modèle 3D", ["3D model scale (%)"] = "Échelle du modèle 3D (%)" })
+
+ns.RegisterLocale("esES", { ["3D model rotation (degrees)"] = "Rotación del modelo 3D (grados)", ["3D model depth"] = "Profundidad del modelo 3D", ["3D model horizontal position"] = "Posición horizontal del modelo 3D", ["3D model vertical position"] = "Posición vertical del modelo 3D", ["3D model scale (%)"] = "Escala del modelo 3D (%)" })
+
+ns.RegisterLocale("esMX", { ["3D model rotation (degrees)"] = "Rotación del modelo 3D (grados)", ["3D model depth"] = "Profundidad del modelo 3D", ["3D model horizontal position"] = "Posición horizontal del modelo 3D", ["3D model vertical position"] = "Posición vertical del modelo 3D", ["3D model scale (%)"] = "Escala del modelo 3D (%)" })
+
+ns.RegisterLocale("deDE", { ["3D model rotation (degrees)"] = "3D-Modelldrehung (Grad)", ["3D model depth"] = "3D-Modelltiefe", ["3D model horizontal position"] = "Horizontale 3D-Modellposition", ["3D model vertical position"] = "Vertikale 3D-Modellposition", ["3D model scale (%)"] = "3D-Modellskalierung (%)" })
+
+ns.RegisterLocale("itIT", { ["3D model rotation (degrees)"] = "Rotazione modello 3D (gradi)", ["3D model depth"] = "Profondità modello 3D", ["3D model horizontal position"] = "Posizione orizzontale modello 3D", ["3D model vertical position"] = "Posizione verticale modello 3D", ["3D model scale (%)"] = "Scala modello 3D (%)" })
+
+ns.RegisterLocale("ptBR", { ["3D model rotation (degrees)"] = "Rotação do modelo 3D (graus)", ["3D model depth"] = "Profundidade do modelo 3D", ["3D model horizontal position"] = "Posição horizontal do modelo 3D", ["3D model vertical position"] = "Posição vertical do modelo 3D", ["3D model scale (%)"] = "Escala do modelo 3D (%)" })
+
+ns.RegisterLocale("ruRU", { ["3D model rotation (degrees)"] = "Поворот 3D-модели (градусы)", ["3D model depth"] = "Глубина 3D-модели", ["3D model horizontal position"] = "Горизонтальное положение 3D-модели", ["3D model vertical position"] = "Вертикальное положение 3D-модели", ["3D model scale (%)"] = "Масштаб 3D-модели (%)" })
+
+ns.RegisterLocale("koKR", { ["3D model rotation (degrees)"] = "3D 모델 회전 (도)", ["3D model depth"] = "3D 모델 깊이", ["3D model horizontal position"] = "3D 모델 가로 위치", ["3D model vertical position"] = "3D 모델 세로 위치", ["3D model scale (%)"] = "3D 모델 크기 (%)" })
+
+ns.RegisterLocale("zhCN", { ["3D model rotation (degrees)"] = "3D模型旋转（度）", ["3D model depth"] = "3D模型深度", ["3D model horizontal position"] = "3D模型水平位置", ["3D model vertical position"] = "3D模型垂直位置", ["3D model scale (%)"] = "3D模型缩放（%）" })
+
+ns.RegisterLocale("zhTW", { ["3D model rotation (degrees)"] = "3D模型旋轉（度）", ["3D model depth"] = "3D模型深度", ["3D model horizontal position"] = "3D模型水平位置", ["3D model vertical position"] = "3D模型垂直位置", ["3D model scale (%)"] = "3D模型縮放（%）" })
+
+ns.RegisterLocale("frFR", { ["3D mask size (%)"] = "Taille du masque 3D (%)" })
+ns.RegisterLocale("esES", { ["3D mask size (%)"] = "Tamaño de la máscara 3D (%)" })
+ns.RegisterLocale("esMX", { ["3D mask size (%)"] = "Tamaño de la máscara 3D (%)" })
+ns.RegisterLocale("deDE", { ["3D mask size (%)"] = "3D-Maskengröße (%)" })
+ns.RegisterLocale("itIT", { ["3D mask size (%)"] = "Dimensione maschera 3D (%)" })
+ns.RegisterLocale("ptBR", { ["3D mask size (%)"] = "Tamanho da máscara 3D (%)" })
+ns.RegisterLocale("ruRU", { ["3D mask size (%)"] = "Размер 3D-маски (%)" })
+ns.RegisterLocale("koKR", { ["3D mask size (%)"] = "3D 마스크 크기 (%)" })
+ns.RegisterLocale("zhCN", { ["3D mask size (%)"] = "3D遮罩大小（%）" })
+ns.RegisterLocale("zhTW", { ["3D mask size (%)"] = "3D遮罩大小（%）" })
+
+ns.RegisterLocale("frFR", { ["3D viewport size (%)"] = "Taille de la fenêtre 3D (%)" })
+ns.RegisterLocale("esES", { ["3D viewport size (%)"] = "Tamaño del área de vista 3D (%)" })
+ns.RegisterLocale("esMX", { ["3D viewport size (%)"] = "Tamaño del área de vista 3D (%)" })
+ns.RegisterLocale("deDE", { ["3D viewport size (%)"] = "3D-Ansichtsgröße (%)" })
+ns.RegisterLocale("itIT", { ["3D viewport size (%)"] = "Dimensione area di visualizzazione 3D (%)" })
+ns.RegisterLocale("ptBR", { ["3D viewport size (%)"] = "Tamanho da área de visualização 3D (%)" })
+ns.RegisterLocale("ruRU", { ["3D viewport size (%)"] = "Размер области 3D-модели (%)" })
+ns.RegisterLocale("koKR", { ["3D viewport size (%)"] = "3D 표시 영역 크기 (%)" })
+ns.RegisterLocale("zhCN", { ["3D viewport size (%)"] = "3D视口大小（%）" })
+ns.RegisterLocale("zhTW", { ["3D viewport size (%)"] = "3D視口大小（%）" })
+
+ns.RegisterLocale("frFR", { ["Milestone Animations"] = "Animations de palier" })
+ns.RegisterLocale("deDE", { ["Milestone Animations"] = "Meilensteinanimationen" })
+ns.RegisterLocale("esES", { ["Milestone Animations"] = "Animaciones de hito" })
+ns.RegisterLocale("esMX", { ["Milestone Animations"] = "Animaciones de hito" })
+ns.RegisterLocale("itIT", { ["Milestone Animations"] = "Animazioni dei traguardi" })
+ns.RegisterLocale("ptBR", { ["Milestone Animations"] = "Animações de marcos" })
+ns.RegisterLocale("ruRU", { ["Milestone Animations"] = "Анимации юбилейных уровней" })
+ns.RegisterLocale("koKR", { ["Milestone Animations"] = "주요 레벨 애니메이션" })
+ns.RegisterLocale("zhCN", { ["Milestone Animations"] = "里程碑动画" })
+ns.RegisterLocale("zhTW", { ["Milestone Animations"] = "里程碑動畫" })
+
+-- Milestone firework debug tuning.
+ns.RegisterLocale("frFR", { ["Firework size (%)"] = "Taille des feux d’artifice (%)", ["Firework opacity (%)"] = "Opacité des feux d’artifice (%)" })
+ns.RegisterLocale("esES", { ["Firework size (%)"] = "Tamaño de los fuegos artificiales (%)", ["Firework opacity (%)"] = "Opacidad de los fuegos artificiales (%)" })
+ns.RegisterLocale("esMX", { ["Firework size (%)"] = "Tamaño de los fuegos artificiales (%)", ["Firework opacity (%)"] = "Opacidad de los fuegos artificiales (%)" })
+ns.RegisterLocale("deDE", { ["Firework size (%)"] = "Feuerwerksgröße (%)", ["Firework opacity (%)"] = "Feuerwerksdeckkraft (%)" })
+ns.RegisterLocale("itIT", { ["Firework size (%)"] = "Dimensione fuochi d’artificio (%)", ["Firework opacity (%)"] = "Opacità fuochi d’artificio (%)" })
+ns.RegisterLocale("ptBR", { ["Firework size (%)"] = "Tamanho dos fogos de artifício (%)", ["Firework opacity (%)"] = "Opacidade dos fogos de artifício (%)" })
+ns.RegisterLocale("ruRU", { ["Firework size (%)"] = "Размер фейерверков (%)", ["Firework opacity (%)"] = "Непрозрачность фейерверков (%)" })
+ns.RegisterLocale("koKR", { ["Firework size (%)"] = "불꽃놀이 크기 (%)", ["Firework opacity (%)"] = "불꽃놀이 불투명도 (%)" })
+ns.RegisterLocale("zhCN", { ["Firework size (%)"] = "烟花大小（%）", ["Firework opacity (%)"] = "烟花不透明度（%）" })
+ns.RegisterLocale("zhTW", { ["Firework size (%)"] = "煙火大小（%）", ["Firework opacity (%)"] = "煙火不透明度（%）" })
+
+-- Non-Modern content inset debug control.
+ns.RegisterLocale("frFR", { ["Frame inset (px)"] = "Marge du cadre (px)" })
+ns.RegisterLocale("esES", { ["Frame inset (px)"] = "Margen del marco (px)" })
+ns.RegisterLocale("esMX", { ["Frame inset (px)"] = "Margen del marco (px)" })
+ns.RegisterLocale("deDE", { ["Frame inset (px)"] = "Rahmeninnenabstand (px)" })
+ns.RegisterLocale("itIT", { ["Frame inset (px)"] = "Margine della cornice (px)" })
+ns.RegisterLocale("ptBR", { ["Frame inset (px)"] = "Margem da moldura (px)" })
+ns.RegisterLocale("ruRU", { ["Frame inset (px)"] = "Отступ рамки (пкс)" })
+ns.RegisterLocale("koKR", { ["Frame inset (px)"] = "프레임 안쪽 여백 (px)" })
+ns.RegisterLocale("zhCN", { ["Frame inset (px)"] = "边框内边距（像素）" })
+ns.RegisterLocale("zhTW", { ["Frame inset (px)"] = "邊框內距（像素）" })
+
+-- Optional popup finishing effects.
+ns.RegisterLocale("frFR", { ["Portrait ring glint"] = "Éclat de l’anneau du portrait", ["Ability reveal shine"] = "Reflet à l’apparition des capacités", ["Milestone anticipation"] = "Anticipation des niveaux jalons", ["Stat impact sparks"] = "Étincelles des gains de statistiques", ["Background depth"] = "Profondeur de l’arrière-plan", ["Closing animation"] = "Animation de fermeture", ["Milestone color transition"] = "Transition de couleur des niveaux jalons" })
+ns.RegisterLocale("esES", { ["Portrait ring glint"] = "Destello del anillo del retrato", ["Ability reveal shine"] = "Brillo al aparecer habilidades", ["Milestone anticipation"] = "Anticipación de hitos", ["Stat impact sparks"] = "Chispas de mejora de estadísticas", ["Background depth"] = "Profundidad del fondo", ["Closing animation"] = "Animación de cierre", ["Milestone color transition"] = "Transición de color de hitos" })
+ns.RegisterLocale("deDE", { ["Portrait ring glint"] = "Glanz am Porträtring", ["Ability reveal shine"] = "Glanz beim Erscheinen von Fähigkeiten", ["Milestone anticipation"] = "Meilenstein-Vorbereitung", ["Stat impact sparks"] = "Funken bei Attributsgewinnen", ["Background depth"] = "Hintergrundtiefe", ["Closing animation"] = "Schließanimation", ["Milestone color transition"] = "Meilenstein-Farbübergang" })
+ns.RegisterLocale("itIT", { ["Portrait ring glint"] = "Bagliore dell’anello del ritratto", ["Ability reveal shine"] = "Riflesso alla comparsa delle abilità", ["Milestone anticipation"] = "Anticipazione dei traguardi", ["Stat impact sparks"] = "Scintille dei miglioramenti", ["Background depth"] = "Profondità dello sfondo", ["Closing animation"] = "Animazione di chiusura", ["Milestone color transition"] = "Transizione colore dei traguardi" })
+ns.RegisterLocale("ptBR", { ["Portrait ring glint"] = "Brilho do anel do retrato", ["Ability reveal shine"] = "Brilho ao revelar habilidades", ["Milestone anticipation"] = "Antecipação de marcos", ["Stat impact sparks"] = "Faíscas de ganho de atributos", ["Background depth"] = "Profundidade do fundo", ["Closing animation"] = "Animação de fechamento", ["Milestone color transition"] = "Transição de cor dos marcos" })
+ns.RegisterLocale("ruRU", { ["Portrait ring glint"] = "Блик на кольце портрета", ["Ability reveal shine"] = "Блик при появлении способностей", ["Milestone anticipation"] = "Подготовка юбилейного эффекта", ["Stat impact sparks"] = "Искры прироста характеристик", ["Background depth"] = "Глубина фона", ["Closing animation"] = "Анимация закрытия", ["Milestone color transition"] = "Смена цвета юбилейного эффекта" })
+ns.RegisterLocale("koKR", { ["Portrait ring glint"] = "초상화 테두리 반짝임", ["Ability reveal shine"] = "능력 등장 광택", ["Milestone anticipation"] = "주요 레벨 사전 효과", ["Stat impact sparks"] = "능력치 증가 불꽃", ["Background depth"] = "배경 깊이", ["Closing animation"] = "닫기 애니메이션", ["Milestone color transition"] = "주요 레벨 색상 전환" })
+ns.RegisterLocale("zhCN", { ["Portrait ring glint"] = "头像边框闪光", ["Ability reveal shine"] = "技能出现光泽", ["Milestone anticipation"] = "里程碑预备效果", ["Stat impact sparks"] = "属性提升火花", ["Background depth"] = "背景纵深", ["Closing animation"] = "关闭动画", ["Milestone color transition"] = "里程碑颜色过渡" })
+ns.RegisterLocale("zhTW", { ["Portrait ring glint"] = "頭像邊框閃光", ["Ability reveal shine"] = "技能出現光澤", ["Milestone anticipation"] = "里程碑預備效果", ["Stat impact sparks"] = "屬性提升火花", ["Background depth"] = "背景縱深", ["Closing animation"] = "關閉動畫", ["Milestone color transition"] = "里程碑顏色過渡" })
+ns.RegisterLocale("esMX", { ["Portrait ring glint"] = "Destello del anillo del retrato", ["Ability reveal shine"] = "Brillo al aparecer habilidades", ["Milestone anticipation"] = "Anticipación de hitos", ["Stat impact sparks"] = "Chispas de mejora de estadísticas", ["Background depth"] = "Profundidad del fondo", ["Closing animation"] = "Animación de cierre", ["Milestone color transition"] = "Transición de color de hitos" })
+
+ns.RegisterLocale("frFR", { ["Screenshot milestones"] = "Capturer les niveaux de palier" })
+ns.RegisterLocale("deDE", { ["Screenshot milestones"] = "Screenshots bei Meilensteinen" })
+ns.RegisterLocale("esES", { ["Screenshot milestones"] = "Capturas de pantalla en hitos" })
+ns.RegisterLocale("esMX", { ["Screenshot milestones"] = "Capturas de pantalla en hitos" })
+ns.RegisterLocale("itIT", { ["Screenshot milestones"] = "Screenshot ai traguardi" })
+ns.RegisterLocale("ptBR", { ["Screenshot milestones"] = "Capturas de tela nos marcos" })
+ns.RegisterLocale("ruRU", { ["Screenshot milestones"] = "Скриншоты на юбилейных уровнях" })
+ns.RegisterLocale("koKR", { ["Screenshot milestones"] = "주요 레벨 스크린샷" })
+ns.RegisterLocale("zhCN", { ["Screenshot milestones"] = "里程碑等级截图" })
+ns.RegisterLocale("zhTW", { ["Screenshot milestones"] = "里程碑等級截圖" })
+
+ns.RegisterLocale("frFR", { ["Portrait motes"] = "Particules du portrait", ["Background motes"] = "Particules d’arrière-plan" })
+ns.RegisterLocale("deDE", { ["Portrait motes"] = "Porträtpartikel", ["Background motes"] = "Hintergrundpartikel" })
+ns.RegisterLocale("esES", { ["Portrait motes"] = "Partículas del retrato", ["Background motes"] = "Partículas de fondo" })
+ns.RegisterLocale("esMX", { ["Portrait motes"] = "Partículas del retrato", ["Background motes"] = "Partículas de fondo" })
+ns.RegisterLocale("itIT", { ["Portrait motes"] = "Particelle del ritratto", ["Background motes"] = "Particelle di sfondo" })
+ns.RegisterLocale("ptBR", { ["Portrait motes"] = "Partículas do retrato", ["Background motes"] = "Partículas de fundo" })
+ns.RegisterLocale("ruRU", { ["Portrait motes"] = "Частицы портрета", ["Background motes"] = "Фоновые частицы" })
+ns.RegisterLocale("koKR", { ["Portrait motes"] = "초상화 입자", ["Background motes"] = "배경 입자" })
+ns.RegisterLocale("zhCN", { ["Portrait motes"] = "头像微粒", ["Background motes"] = "背景微粒" })
+ns.RegisterLocale("zhTW", { ["Portrait motes"] = "頭像微粒", ["Background motes"] = "背景微粒" })
+
+ns.RegisterLocale("frFR", { ["Warning: 3D Portraits will consume a lot of memory."] = "Attention : les portraits 3D consommeront beaucoup de mémoire." })
+ns.RegisterLocale("esES", { ["Warning: 3D Portraits will consume a lot of memory."] = "Advertencia: los retratos 3D consumirán mucha memoria." })
+ns.RegisterLocale("esMX", { ["Warning: 3D Portraits will consume a lot of memory."] = "Advertencia: los retratos 3D consumirán mucha memoria." })
+ns.RegisterLocale("deDE", { ["Warning: 3D Portraits will consume a lot of memory."] = "Warnung: 3D-Porträts verbrauchen viel Arbeitsspeicher." })
+ns.RegisterLocale("itIT", { ["Warning: 3D Portraits will consume a lot of memory."] = "Attenzione: i ritratti 3D consumeranno molta memoria." })
+ns.RegisterLocale("ptBR", { ["Warning: 3D Portraits will consume a lot of memory."] = "Aviso: retratos 3D consumirão muita memória." })
+ns.RegisterLocale("ruRU", { ["Warning: 3D Portraits will consume a lot of memory."] = "Внимание: 3D-портреты потребляют много памяти." })
+ns.RegisterLocale("koKR", { ["Warning: 3D Portraits will consume a lot of memory."] = "경고: 3D 초상화는 메모리를 많이 사용합니다." })
+ns.RegisterLocale("zhCN", { ["Warning: 3D Portraits will consume a lot of memory."] = "警告：3D头像会消耗大量内存。" })
+ns.RegisterLocale("zhTW", { ["Warning: 3D Portraits will consume a lot of memory."] = "警告：3D頭像會消耗大量記憶體。" })

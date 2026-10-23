@@ -72,11 +72,22 @@ function ns.IsTrainingEntryEligible(entry)
     return true
 end
 
+-- A character cannot change class without reloading the addon. Keep its
+-- catalogue even on Retail, so the developer flavour override still works.
+function ns.ReleaseUnusedClassTraining()
+    local _, class = UnitClass("player")
+    if not class or not ns.ClassTrainingForever then return end
+    for token in pairs(ns.ClassTrainingForever) do
+        if token ~= class then ns.ClassTrainingForever[token] = nil end
+    end
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("SPELL_DATA_LOAD_RESULT")
 frame:SetScript("OnEvent", function(_, event, id)
     if event == "PLAYER_LOGIN" then
+        ns.ReleaseUnusedClassTraining()
         if not ns.HasBuiltInTrainerData() then return end
         local _, class = UnitClass("player")
         -- Warm only this character's class before the next level-up event.

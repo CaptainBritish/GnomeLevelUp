@@ -31,7 +31,7 @@ Set a flag to `true` to make that locale available to auto-detection and the lan
 | zhCN | Chinese (Simplified) | Enabled |
 | zhTW | Chinese (Traditional) | Enabled |
 
-All ten non-English locale dictionaries contain all 260 canonical source keys. Spanish shares one vocabulary table with regional overrides, while the esES/esMX switches remain independent. All languages are available regardless of review status. The translation tables received contextual and glossary review; machine-translated wording still benefits from native-speaker feedback.
+All ten non-English locale dictionaries contain all 270 canonical source keys. Spanish shares one vocabulary table with regional overrides, while the esES/esMX switches remain independent. All languages are available regardless of review status. The translation tables received contextual and glossary review; machine-translated wording still benefits from native-speaker feedback.
 
 ## English key cleanup
 
@@ -108,3 +108,12 @@ Setup-only Show pet skills and Enable animations add two keys (259 total),
 translated in all ten non-English dictionaries.
 
 The centered setup welcome heading adds one translated key (260 total).
+
+Background animations adds one setup key, translated in all ten dictionaries
+(261 canonical keys).
+
+Horizontal layout adds one label in every non-English dictionary (262 canonical keys).
+
+Player 3D portrait is translated in all ten dictionaries (263 canonical keys).
+
+Seven debug model/mask/viewport controls bring coverage to 270 canonical keys.

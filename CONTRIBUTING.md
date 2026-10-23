@@ -1,6 +1,6 @@
 # Working on GnomeLevelUp
 
-The current development version is 1.4.0; the last public release is 1.3.8. WoW Forever is the primary test client. Retail compatibility needs separate in-game testing.
+The current development version is 1.4.5; the last public release is 1.3.8. WoW Forever is the primary test client. Retail compatibility needs separate in-game testing.
 
 ## Code map
 

@@ -18,6 +18,26 @@ local suppressionToken = 0
 local suppressionActive = false
 local suppressionQueueToken = 0
 
+local suppressionTimers = {}
+local function CancelSuppressionTimers()
+    for key, timer in pairs(suppressionTimers) do timer:Cancel(); suppressionTimers[key] = nil end
+end
+
+local function ScheduleSuppressionTimer(key, delay, callback)
+    if suppressionTimers[key] then suppressionTimers[key]:Cancel(); suppressionTimers[key] = nil end
+    if C_Timer and type(C_Timer.NewTimer) == "function" then
+        local timer
+        timer = C_Timer.NewTimer(delay, function()
+            if suppressionTimers[key] ~= timer then return end
+            suppressionTimers[key] = nil
+            callback()
+        end)
+        suppressionTimers[key] = timer
+    else
+        C_Timer.After(delay, callback)
+    end
+end
+
 -- Blizzard's native level-up files. GLU mutes these while the addon is
 -- active; its own sound uses a separate FileDataID below.
 local GLU_MUTED_SOUND_IDS = { 569593, 567431 }
@@ -113,6 +133,7 @@ function ns.HideBlizzardBannerNow()
 end
 
 function ns.RestoreBlizzardBanner()
+    CancelSuppressionTimers()
     suppressionToken = suppressionToken + 1
     suppressionQueueToken = suppressionQueueToken + 1
     RestoreSuppressedFrames()
@@ -127,7 +148,7 @@ function ns.SuppressBlizzardBanner()
     ns.HideBlizzardBannerNow()
 
     local duration = math.max(15, (ns.db and tonumber(ns.db.duration)) or 7)
-    C_Timer.After(duration + 1.0, function()
+    ScheduleSuppressionTimer("restore", duration + 1.0, function()
         if token == suppressionToken then
             RestoreSuppressedFrames()
         end
@@ -152,10 +173,10 @@ function ns.QueueBlizzardSuppression()
             ns.HideBlizzardBannerNow()
         end
         if retryDelays[index + 1] then
-            C_Timer.After(retryDelays[index + 1], function() Retry(index + 1) end)
+            ScheduleSuppressionTimer("retry", retryDelays[index + 1], function() Retry(index + 1) end)
         end
     end
-    C_Timer.After(retryDelays[1], function() Retry(1) end)
+    ScheduleSuppressionTimer("retry", retryDelays[1], function() Retry(1) end)
 end
 
 local eventFrame = CreateFrame("Frame")

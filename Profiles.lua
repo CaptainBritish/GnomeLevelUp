@@ -21,6 +21,12 @@ local function NormalizeSettings(settings)
     for key in pairs(optional) do
         if settings[key] == false then settings[key] = nil end
     end
+    -- Old exports may contain the separate effect switches. The grouped
+    -- settings now control those effects; accept and discard old booleans.
+    for _, key in ipairs({ "newAbilitySparkles", "abilityRevealShine", "backgroundDepth", "milestoneAnticipation", "statImpactSparks", "milestoneColorTransition", "popupClosingAnimation" }) do
+        if type(settings[key]) == "boolean" then settings[key] = nil end
+    end
+    if settings.horizontalMode then settings.compactMode = true end
     return settings
 end
 
@@ -324,9 +330,13 @@ local function Decode(text)
 end
 
 local ranges = {
-    scale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 },
+    portraitModelRotation = { -180, 180 }, portraitModelX = { -5, 5 },
+    portraitModelY = { -5, 5 }, portraitModelZ = { -5, 5 }, portraitModelScale = { 25, 300 },
+    portraitModelMaskSize = { 25, 300 },
+    portraitModelViewportSize = { 25, 300 },
+    scale = { 0.5, 2 }, horizontalScale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 },
     animSpeedMultiplier = { 0.25, 3 }, playerPortraitScale = { 0.1, 5 },
-    portraitRingScale = { 0.1, 5 }, sectionPadding = { 0, 100 },
+    portraitRingScale = { 0.1, 5 }, horizontalPortraitRingScale = { 0.1, 5 }, sectionPadding = { 0, 100 },
 }
 local anchors = { CENTER = true, TOP = true, BOTTOM = true, LEFT = true, RIGHT = true,
     TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
@@ -336,7 +346,7 @@ local enums = {
     controllerMenuFrameStrata = { AUTO = true, BACKGROUND = true, LOW = true, MEDIUM = true,
         HIGH = true, DIALOG = true, FULLSCREEN = true, FULLSCREEN_DIALOG = true, TOOLTIP = true },
     forceFlavor = { auto = true, retail = true, forever = true },
-    portraitMode = { none = true, class = true, player = true },
+    portraitMode = { none = true, class = true, player = true, player3d = true },
     statSlideDirection = { none = true, alternate = true, left = true, right = true },
     backgroundMode = { MODERN = true, CUSTOM = true },
     soundChannel = { Master = true, SFX = true, Music = true, Ambience = true, Dialog = true },
@@ -392,7 +402,7 @@ local function ValidSettings(settings)
             if template == nil then template = optional[key] end
             if template == nil or not ValidateLike(value, template, 0) then return false end
             if enums[key] and not enums[key][value] then return false end
-            if key == "framePosition" and (not anchors[value.point] or not anchors[value.relativePoint]) then return false end
+            if (key == "framePosition" or key == "horizontalFramePosition") and (not anchors[value.point] or not anchors[value.relativePoint]) then return false end
             local range = ranges[key]
             if range and (value < range[1] or value > range[2]) then return false end
             if key:match("Opacity$") and (value < 0 or value > 100) then return false end

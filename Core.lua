@@ -1,5 +1,9 @@
 local ADDON_NAME, ns = ...
 
+ns.PORTRAIT_MEMORY_WARNING = "Warning: 3D Portraits will consume a lot of memory."
+
+ns.DEFAULT_FONT_PATH = "Fonts\\FRIZQT__.TTF"
+
 local DATABASE_SCHEMA_VERSION = 6
 
 local defaults = {
@@ -10,6 +14,7 @@ local defaults = {
     muteNativeDing = true,
     duration = 7,       -- seconds the cinematic stays up before auto-hiding
     scale = 1.0,
+    horizontalScale = 0.9,
     frameStrata = "HIGH",
     printInstructions = true,
     introShown = false,
@@ -33,6 +38,7 @@ local defaults = {
     showAllWarlockGrimoires = false,
     useHorizontalAbilityScroll = false,
     compactMode = false,
+    horizontalMode = false,
     showLevelTime = true,
     ignoreMouseoverDelay = false,
     ignoreMouseoverDelayUserSet = false,
@@ -43,19 +49,24 @@ local defaults = {
     rightClickClose = true,
     lockFramePosition = false,
     sectionPadding = 8,
-    bgOpacity = 0.70,           -- background darkness at its peak (0-1)
+    compactHorizontalPadding = 2,
+    bgOpacity = 0.80,           -- background darkness at its peak (0-1)
     backgroundColor = { 0.00, 0.00, 0.00 },
     frameColor = { 1.00, 1.00, 1.00 },
     portraitRingColor = { 1.00, 1.00, 1.00 },
     animSpeedMultiplier = 1.0,  -- higher = faster animations
     reducedMotion = false,       -- skip entrance/exit movement and fades
+    backgroundAnimations = true,
+    milestoneAnimations = true,
+    screenshotMilestones = false,
+    portraitRingGlint = true,
+
     portraitAnimation = true,
     portraitRingSettle = true,
     dividerReveal = true,
     highlightNewAbilities = true,
     emphasizeStatGains = true,
     portraitSparks = true,
-    newAbilitySparkles = true,
     backgroundEmbers = true,
     frameEdgeGlow = true,
     particlePortraitCount = 5,
@@ -66,18 +77,22 @@ local defaults = {
     particleStarburstOpacity = 65,
     particleEmberCount = 20,
     particleEmberSize = 150,
-    particleEmberOpacity = 30,
+    particleEmberOpacity = 40,
     particleSparkleCount = 2,
     particleSparkleSize = 200,
     particleSparkleOpacity = 90,
     starburstOpacity = 50,
-    portraitPulseOpacity = 71.5,
+    portraitPulseOpacity = 50,
     frameEdgeGlowOpacity = 33,
+    fireworkSize = 60,
+    fireworkOpacity = 70,
+    frameInset = 0,
 
     statSlideDirection = "alternate", -- "alternate" | "left" | "right"
     equalStatWidths = false, -- add measured tracking so every stat row has the same visual width
     customFontPath = nil,       -- nil = default (Friz Quadrata)
     framePosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 90 },
+    horizontalFramePosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -80 },
     minimapButtonShown = true,
     suspendPreview = true,
     minimapAngle = 225,
@@ -88,6 +103,15 @@ local defaults = {
     portraitRingTexture = nil,
     portraitRingChoice = "NONE",
     portraitRingScale = 1.10,
+    portraitModelRotation = 0,
+    portraitModelX = -0.1,
+    portraitModelY = -0.05,
+    portraitModelZ = 0.03,
+    portraitModelScale = 100,
+    portraitModelMaskSize = 93,
+    portraitModelViewportSize = 105,
+    horizontalPortraitRingScale = 1.15,
+    horizontalPortraitRingOffset = { x = 0, y = 1 },
     portraitRingOffset = { x = 0, y = 0 },
     controllerGlyphStyle = "xbox", -- "none" | "xbox" | "playstation" | "nintendo"
     controllerMenuFrameStrata = "HIGH",
@@ -138,34 +162,50 @@ local defaults = {
     },
 }
 ns.defaults = defaults
+ns.EXTRA_EFFECTS = {
+    { key = "portraitRingGlint", label = "Portrait ring glint" },
+}
+
+function ns.GetSectionPadding()
+    local key = ns.db and ns.db.horizontalMode and "compactHorizontalPadding" or "sectionPadding"
+    return math.max(0, math.min(30, tonumber(ns.db and ns.db[key]) or defaults[key]))
+end
+
+function ns.SetSectionPadding(value)
+    local key = ns.db.horizontalMode and "compactHorizontalPadding" or "sectionPadding"
+    ns.db[key] = math.max(0, math.min(30, tonumber(value) or defaults[key]))
+end
 
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
-    "portraitSparks", "newAbilitySparkles", "backgroundEmbers", "frameEdgeGlow",
+    "portraitRingGlint",
+    "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath",
-    "frameStrata", "framePosition", "lockFramePosition", "sectionPadding",
+    "frameStrata", "framePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding",
     "scale",
 }
 
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
-    "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity",
+    "portraitRingGlint",
+    "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize",
+    "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity", "fireworkSize", "fireworkOpacity", "frameInset",
     "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
-    "portraitSparks", "newAbilitySparkles", "backgroundEmbers", "frameEdgeGlow",
+    "milestoneAnimations", "screenshotMilestones", "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
-    "enabled", "duration", "scale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
+    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "customFontPath",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
-    "framePosition", "lockFramePosition", "sectionPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
+    "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
-    "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "controllerGlyphStyle", "controllerMenuFrameStrata",
+    "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "horizontalPortraitRingScale", "horizontalPortraitRingOffset", "controllerGlyphStyle", "controllerMenuFrameStrata",
 }
 
 local function ResetSettingKeys(keys)
@@ -280,6 +320,7 @@ function ns.RestoreModernAppearance()
     -- Modern starts without a portrait ring. Keep portrait artwork, position
     -- and font choices when switching backgrounds.
     ns.db.backgroundMode = "MODERN"
+    ns.db.bgOpacity = 0.80
     ns.db.backgroundTheme = nil
     ns.db.backgroundChoice = "NONE"
     ns.db.portraitRingEnabled = false
@@ -459,8 +500,15 @@ local function InitDB()
     if GnomeLevelUpDB.effectReadabilityPresetVersion ~= 1 then
         GnomeLevelUpDB.starburstOpacity = 50
         GnomeLevelUpDB.particleSparkleSize = 200
-        GnomeLevelUpDB.particleEmberOpacity = 30
+        GnomeLevelUpDB.particleEmberOpacity = 40
         GnomeLevelUpDB.effectReadabilityPresetVersion = 1
+    end
+    -- Refresh the old defaults without replacing custom debug values.
+    if GnomeLevelUpDB.effectPolishPresetVersion ~= 1 then
+        if GnomeLevelUpDB.fireworkSize == nil or GnomeLevelUpDB.fireworkSize == 80 then GnomeLevelUpDB.fireworkSize = 60 end
+        if GnomeLevelUpDB.portraitPulseOpacity == nil or GnomeLevelUpDB.portraitPulseOpacity == 71.5 then GnomeLevelUpDB.portraitPulseOpacity = 50 end
+        if GnomeLevelUpDB.particleEmberOpacity == nil or GnomeLevelUpDB.particleEmberOpacity == 30 then GnomeLevelUpDB.particleEmberOpacity = 40 end
+        GnomeLevelUpDB.effectPolishPresetVersion = 1
     end
     MergeMissingSettings(GnomeLevelUpDB, defaults)
     -- 1.3 stored one theme value for the whole custom appearance. Preserve
@@ -558,6 +606,13 @@ local function InitDB()
     -- Blizzard owns level-up chat now; retire the addon-only settings.
     GnomeLevelUpDB.printClassicLevelUpText = nil
     GnomeLevelUpDB.classicLevelUpTextColor = nil
+    GnomeLevelUpDB.popupClosingAnimation = nil
+    GnomeLevelUpDB.milestoneColorTransition = nil
+    GnomeLevelUpDB.statImpactSparks = nil
+    GnomeLevelUpDB.newAbilitySparkles = nil
+    GnomeLevelUpDB.abilityRevealShine = nil
+    GnomeLevelUpDB.backgroundDepth = nil
+    GnomeLevelUpDB.milestoneAnticipation = nil
     GnomeLevelUpDB.levelNumberReveal = nil
     GnomeLevelUpDB.persistentOptionsPreview = nil
     GnomeLevelUpDB.themePreview = nil
@@ -584,6 +639,7 @@ local function InitDB()
         end
         GnomeLevelUpDB.backgroundThemeTextureVersion = themeTextureVersion
     end
+    if GnomeLevelUpDB.horizontalMode then GnomeLevelUpDB.compactMode = true end
     GnomeLevelUpDB.schemaVersion = DATABASE_SCHEMA_VERSION
 end
 ns.InitDB = InitDB
@@ -594,18 +650,46 @@ EnsureDatabase = function()
 end
 ns.EnsureDatabase = EnsureDatabase
 
+function ns.SetHorizontalMode(enabled)
+    EnsureDatabase()
+    ns.db.horizontalMode = enabled == true
+    if ns.db.horizontalMode then ns.db.compactMode = true end
+    if ns.PositionFrame and ns.levelUpFrame then ns.PositionFrame(ns.levelUpFrame) end
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end
+
+function ns.GetPortraitRingSettingKey(setting)
+    return (ns.db and ns.db.horizontalMode and "horizontalPortraitRing" or "portraitRing") .. setting
+end
+
+function ns.GetPopupScale()
+    EnsureDatabase()
+    return ns.db.horizontalMode and (ns.db.horizontalScale or 0.9) or (ns.db.scale or 1)
+end
+
+function ns.SetPopupScale(value)
+    EnsureDatabase()
+    ns.db[ns.db.horizontalMode and "horizontalScale" or "scale"] = math.max(0.5, math.min(2, value))
+end
+
 local CLASS_COLOR_KEYS = {
-    "title", "level", "statsHeader", "abilitiesHeader", "abilityName", "portraitBorder", "animatedElements",
+    "title", "level", "statsHeader", "abilitiesHeader", "abilityName", "portraitBorder", "animatedElements", "divider",
 }
 
-local function ApplyCurrentClassColors()
-    local _, classToken = UnitClass("player")
-    local classColor = ns.CLASS_COLORS and ns.CLASS_COLORS[classToken]
-    if not classColor then return end
+function ns.GetClassColor(key)
+    local _, token = UnitClass("player")
+    local base = ns.CLASS_COLORS and ns.CLASS_COLORS[token]
+    if not base then return end
+    local overrides = ns.db and ns.db.classColorOverrides and ns.db.classColorOverrides[token]
+    if overrides and overrides[key] then return overrides[key] end
+    if key == "divider" then return { base[1] * .8, base[2] * .8, base[3] * .8 } end
+    return base
+end
 
+local function ApplyCurrentClassColors()
     for _, key in ipairs(CLASS_COLOR_KEYS) do
-        local overrides = ns.db.classColorOverrides and ns.db.classColorOverrides[classToken]
-        ns.db.colors[key] = CopySetting(overrides and overrides[key] or classColor)
+        local color = ns.GetClassColor(key)
+        if color then ns.db.colors[key] = CopySetting(color) end
     end
 end
 
@@ -790,6 +874,7 @@ function ns.SetAddonEnabled(enabled)
 end
 
 function ns.ResetOptionsToDefaults()
+    if GnomeLevelUpCharacterDB then GnomeLevelUpCharacterDB.portraitModelTuning = nil end
     -- Restore the settings page to the default values.
     ns.InvalidateColorPicker()
     ResetSettingKeys(ns.RESETTABLE_SETTING_KEYS)
@@ -847,6 +932,13 @@ ns.PARTICLE_SETTINGS = {
     { group = "sparkle", countLabel = "Ability sparkle count", sizeLabel = "Ability sparkle size (%)", opacityLabel = "Ability sparkle opacity (%)",
         count = "particleSparkleCount", size = "particleSparkleSize", opacity = "particleSparkleOpacity", maxCount = 8 },
 }
+ns.FRAME_INSET_SETTING = {
+    value = "frameInset", valueLabel = "Frame inset (px)", min = 0, max = 100, layout = true,
+}
+ns.FIREWORK_SETTINGS = {
+    size = "fireworkSize", sizeLabel = "Firework size (%)",
+    opacity = "fireworkOpacity", opacityLabel = "Firework opacity (%)",
+}
 ns.EFFECT_OPACITY_SETTINGS = {
     { opacity = "starburstOpacity", opacityLabel = "Starburst opacity (%)", precision = 10 },
     { opacity = "portraitPulseOpacity", opacityLabel = "Portrait pulse opacity (%)", precision = 10 },
@@ -856,17 +948,117 @@ function ns.GetParticleValue(spec, kind)
     local key = spec[kind]
     local value = tonumber(ns.db and ns.db[key])
     if not value or value ~= value then value = ns.defaults[key] end
-    local minimum = kind == "size" and 25 or 0
-    local maximum = kind == "count" and spec.maxCount or (kind == "size" and 400 or 100)
+    local minimum = spec.min or (kind == "size" and 25 or 0)
+    local maximum = spec.max or (kind == "count" and spec.maxCount or (kind == "size" and 400 or 100))
     local precision = spec.precision or 1
     local rounded = math.floor(math.max(minimum, math.min(maximum, value)) * precision + 0.5)
     return spec.precision and rounded / precision or rounded
 end
 
+-- Portrait calibration from the worksheet and in-game tuning (22 October 2026).
+-- Values: depth, horizontal, vertical, scale %, mask %, viewport %, rotation degrees.
+local portraitModelPresets = {
+    Human = {
+        [2] = { -0.08, 0.08, -0.02, 100, 93, 105, 0 },
+        [3] = { -0.06, 0.06, 0, 100, 93, 105, -10 },
+    },
+    Dwarf = {
+        [2] = { -0.12, 0.09, -0.06, 100, 93, 105, 6 },
+        [3] = { -0.13, 0.07, -0.03, 100, 93, 105, 0 },
+    },
+    NightElf = {
+        [2] = { -0.06, 0.12, -0.01, 100, 93, 105, 0 },
+        [3] = { -0.08, 0.05, 0, 100, 93, 105, 1 },
+    },
+    Gnome = {
+        [2] = { -0.06, 0.1, -0.03, 100, 93, 105, 0 },
+        [3] = { -0.04, 0.1, -0.08, 100, 93, 105, -6 },
+    },
+    Orc = {
+        [2] = { -0.31, 0.16, 0.01, 100, 93, 105, 0 },
+        [3] = { -0.08, 0.14, -0.05, 100, 93, 105, -6 },
+    },
+    Scourge = {
+        [2] = { -0.03, 0.05, 0, 100, 93, 105, 0 },
+        [3] = { -0.23, 0.06, 0.04, 100, 93, 105, 7 },
+    },
+    Tauren = {
+        [2] = { -0.37, 0.41, -0.07, 100, 93, 105, -4 },
+        [3] = { -0.13, 0.23, -0.01, 100, 93, 105, -3 },
+    },
+    Troll = {
+        [2] = { -0.05, 0.23, 0.06, 100, 93, 105, -10 },
+        [3] = { -0.08, 0.19, 0, 100, 93, 105, -15 },
+    },
+    Skyborne = {
+        [2] = { -0.1, 0.04, 0.03, 100, 93, 105, 9 },
+        [3] = { -0.02, -0.02, 0, 100, 93, 105, -3 },
+    },
+}
+local portraitModelIndexes = {
+    portraitModelX = 1, portraitModelY = 2, portraitModelZ = 3,
+    portraitModelScale = 4, portraitModelMaskSize = 5,
+    portraitModelViewportSize = 6, portraitModelRotation = 7,
+}
+local portraitRaceIDs = { [1] = "Human", [2] = "Orc", [3] = "Dwarf",
+    [4] = "NightElf", [5] = "Scourge", [6] = "Tauren", [7] = "Gnome", [8] = "Troll" }
+local portraitIdentityReady, portraitIdentity, portraitPreset
+
+function ns.RefreshPlayerModelIdentity()
+    local name, token, raceID
+    if UnitRace then name, token, raceID = UnitRace("player") end
+    local sex = UnitSex and UnitSex("player")
+    -- Prefer the client token, including custom races, before standard race IDs.
+    local race = portraitModelPresets[token] and token
+        or (portraitModelPresets[name] and name) or portraitRaceIDs[raceID]
+    portraitPreset = race and portraitModelPresets[race][sex]
+    portraitIdentity = portraitPreset and (race .. ":" .. sex) or nil
+    portraitIdentityReady = true
+end
+
+function ns.GetPlayerModelSetting(key)
+    if not portraitIdentityReady then ns.RefreshPlayerModelIdentity() end
+    local index = portraitModelIndexes[key]
+    if portraitPreset and index then
+        local all = GnomeLevelUpCharacterDB and GnomeLevelUpCharacterDB.portraitModelTuning
+        local tuning = type(all) == "table" and all[portraitIdentity]
+        local value = type(tuning) == "table" and tonumber(tuning[key])
+        if value and value == value and value ~= math.huge and value ~= -math.huge then return value end
+        return portraitPreset[index]
+    end
+    return tonumber(ns.db and ns.db[key]) or ns.defaults[key]
+end
+
+function ns.SetPlayerModelSetting(key, value)
+    if not portraitModelIndexes[key] then return end
+    ns.RefreshPlayerModelIdentity()
+    if portraitIdentity then
+        -- Calibration belongs to this character, not a shared appearance profile.
+        GnomeLevelUpCharacterDB = GnomeLevelUpCharacterDB or {}
+        local all = GnomeLevelUpCharacterDB.portraitModelTuning
+        if type(all) ~= "table" then all = {}; GnomeLevelUpCharacterDB.portraitModelTuning = all end
+        if type(all[portraitIdentity]) ~= "table" then all[portraitIdentity] = {} end
+        all[portraitIdentity][key] = value
+    else
+        ns.db[key] = value
+    end
+end
+
+ns.MODEL_SETTINGS = {
+    { key = "portraitModelRotation", label = "3D model rotation (degrees)", min = -180, max = 180 },
+    { key = "portraitModelX", label = "3D model depth", min = -5, max = 5 },
+    { key = "portraitModelY", label = "3D model horizontal position", min = -5, max = 5 },
+    { key = "portraitModelZ", label = "3D model vertical position", min = -5, max = 5 },
+    { key = "portraitModelScale", label = "3D model scale (%)", min = 25, max = 300 },
+    { key = "portraitModelMaskSize", label = "3D mask size (%)", min = 25, max = 300 },
+    { key = "portraitModelViewportSize", label = "3D viewport size (%)", min = 25, max = 300 },
+}
+
 ns.PORTRAIT_CHOICES = {
     { value = "none", label = "None" },
     { value = "class",  label = "Class icon" },
     { value = "player", label = "Player portrait" },
+    { value = "player3d", label = "Player 3D portrait" },
 }
 
 
@@ -1019,15 +1211,15 @@ local function BuildDebugGrimoirePreview(limit)
     return grimoires
 end
 
-function ns.PreviewLevelUp(debugSkills)
+function ns.PreviewLevelUp(debugSkills, milestoneLevel)
     -- Use a predictable example so the options preview does not depend on live data.
     EnsureDatabase()
     -- A preview does not fire PLAYER_LEVEL_UP, so queue the popup cleanup below.
-    local currentLevel = UnitLevel("player")
+    local currentLevel = milestoneLevel or UnitLevel("player")
 
     local trainerAbilities = {}
     if debugSkills then
-        trainerAbilities = BuildDebugAbilityPreview(currentLevel, 5)
+        trainerAbilities = BuildDebugAbilityPreview(currentLevel, 15)
     else
         -- Always include both styles, even if this character has no trainer data.
         trainerAbilities = {
@@ -1052,7 +1244,7 @@ function ns.PreviewLevelUp(debugSkills)
     local _, classToken = UnitClass("player")
     local warlockPetAbilities = {}
     if debugSkills then
-        warlockPetAbilities = BuildDebugGrimoirePreview(5)
+        warlockPetAbilities = BuildDebugGrimoirePreview(15)
     elseif classToken == "WARLOCK" then
         warlockPetAbilities[1] = {
             name = "Firebolt (Rank 2)",
@@ -1074,7 +1266,7 @@ function ns.PreviewLevelUp(debugSkills)
         { name = _G["SPIRIT"] or "Spirit", old = 16, new = 18 },
         { name = _G["HEALTH"] or "Health", old = 200, new = 217, kind = "health" },
         { name = _G["MANA"] or "Mana", old = 150, new = 170, kind = "mana" },
-    }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities, true)
+    }, trainerAbilities, unlearnedWeaponSkills, ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime(), warlockPetAbilities, true, milestoneLevel ~= nil)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -1082,10 +1274,27 @@ end
 local frame = CreateFrame("Frame")
 ns.eventFrame = frame
 
+-- Wait until the loading screen has released the UI before opening setup.
+-- A newer world/loading event supersedes an older queued check.
+local setupCheckToken = 0
+local setupLoading = true
+local function QueueFirstTimeSetup()
+    setupCheckToken = setupCheckToken + 1
+    if ns.db and ns.db.firstTimeSetupCompleted then return end
+    local token = setupCheckToken
+    local function check()
+        if token ~= setupCheckToken or setupLoading then return end
+        if ns.ShowFirstTimeSetupIfNeeded then ns.ShowFirstTimeSetupIfNeeded() end
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(1, check) else check() end
+end
+
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("LOADING_SCREEN_ENABLED")
+frame:RegisterEvent("LOADING_SCREEN_DISABLED")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
 
 frame:SetScript("OnEvent", function(self, event, ...)
@@ -1121,6 +1330,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "PLAYER_LOGIN" then
         EnsureDatabase()
+        QueueFirstTimeSetup()
         ns.ApplyAddonState(false)
         if ns.SyncClassColors then ns.SyncClassColors() elseif ns.ApplyColors then ns.ApplyColors() end
         if ns.RefreshBaseline then
@@ -1130,10 +1340,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
             and ns.MarkKnownTrainerSkills and ns.SnapshotSpellBook then
             ns.MarkKnownTrainerSkills(ns.SnapshotSpellBook())
         end
+    elseif event == "LOADING_SCREEN_ENABLED" then
+        setupLoading = true
+        setupCheckToken = setupCheckToken + 1
+    elseif event == "LOADING_SCREEN_DISABLED" then
+        setupLoading = false
+        QueueFirstTimeSetup()
     elseif event == "PLAYER_REGEN_ENABLED" then
-        if ns.ShowFirstTimeSetupIfNeeded then ns.ShowFirstTimeSetupIfNeeded() end
+        QueueFirstTimeSetup()
     elseif event == "PLAYER_ENTERING_WORLD" then
-        if ns.ShowFirstTimeSetupIfNeeded then ns.ShowFirstTimeSetupIfNeeded() end
+        QueueFirstTimeSetup()
         ns.ApplyAddonState(false)
         if ns.SyncClassColors then ns.SyncClassColors() elseif ns.ApplyColors then ns.ApplyColors() end
     elseif event == "PLAYER_LEVEL_UP" then
@@ -1160,6 +1376,14 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         if ns.ToggleControllerOptions then ns.ToggleControllerOptions(true, true) end
     elseif msg == "debugskills" then
         ns.PreviewLevelUp(true)
+    elseif msg == "milestone" or msg:match("^milestone%s") then
+        local level = msg == "milestone" and math.max(10, math.ceil(UnitLevel("player") / 10) * 10)
+            or tonumber(msg:match("^milestone%s+(%d+)$"))
+        if level and level >= 10 and level <= 1000 and level % 10 == 0 then
+            ns.PreviewLevelUp(false, level)
+        else
+            print("|cff3fe0ffGnomeLevelUp|r: /glu milestone [level] — use a multiple of 10 (10–1000).")
+        end
     elseif msg == "test" then
         ns.PreviewLevelUp()
     elseif msg == "sound" then
@@ -1245,7 +1469,8 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         end
     else
         print("|cff3fe0ffGnomeLevelUp|r commands:")
-        print("  /glu test          - preview the level-up screen")
+        print("  /glu test          - preview the normal level-up screen")
+        print("  /glu milestone [level] - preview milestone effects (e.g. 30)")
         print("  /glu options       - open the settings page (also under Options > AddOns)")
         print("  /glu sound         - toggle the level-up sound")
         print("  /glu duration N    - set how long the screen stays up (seconds)")

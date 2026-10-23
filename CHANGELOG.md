@@ -1,6 +1,28 @@
 # Changelog
 
-## 1.4.0 — Unreleased
+## 1.4.5 — 23/10/2026
+
+##### New Features
+
+* Added more impactful Milestone celebrations every 10 levels.
+* Added "screenshot on milestone" toggle.
+
+##### Customization Options
+
+* Added new Horizontal layout mode.
+* Added new background and frame effects.
+* Completely redesigned "Modern" theme. Modern now has unique animations compared to themed mode.
+* Added 3D Portrait mode. (Thanks 3Zeah!)
+
+##### Bug Fixes and Optimization
+
+* Redesigned first time setup, updated it to include important settings.
+* Further optimization to reduce and pool memory usage.
+* Fixed a memory leak when /glu test is repeatedly fired.
+
+
+
+## 1.4.0
 
 ##### New Features
 
@@ -10,14 +32,16 @@ updated Hunter and Warlock pet training. Available skills no longer require trai
 * Added translations for all supported Forever clients. Only French and Spanish (ES) have been human reviewed, if you're a native speaker and see any errors in the machine translation please let me know!
 
 ##### Customization Options
+
 * Added a host of new animations, all customizable and togglable depending on your likes!
 * Added profile import/export options and per-character profile saving.
 
 ##### Bug Fixes and Optimization
 
-* Improved API compatibility, animation performance and popup cleanup. 
+* Improved API compatibility, animation performance and popup cleanup.
 * Removed the Classic level-up chat option now provided by Blizzard.
 * Improved performance across all options, even with new animations enabled less resources are consumed!
+
 
 
 ## 1.3.8 - 15/10/2026

@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.4.0**
+**Development version: 1.4.5**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -39,11 +39,13 @@ The settings include themes, separate frame/background/portrait-ring choices,
 fonts, sounds, animation, compact layout and trainer filters. Modern is the
 default theme, with Player Portrait and no portrait ring. Time to Level and
 right-click closing are enabled by default.
+Non-Modern themes default to a 0px content inset inside Modern-sized frames. The close button stays on the
+outer frame, and portrait artwork may overlap the border.
 Existing saved preferences are preserved. Selecting Modern clears its ring.
 Blizzard handles level-up chat; GLU does not replace or suppress that message.
 
-On first run, the setup panel welcomes you to GnomeLevelUp and offers Language, Theme, Compact Layout,
-Time to Level, a combined pet-skills switch, Enable Animations, controller
+On first run, the setup panel welcomes you to GnomeLevelUp and offers Language, Theme, Compact Layout, Horizontal layout,
+Time to Level, a combined pet-skills switch, Enable Animations, Background Animations, controller
 glyphs, unlearned weapon skills, learning costs, Right-click to Close, Ignore
 Mouseover Delay and Use Class Colours. The setup pet switch controls both Hunter skills and Warlock training/grimoires;
 the full menus retain separate controls. Disabling Enable Animations uses
@@ -124,8 +126,8 @@ and **Frame edge glow**.
 
 The entrance runs from top to bottom: background, portrait/ring and level text,
 Stats Gained heading, stat block, Abilities heading, ability icons, then weapon
-training. Time-to-level appears after the stats; pet abilities follow player
-abilities. Hidden optional sections add no wait. Prices, scrollbars, dividers
+training. Time-to-level appears after the stats; Abilities and Grimoires enter
+together. Hidden optional sections add no wait. Prices, scrollbars, dividers
 and text glows follow their section. Animation speed scales the entrance;
 Reduced Motion fades every section in together over 0.25 seconds (scaled by
 Animation speed), with all decorative animated elements hidden. The display-duration timer
@@ -389,3 +391,255 @@ In the trainer report window, **Copy** selects the JSON for **Ctrl+C** (Command+
 also works). After that shortcut, the visible field clears; saved observations
 remain available when you reopen the report. WoW restricts direct clipboard
 writes, so clicking Copy alone does not erase the field or claim a clipboard copy.
+
+Background Animations in first-time setup switches decorative 1.4.0 effects
+off together: portrait pulse/starburst/settle, motes, embers, edge glow, ability
+glow/sparkles, stat highlights and divider reveals. Text movement, stat counting
+and entrance/exit fades remain. Individual effect choices are kept, so enabling
+the master switch restores them. This differs from Reduced Motion.
+
+
+### Horizontal popup layout
+
+Enable **Horizontal layout** in Appearance, the controller Mode page or first-time
+setup. It works independently of **Compact Layout**. The larger player portrait
+sits at the centre-left with a stronger pulse, stats and Time to Level occupy
+the next column, then Abilities and a separate Warlock Grimoires column when
+present. Portrait None keeps only the level in the left column.
+
+In both Horizontal sizes, abilities fill four down before using a second and
+third column. Up to 12 fit before a vertical scrollbar appears at 13. Training
+columns use their actual content width, with a 28-unit gap between Abilities
+and Grimoires. The vertical popup keeps its prior ability layout. Column widths
+account for the display and popup scale; long stat values fit their column.
+
+Horizontal defaults to **90% (0.9)** scale and a top-centre position, 80 UI units
+below the top. Horizontal and vertical positions/scales are saved independently;
+the Popup scale control edits the active layout. Orientation and both layouts'
+positions/scales travel in profiles. Theme changes preserve the horizontal
+position/scale; Reset All Options restores defaults. Portrait effects follow the
+portrait. Reduced Motion and Background Animations retain their behavior.
+
+Modern defaults to **80% opacity** on fresh settings or when selected again.
+Its original soft backdrop has a masked edge, shaded stat rows and accent bars
+that extend to 94% of the frame width. Bars update with Animated Elements colour
+changes immediately and reveal from the centre with Reveal dividers. Reduced
+Motion and Background Animations also apply to these reveals. The backdrop
+expands outward in sync with the bars. Custom themes
+retain their artwork.
+
+First-time setup opens shortly after login/world loading has settled and retries
+when combat ends if necessary. **Finish Setup** saves completion. Closing it
+without finishing allows it to return next login; `/glu firsttime` always opens
+it manually. Older builds recorded only an attempted opening, so users with
+that old marker will receive setup once more until they finish it.
+
+
+`/glu debugskills` shows 15 abilities and 15 grimoires, exercising the full
+four-down, three-across grids and overflow. Horizontal Abilities reserves three
+columns: one populated column is centred, and two are centred as a pair. Icons
+retain their base sizes as lists grow. All twelve grid positions fit before
+scrolling; the shared scrollbar sits halfway between Abilities and Grimoires
+and moves both lists, stopping each at its own end. Mouse wheel works over
+either list. Without Grimoires, the bar sits beside Abilities.
+
+Horizontal enlarges the player portrait and ring together by about 14% over
+the earlier Horizontal base, keeps their configured relative size and reserves enough height
+for four full skill rows, the portrait and stats/Time to Level, with additional
+bottom clearance. The 350 displayed UI-unit limit remains; whole-panel fitting
+is used for extreme scale/display settings. Weapon training is hidden and its
+option disabled in Horizontal; the saved preference returns in Vertical.
+Horizontal defaults to top centre (80 UI units below the top), while dragged
+positions remain independent for each layout. Missing or legacy vertical-default
+horizontal positions use that top-centre fallback immediately when switching.
+
+Vertical centres incomplete ability rows and removes the unused bottom
+extension, balancing top/bottom content padding. Modern's vertical backdrop
+still extends 12% further down while preserving its top edge.
+
+The 3D portrait uses model-depth occlusion adapted from Animated Default
+Portraits 1.1.3 by dvd (see THIRD_PARTY_NOTICES.md). Two almost-invisible built-in
+gears models occlude the player model outside their circular holes. Their
+15-degree relative rotation improves the polygonal circle outline. The black
+backing remains confined to its circular texture; there is no opaque square
+cover. Mask creation is lazy, shared with the existing portrait lifecycle, and
+adds no addon dependency or global portrait hooks. This relies on client model
+rendering behavior and needs an in-game visual check on Forever.
+
+Horizontal ring geometry defaults to 1.15× scale and a +1 Y offset. The ring
+scale/offset controls edit the active layout; vertical ring geometry is retained.
+Horizontal ring settings are also included in profiles and full reset.
+
+Choose **Player 3D portrait** in the Portrait dropdown for a live player model
+inside the existing ring. It shares the portrait fade, settle, horizontal size
+and effects. Reduced Motion or disabled Background Animations pauses its idle
+movement. The model is created only when selected and reused thereafter. The
+small controller/setup header preview remains a flat player portrait.
+
+With Debug enabled, numeric fields control the 3D model rotation (degrees),
+depth, horizontal/vertical position and scale (%). Edits apply immediately and
+are stored in profiles. Selecting Horizontal layout enables Compact Layout;
+Compact stays locked on while Horizontal is enabled; it becomes selectable
+again in Vertical.
+
+In Horizontal mode, Time to Level sits directly below stats with a 2-unit gap;
+the separators between/under those blocks are hidden and their height removed.
+Vertical mode keeps both separators and its existing spacing.
+
+With Debug enabled, **3D mask size (%)** adjusts the circular model-depth
+opening independently of the model and ring size. Range: 25–300; 100 aligns
+with the black backing circle. Changes apply immediately after Enter or leaving
+the field. The setting is saved in profiles and resets to 100 with full reset.
+
+Horizontal centres the stat rows and Time to Level together between the header
+divider and lower accent, retaining the usual section gap above Time to Level.
+The Stats Gained heading stays at the top of its column. Vertical training
+headings use full column width, CENTER horizontal and MIDDLE vertical alignment.
+
+**3D viewport size (%)**, also Debug-only, controls the rectangular model frame;
+range 25–300, default 100. The depth-mask opening remains tied to the backing
+circle as the viewport grows. Start both mask and viewport at 100% for testing,
+then report any adjustments needed. The model itself still has separate scale,
+rotation and position fields. Model-mask calibration refreshes for viewport,
+portrait, ring, settle and effective-scale changes. Mask models are paused and
+remain children of the portrait, so hiding the popup hides their rendering.
+
+
+### Race and sex calibration
+
+The 3D portrait automatically uses the 18 tested male/female presets for Human,
+Dwarf, Night Elf, Gnome, Orc, Undead, Tauren, Troll and Skyborne from the supplied
+worksheet, including rotation. Draenei and Blood Elf have no Forever preset.
+The original workbook is in Tools/Portrait-Race-Sex-Tuning.xlsx.
+Unknown races or sex values use the existing configurable model defaults.
+
+Debug model fields show the effective preset values. Editing one stores an
+absolute override for that race/sex in this character's SavedVariables, separate
+from shared/imported appearance profiles. Reset All Options clears this
+character's overrides and restores the shipped presets. Existing profile model
+fields remain available as the fallback for races without a preset; they do not
+override calibrated races. Character race/sex is refreshed on portrait/model
+refresh, with mask geometry using the same effective calibration as the model.
+
+
+### Milestone celebrations
+
+Real level-ups at positive multiples of ten use stronger effects for that popup:
+twice the configured particle counts (within the existing per-effect caps),
+25% larger/brighter particles, more frequent ambient ability sparkles, a larger
+starburst/pulse and brighter edge glow. Zero counts and disabled effects remain
+off. Reduced Motion and Background Animations keep their existing behavior.
+The next nine levels use the ordinary settings; saved tuning is never modified.
+Pools are reused after the first larger celebration.
+
+Use `/glu milestone` to preview the nearest milestone at or above your current
+level, or `/glu milestone 30` to choose a multiple of ten (10–1000). `/glu test`
+and `/glu debugskills` remain normal previews even on a milestone-level character.
+
+
+Milestone popups use the original portrait pulse with two thin expanding shockwaves, a repeating
+clipped-glyph gleam across the level text, brighter decelerating bursts on every
+stat with alternating left/right origins after the last stat count, and paired light trails moving from divider centres toward
+their ends after each section lands. These use the Animated Elements colour;
+the text gleam lightens that colour for readability. The portrait pulse follows
+Portrait Animation and require a player portrait; divider trails follow Reveal
+Dividers; the completion burst requires Emphasize Stat Gains and improved stats.
+All four follow Background Animations and Reduced Motion. The pulse, fireworks
+and trails play once per popup; the gleam repeats every 3 seconds. They share the existing visible-only driver, with lazily allocated reusable
+textures. `/glu milestone` previews all enabled milestone effects.
+
+
+Animation settings include **Milestone Animations**, enabled by default in both
+normal and controller menus, saved in profiles and restored by Reset All Options.
+Turning it off disables all milestone boosts/accents and restores normal level
+text. Milestone level text is 43% larger and uses no added bold weight, retaining custom fonts and non-Latin coverage.
+The larger static text remains available with Reduced Motion. Horizontal
+milestone starbursts are 20% smaller than the earlier milestone version;
+vertical and ordinary starbursts retain their sizes. Stat bursts emit up to
+16 particles per visible row, with increased brightness/size. Stat fireworks
+play one row at a time with alternating origins, roughly twice the original
+travel distance and a fixed random opacity multiplier of 0.9–1.1 per particle.
+Their non-overlapping windows shorten when necessary to fit the popup duration.
+The brighter text gleam repeats start-to-start every 3 seconds, and Modern
+top/bottom bars use the same centre-out trails as the section dividers.
+
+
+The portrait pulse uses the original circle-frame artwork and .65s timing,
+with two thin milestone shockwaves. The experimental thick-ring artwork is no
+longer used by the runtime (retained for rollback). The brighter, wider level gleam repeats every 3 seconds after its first
+pass. Firework slots are .50s / speed (shortened further if the popup needs it),
+and their derived base opacity is 10% higher, preserving per-particle variation.
+Horizontal portrait motes start beyond the ring edge and drift 70% farther;
+vertical and contained starburst motes retain their existing paths.
+
+Default font explicitly selects Fonts/FRIZQT__.TTF and clears customFontPath.
+It does not use STANDARD_TEXT_FONT, which skins or clients can replace.
+Invalid/empty font paths also fall back to Friz for existing and new stat text.
+First-time setup lists Horizontal layout in slot 5, after Time to Level.
+
+
+### Grimoire space and entrance
+
+In Horizontal layout, a visible Grimoire section reserves the same three-column,
+four-down grid as Abilities. A single populated column is centred in that space;
+two populated columns are centred as a pair. Overflow keeps the shared scrollbar
+and fixed icon sizes. Modern's dark horizontal backdrop extends another 24px on
+each side while Grimoires are visible, including during its expanding reveal;
+that extra coverage is removed when the section disappears. Custom artwork and
+vertical backdrop dimensions remain unchanged.
+
+Abilities and Grimoires now share their header fade start and icon entrance
+start in both layouts. Each list retains its own per-icon stagger. Later sections
+and popup duration wait for whichever list finishes later.
+
+
+Milestone gleam brightness is slightly reduced while preserving its 3s repeat.
+Fireworks explicitly render above both the content and background frame levels,
+so an opaque backdrop cannot cover them. For lists longer than nine skills,
+ability highlights and sparkles become eligible after the first nine entrances
+finish (plus the existing .5s delay), instead of waiting for every skill. Later
+icons still wait for their own entrance; each effect keeps its existing stagger.
+This applies to both the Abilities and Grimoire lists; ordinary shorter lists
+retain their previous completion gate.
+
+Horizontal headers sit 4px higher and excess vertical padding is reduced,
+trimming about 10 layout pixels in standard Compact/Regular popups without
+shrinking icons or fonts. The stats/Time-to-Level block still stays together
+and centres in the available space; content-fit safeguards remain active.
+
+Milestone portrait glows expand 10% further and gain 10% opacity (capped at full
+opacity). Stat fireworks visit rows in a shuffled order, alternating randomized
+left/right origins across the text width, with varied size and taller spread.
+Ability wheel scrolling works over icons and the scrollbar, and layout refreshes
+retain the current offset. The 2D player portrait is 5% smaller inside its ring.
+First-time setup includes Portrait in slot 4, before Time to Level and Horizontal.
+
+Firework size and opacity can be tuned with numeric fields in Debug. Defaults
+are 80% size and 70% opacity. Compact horizontal mode
+has its own 2px default section padding; Section padding edits the active layout value.
+Overflow lists with more than nine skills skip entrances for off-screen icons.
+Switching orientation refreshes the 3D portrait camera and its mask together.
+Female Troll defaults use horizontal position 0.18 and rotation -15 degrees.
+
+Textured themes never enlarge the popup beyond the equivalent Modern layout.
+Their contents scale down together when needed to preserve the 5px inset.
+
+Debug includes **Frame inset (px)**, a numeric field from 0 to 100 (default 0).
+It adjusts non-Modern content clearance without increasing the outer frame.
+
+Horizontal popups calculate equal whitespace at each end from the portrait/level
+column and the final training column, including an external scrollbar.
+
+Debug numeric fields include small +/- buttons alongside narrower text boxes.
+3D depth/position steps by 0.01, rotation by 1 degree, and percentages/counts/inset
+by 1. Female Gnome defaults are depth -0.05, horizontal 0.10, vertical -0.03 and
+rotation -20 degrees.
+
+Updated 15 race/sex 3D portrait calibrations from in-game tuning on 22 October.
+The detailed values and rollback instructions are in Tools/REFACTOR_LOG_2026-10-19.md.
+
+Seven additional effects can be compared individually under Animation: portrait
+ring glint, new-ability reveal shine, milestone anticipation, stat impact sparks,
+background depth, closing animation, and milestone color transition. All default
+on and respect Reduced Motion and Background Animations. Test ordinary effects
+with `/glu test` and milestone effects with `/glu milestone 30`.

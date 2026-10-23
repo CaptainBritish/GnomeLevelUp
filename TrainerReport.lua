@@ -128,7 +128,7 @@ end
 
 function ns.GetTrainerReportJSON()
     local store = Store()
-    return JSON({ addon = ADDON_NAME, addonVersion = "1.4.0", schemaVersion = 1,
+    return JSON({ addon = ADDON_NAME, addonVersion = "1.4.5", schemaVersion = 1,
         catalogueRevision = revision, changes = store and store.changes or {},
         truncated = store and store.truncated == true or false })
 end

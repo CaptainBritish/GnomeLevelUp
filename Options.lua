@@ -82,7 +82,7 @@ local function BuildOptions()
     local BLACK_COLOR = { 0, 0, 0 }
 
     local FONT_CHOICES = {
-        { value = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", label = "Default font", previewFont = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF" },
+        { value = ns.DEFAULT_FONT_PATH, label = "Default font", previewFont = ns.DEFAULT_FONT_PATH },
         { value = "Fonts\\ARIALN.TTF",    label = "Arial Narrow", previewFont = "Fonts\\ARIALN.TTF" },
         { value = "Fonts\\SKURRI.TTF",    label = "Skurri", previewFont = "Fonts\\SKURRI.TTF" },
         { value = "Fonts\\MORPHEUS.TTF",  label = "Morpheus", previewFont = "Fonts\\MORPHEUS.TTF" },
@@ -490,8 +490,8 @@ local function BuildOptions()
         local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
         version:SetTextColor(0.70, 0.70, 0.70)
-        local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.4.0"
-        version:SetText(ns.L("Version %s", tostring(addonVersion or "1.4.0")))
+        local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.4.5"
+        version:SetText(ns.L("Version %s", tostring(addonVersion or "1.4.5")))
 
         local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
@@ -503,13 +503,29 @@ local function BuildOptions()
     AddSectionHeader("Appearance", "appearance")
 
     local appearanceRow = y
-    AddDropdown("Portrait", ns.PORTRAIT_CHOICES,
+    local _, portraitDropdown = AddDropdown("Portrait", ns.PORTRAIT_CHOICES,
         function() return ns.db.portraitMode or "class" end,
         function(value)
             ns.db.portraitMode = value
             ns.RefreshClassIcon()
             ns.RefreshPopupLayout()
         end, appearanceRow, 140, LEFT, CONTROL_X)
+
+    local function PortraitWarning(self)
+        if ns.db.portraitMode ~= "player3d" then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(ns.L(ns.PORTRAIT_MEMORY_WARNING), 1, .2, .2, 1, true)
+        GameTooltip:Show()
+    end
+    local function HidePortraitWarning() GameTooltip:Hide() end
+    portraitDropdown:EnableMouse(true)
+    portraitDropdown:HookScript("OnEnter", PortraitWarning)
+    portraitDropdown:HookScript("OnLeave", HidePortraitWarning)
+    local portraitDropdownButton = _G[portraitDropdown:GetName() .. "Button"]
+    if portraitDropdownButton then
+        portraitDropdownButton:HookScript("OnEnter", PortraitWarning)
+        portraitDropdownButton:HookScript("OnLeave", HidePortraitWarning)
+    end
 
     local portraitRingDropdown
     if ns.PORTRAIT_RING_CHOICES then
@@ -630,9 +646,9 @@ local function BuildOptions()
 
     AddStepper("Section padding",
         function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
-        function() return ns.db.sectionPadding end,
+        function() return ns.GetSectionPadding() end,
         function(dir)
-            ns.db.sectionPadding = math.max(0, math.min(30, (tonumber(ns.db.sectionPadding) or 8) + dir))
+            ns.SetSectionPadding(ns.GetSectionPadding() + dir)
             ns.RefreshPopupLayout()
         end, nil, nil, nil, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT, y)
     y = y - 34
@@ -756,71 +772,85 @@ local function BuildOptions()
         { "bottomLeft", "Bottom-left corner" }, { "bottom", "Bottom edge" },
         { "bottomRight", "Bottom-right corner" },
     }
-    local textureSwatches = {}
-    local textureTransformControls = {}
-    local textureGridStartY = y
-    for _, entry in ipairs(textureColorChoices) do
-        local index = _
-        local key, label = entry[1], entry[2]
-        local column = (index - 1) % 2
-        local row = math.floor((index - 1) / 2)
-        local rowY = textureGridStartY - row * 34
-        local x0 = LEFT + column * 270
-        textureSwatches[key] = AddColorPicker(ns.L("%s hue", ns.L(label)),
-            function()
-                return (ns.db.backgroundTextureColors and ns.db.backgroundTextureColors[key]) or WHITE_COLOR
-            end,
-            function(color)
-                ns.db.backgroundTextureColors[key] = color
-                ns.ApplyBackgroundAppearance()
-            end, x0, rowY, true)
+    local debugBuilders = {}
+    -- Reserve ordering IDs only; measured layout adds no blank space for them.
+    local function DeferDebugControls(height, build)
+        local startY, section = y, currentSection
+        debugBuilders[#debugBuilders + 1] = function()
+            local savedY, savedSection = y, currentSection
+            y, currentSection = startY, section
+            build()
+            y, currentSection = savedY, savedSection
+        end
+        y = y - height
     end
-    y = textureGridStartY - math.ceil(#textureColorChoices / 2) * 34
+    DeferDebugControls(math.ceil(#textureColorChoices / 2) * (34 + 64), function()
+        local textureSwatches = {}
+        local textureTransformControls = {}
+        local textureGridStartY = y
+        for _, entry in ipairs(textureColorChoices) do
+            local index = _
+            local key, label = entry[1], entry[2]
+            local column = (index - 1) % 2
+            local row = math.floor((index - 1) / 2)
+            local rowY = textureGridStartY - row * 34
+            local x0 = LEFT + column * 270
+            textureSwatches[key] = AddColorPicker(ns.L("%s hue", ns.L(label)),
+                function()
+                    return (ns.db.backgroundTextureColors and ns.db.backgroundTextureColors[key]) or WHITE_COLOR
+                end,
+                function(color)
+                    ns.db.backgroundTextureColors[key] = color
+                    ns.ApplyBackgroundAppearance()
+                end, x0, rowY, true)
+        end
+        y = textureGridStartY - math.ceil(#textureColorChoices / 2) * 34
 
-    -- Keep each texture's transform controls in a compact two-column grid.
-    local textureTransformStartY = y
-    for _, entry in ipairs(textureColorChoices) do
-        local index = _
-        local key, label = entry[1], entry[2]
-        local column = (index - 1) % 2
-        local row = math.floor((index - 1) / 2)
-        local rowY = textureTransformStartY - row * 64
-        local x0 = LEFT + column * 270
-        local _, rotationDropdown = AddDropdown(ns.L("%s rotation", ns.L(label)), ns.BACKGROUND_ROTATION_CHOICES,
-            function()
-                local transform = ns.db.backgroundTextureTransforms[key]
-                return transform and tonumber(transform.rotation) or 0
-            end,
-            function(value)
-                ns.db.backgroundTextureTransforms[key].rotation = value
-                ns.ApplyBackgroundAppearance()
-            end, rowY, 52, x0, x0 + 170, true, 64)
-        local flipRowY = rowY - 30
-        local flipH = AddCheckbox("Flip H",
-            function()
-                local transform = ns.db.backgroundTextureTransforms[key]
-                return transform and transform.flipX
-            end,
-            function(value)
-                ns.db.backgroundTextureTransforms[key].flipX = value
-                ns.ApplyBackgroundAppearance()
-            end, x0, flipRowY, true, 64, rowY)
-        local flipV = AddCheckbox("Flip V",
-            function()
-                local transform = ns.db.backgroundTextureTransforms[key]
-                return transform and transform.flipY
-            end,
-            function(value)
-                ns.db.backgroundTextureTransforms[key].flipY = value
-                ns.ApplyBackgroundAppearance()
-            end, x0 + 130, flipRowY, true, 64, rowY)
-        textureTransformControls[#textureTransformControls + 1] = {
-            dropdown = rotationDropdown,
-            flipH = flipH,
-            flipV = flipV,
-        }
-    end
-    y = textureTransformStartY - math.ceil(#textureColorChoices / 2) * 64
+        -- Keep each texture's transform controls in a compact two-column grid.
+        local textureTransformStartY = y
+        for _, entry in ipairs(textureColorChoices) do
+            local index = _
+            local key, label = entry[1], entry[2]
+            local column = (index - 1) % 2
+            local row = math.floor((index - 1) / 2)
+            local rowY = textureTransformStartY - row * 64
+            local x0 = LEFT + column * 270
+            local _, rotationDropdown = AddDropdown(ns.L("%s rotation", ns.L(label)), ns.BACKGROUND_ROTATION_CHOICES,
+                function()
+                    local transform = ns.db.backgroundTextureTransforms[key]
+                    return transform and tonumber(transform.rotation) or 0
+                end,
+                function(value)
+                    ns.db.backgroundTextureTransforms[key].rotation = value
+                    ns.ApplyBackgroundAppearance()
+                end, rowY, 52, x0, x0 + 170, true, 64)
+            local flipRowY = rowY - 30
+            local flipH = AddCheckbox("Flip H",
+                function()
+                    local transform = ns.db.backgroundTextureTransforms[key]
+                    return transform and transform.flipX
+                end,
+                function(value)
+                    ns.db.backgroundTextureTransforms[key].flipX = value
+                    ns.ApplyBackgroundAppearance()
+                end, x0, flipRowY, true, 64, rowY)
+            local flipV = AddCheckbox("Flip V",
+                function()
+                    local transform = ns.db.backgroundTextureTransforms[key]
+                    return transform and transform.flipY
+                end,
+                function(value)
+                    ns.db.backgroundTextureTransforms[key].flipY = value
+                    ns.ApplyBackgroundAppearance()
+                end, x0 + 130, flipRowY, true, 64, rowY)
+            textureTransformControls[#textureTransformControls + 1] = {
+                dropdown = rotationDropdown,
+                flipH = flipH,
+                flipV = flipV,
+            }
+        end
+        y = textureTransformStartY - math.ceil(#textureColorChoices / 2) * 64
+    end)
 
     local fontStrataRow = y
     AddDropdown("Frame strata", ns.STRATA_CHOICES,
@@ -833,8 +863,8 @@ local function BuildOptions()
     AddDropdown("Font", FONT_CHOICES,
         function() return ns.db.customFontPath or FONT_CHOICES[1].value end,
         function(value)
-            ns.db.customFontPath = value
-            ns.ApplyFont(value)
+            ns.db.customFontPath = value ~= ns.DEFAULT_FONT_PATH and value or nil
+            ns.ApplyFont(ns.db.customFontPath)
         end, fontStrataRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 270)
     y = fontStrataRow - 36
 
@@ -881,12 +911,15 @@ local function BuildOptions()
             ns.db.lockFramePosition = v
             ns.ApplyFrameLock(v)
         end, LEFT, appearanceToggleRow)
-    AddCheckbox("Compact Layout",
-        function() return ns.db.compactMode end,
+    do
+    local compactButton, compactLabel = AddCheckbox("Compact Layout",
+        function() return ns.db.horizontalMode or ns.db.compactMode end,
         function(v)
-            ns.db.compactMode = v
+            ns.db.compactMode = ns.db.horizontalMode or v
             ns.RefreshPopupLayout()
         end, LEFT + 150, appearanceToggleRow)
+    AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
+    end
     AddCheckbox("Suspend Preview",
         function() return ns.db.suspendPreview ~= false end,
         function(v)
@@ -894,6 +927,9 @@ local function BuildOptions()
             ns.RefreshPreviewSuspension()
         end, LEFT + 320, appearanceToggleRow)
     y = appearanceToggleRow - 32
+    AddCheckbox("Horizontal layout", function() return ns.db.horizontalMode end,
+        function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end, LEFT, y)
+    y = y - 32
 
     AddButton("Reset Appearance", 150, LEFT, y, function()
         ns.ResetAppearanceToDefaults()
@@ -914,18 +950,17 @@ local function BuildOptions()
                 ns.RefreshVisualEffects()
             end }
     end
-    local portraitEffect = EffectToggle("Portrait pulse and starburst", "portraitAnimation")
-    AddCheckbox(portraitEffect[1], portraitEffect[2], portraitEffect[3])
+    AddCheckboxPair(EffectToggle("Milestone Animations", "milestoneAnimations"),
+        EffectToggle("Portrait pulse and starburst", "portraitAnimation"))
     AddCheckboxPair(EffectToggle("Highlight new abilities", "highlightNewAbilities"),
         EffectToggle("Emphasize stat gains", "emphasizeStatGains"))
-    AddCheckboxPair(EffectToggle("Portrait sparks", "portraitSparks"),
-        EffectToggle("New ability sparkles", "newAbilitySparkles"))
-    local _, _, edgeCheck, edgeLabel = AddCheckboxPair(EffectToggle("Background embers", "backgroundEmbers"),
+    AddCheckboxPair(EffectToggle("Portrait motes", "portraitSparks"),
+        EffectToggle("Background motes", "backgroundEmbers"))
+    local _, _, edgeCheck, edgeLabel = AddCheckboxPair(EffectToggle("Portrait and ring settle", "portraitRingSettle"),
         EffectToggle("Frame edge glow", "frameEdgeGlow"))
     AddAvailabilityRefresh(edgeCheck, edgeLabel, function() return ns.db.backgroundMode ~= "MODERN" end)
-
-    AddCheckboxPair(EffectToggle("Portrait and ring settle", "portraitRingSettle"),
-        EffectToggle("Reveal dividers", "dividerReveal"))
+    AddCheckboxPair(EffectToggle("Reveal dividers", "dividerReveal"),
+        EffectToggle("Portrait ring glint", "portraitRingGlint"))
 
     local animationRow = y
     AddStepper("Animation speed",
@@ -945,9 +980,8 @@ local function BuildOptions()
         animationRow, 140, LEFT + 270, CONTROL_X + 270)
     y = animationRow - 36
 
-    AddCheckbox("Reduced motion",
-        function() return ns.db.reducedMotion end,
-        function(v) ns.db.reducedMotion = v; ns.RefreshVisualEffects() end)
+    local reducedMotion = EffectToggle("Reduced motion", "reducedMotion")
+    AddCheckbox(reducedMotion[1], reducedMotion[2], reducedMotion[3])
 
     AddSectionHeader("Mode", "mode")
 
@@ -958,6 +992,8 @@ local function BuildOptions()
             ns.db.minimapButtonShown = v
             ns.SetMinimapButtonShown(v)
         end, LEFT, modeRowY)
+    AddCheckbox("Screenshot milestones", function() return ns.db.screenshotMilestones end,
+        function(v) ns.db.screenshotMilestones = v end, LEFT + 270, modeRowY)
     y = modeRowY - 32
 
     AddCheckbox("Hide Blizzard level-up toast",
@@ -1018,100 +1054,154 @@ local function BuildOptions()
         end, LEFT, y)
     y = y - 32
 
-    AddCheckbox("Show all available grimoires",
-        function() return ns.db.showAllWarlockGrimoires == true end,
-        function(v) ns.db.showAllWarlockGrimoires = v end,
-        LEFT, y, true, 32, y)
-    y = y - 32
+    DeferDebugControls(32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34, function()
+        AddCheckbox("Show all available grimoires",
+            function() return ns.db.showAllWarlockGrimoires == true end,
+            function(v) ns.db.showAllWarlockGrimoires = v end,
+            LEFT, y, true, 32, y)
+        y = y - 32
 
-    local function AddVisualTuningField(spec, kind, rowY, column)
-        local key = spec[kind]
-        local label = AddLabel(spec[kind .. "Label"], rowY, LEFT + (column - 1) * 175, true)
-        local input = CreateFrame("EditBox", nil, body, "InputBoxTemplate")
-        input:SetSize(110, 24)
-        input:SetAutoFocus(false)
-        input:SetMaxLetters(8)
-        local function refresh() input:SetText(tostring(ns.GetParticleValue(spec, kind))) end
-        local function commit()
-            local value = tonumber(input:GetText())
-            if value and value == value and value ~= math.huge and value ~= -math.huge then
-                ns.db[key] = value
-                ns.db[key] = ns.GetParticleValue(spec, kind)
-                ns.RefreshVisualEffects()
+        local function AddDebugAdjustButtons(input, step, current, commit)
+            local function Make(text, direction)
+                local button = CreateFrame("Button", nil, input, "UIPanelButtonTemplate")
+                button:SetSize(22, 24)
+                button:SetText(text)
+                button:SetPoint(direction < 0 and "RIGHT" or "LEFT", input,
+                    direction < 0 and "LEFT" or "RIGHT", direction * 4, 0)
+                button:SetScript("OnClick", function()
+                    local value = tonumber(input:GetText()) or current()
+                    input:SetText(tostring(tonumber(string.format("%.4f", value + direction * step))))
+                    commit()
+                end)
+                return button
+            end
+            return Make("-", -1), Make("+", 1)
+        end
+
+        local function AddVisualTuningField(spec, kind, rowY, column)
+            local key = spec[kind]
+            local label = AddLabel(spec[kind .. "Label"], rowY, LEFT + (column - 1) * 175, true)
+            local input = CreateFrame("EditBox", nil, body, "InputBoxTemplate")
+            input:SetSize(110, 24)
+            input:SetAutoFocus(false)
+            input:SetMaxLetters(8)
+            local function refresh() input:SetText(tostring(ns.GetParticleValue(spec, kind))) end
+            local function commit()
+                local value = tonumber(input:GetText())
+                if value and value == value and value ~= math.huge and value ~= -math.huge then
+                    ns.db[key] = value
+                    ns.db[key] = ns.GetParticleValue(spec, kind)
+                    if spec.layout then ns.RefreshPopupLayout() else ns.RefreshVisualEffects() end
+                end
+                refresh()
+            end
+            input:SetScript("OnEnterPressed", function(self) commit(); self:ClearFocus() end)
+            input:SetScript("OnEditFocusLost", commit)
+            input:SetScript("OnEscapePressed", function(self) refresh(); self:ClearFocus() end)
+            local minus, plus = AddDebugAdjustButtons(input, 1,
+                function() return ns.GetParticleValue(spec, kind) end, commit)
+            LayoutCell("edit", rowY, LEFT + (column - 1) * 175, label, input, { label, input, minus, plus }, true,
+                { columns = 3, column = column, minus = minus, plus = plus })
+            refreshers[#refreshers + 1] = function()
+                if not input:HasFocus() then refresh() end
             end
             refresh()
         end
-        input:SetScript("OnEnterPressed", function(self) commit(); self:ClearFocus() end)
-        input:SetScript("OnEditFocusLost", commit)
-        input:SetScript("OnEscapePressed", function(self) refresh(); self:ClearFocus() end)
-        LayoutCell("edit", rowY, LEFT + (column - 1) * 175, label, input, { label, input }, true,
-            { columns = 3, column = column })
-        refreshers[#refreshers + 1] = function()
-            if not input:HasFocus() then refresh() end
+        for index, spec in ipairs(ns.MODEL_SETTINGS) do
+            local column = (index - 1) % 3 + 1
+            local label = AddLabel(spec.label, y, LEFT + (column - 1) * 175, true)
+            local input = CreateFrame("EditBox", nil, body, "InputBoxTemplate")
+            input:SetSize(110, 24)
+            input:SetAutoFocus(false)
+            input:SetMaxLetters(8)
+            local function refresh() input:SetText(tostring(ns.GetPlayerModelSetting(spec.key))) end
+            local function commit()
+                local value = tonumber(input:GetText())
+                if value and value == value and value ~= math.huge and value ~= -math.huge then
+                    ns.SetPlayerModelSetting(spec.key, math.max(spec.min, math.min(spec.max, value)))
+                    if ns.ApplyPlayerModelSettings then ns.ApplyPlayerModelSettings() end
+                end
+                refresh()
+            end
+            input:SetScript("OnEnterPressed", function(self) commit(); self:ClearFocus() end)
+            input:SetScript("OnEditFocusLost", commit)
+            input:SetScript("OnEscapePressed", function(self) refresh(); self:ClearFocus() end)
+            local step = (spec.key == "portraitModelX" or spec.key == "portraitModelY" or spec.key == "portraitModelZ") and 0.01 or 1
+            local minus, plus = AddDebugAdjustButtons(input, step,
+                function() return ns.GetPlayerModelSetting(spec.key) end, commit)
+            LayoutCell("edit", y, LEFT + (column - 1) * 175, label, input, { label, input, minus, plus }, true,
+                { columns = 3, column = column, minus = minus, plus = plus })
+            refreshers[#refreshers + 1] = function() if not input:HasFocus() then refresh() end end
+            refresh()
+            if column == 3 or index == #ns.MODEL_SETTINGS then y = y - 60 end
         end
-        refresh()
-    end
-    for _, spec in ipairs(ns.PARTICLE_SETTINGS) do
-        for column, kind in ipairs({ "count", "size", "opacity" }) do
-            AddVisualTuningField(spec, kind, y, column)
+        for _, spec in ipairs(ns.PARTICLE_SETTINGS) do
+            for column, kind in ipairs({ "count", "size", "opacity" }) do
+                AddVisualTuningField(spec, kind, y, column)
+            end
+            y = y - 60
+        end
+        AddVisualTuningField(ns.FIREWORK_SETTINGS, "size", y, 1)
+        AddVisualTuningField(ns.FIREWORK_SETTINGS, "opacity", y, 2)
+        AddVisualTuningField(ns.FRAME_INSET_SETTING, "value", y, 3)
+        y = y - 60
+        for column, spec in ipairs(ns.EFFECT_OPACITY_SETTINGS) do
+            AddVisualTuningField(spec, "opacity", y, column)
         end
         y = y - 60
-    end
-    for column, spec in ipairs(ns.EFFECT_OPACITY_SETTINGS) do
-        AddVisualTuningField(spec, "opacity", y, column)
-    end
-    y = y - 60
 
-    AddButton("Print performance report", 170, LEFT, y, function()
-        ns.PrintPerformanceDiagnostics()
-    end, true, y, 32)
-    AddButton("Reset performance data", 170, LEFT + 180, y, function()
-        ns.ResetPerformanceDiagnostics()
-    end, true, y, 32)
-    y = y - 32
+        AddButton("Print performance report", 170, LEFT, y, function()
+            ns.PrintPerformanceDiagnostics()
+        end, true, y, 32)
+        AddButton("Reset performance data", 170, LEFT + 180, y, function()
+            ns.ResetPerformanceDiagnostics()
+        end, true, y, 32)
+        y = y - 32
 
-    AddCheckbox("Equal-width stat text",
-        function() return ns.db.equalStatWidths == true end,
-        function(v)
-            ns.db.equalStatWidths = v
-            ns.RefreshStatTextLayout()
-        end, LEFT, y, true, 32, y)
-    y = y - 32
+        AddCheckbox("Equal-width stat text",
+            function() return ns.db.equalStatWidths == true end,
+            function(v)
+                ns.db.equalStatWidths = v
+                ns.RefreshStatTextLayout()
+            end, LEFT, y, true, 32, y)
+        y = y - 32
 
-    AddStepper("Portrait ring scale",
-        function(v) return string.format("%.2fx", v) end,
-        function() return tonumber(ns.db.portraitRingScale) or 1.0 end,
-        function(dir)
-            ns.db.portraitRingScale = math.max(0.5, math.min(2.0,
-                (tonumber(ns.db.portraitRingScale) or 1.0) + dir * 0.05))
-            ns.RefreshPortraitGeometry()
-        end, true, y, 34)
+        AddStepper("Portrait ring scale",
+            function(v) return string.format("%.2fx", v) end,
+            function() return tonumber(ns.db[ns.GetPortraitRingSettingKey("Scale")]) or 1.0 end,
+            function(dir)
+                ns.db[ns.GetPortraitRingSettingKey("Scale")] = math.max(0.5, math.min(2.0,
+                    (tonumber(ns.db[ns.GetPortraitRingSettingKey("Scale")]) or 1.0) + dir * 0.05))
+                ns.RefreshPortraitGeometry()
+            end, true, y, 34)
 
-    AddStepper("Portrait ring offset X",
-        function(v) return string.format("%+.0f", v) end,
-        function()
-            local offset = ns.db.portraitRingOffset or {}
-            return tonumber(offset.x) or 0
-        end,
-        function(dir)
-            ns.db.portraitRingOffset = ns.db.portraitRingOffset or {}
-            ns.db.portraitRingOffset.x = math.max(-50, math.min(50,
-                (tonumber(ns.db.portraitRingOffset.x) or 0) + dir))
-            ns.RefreshPortraitGeometry()
-        end, true, y, 34)
+        AddStepper("Portrait ring offset X",
+            function(v) return string.format("%+.0f", v) end,
+            function()
+                local offset = ns.db[ns.GetPortraitRingSettingKey("Offset")] or {}
+                return tonumber(offset.x) or 0
+            end,
+            function(dir)
+                ns.db[ns.GetPortraitRingSettingKey("Offset")] = ns.db[ns.GetPortraitRingSettingKey("Offset")] or {}
+                ns.db[ns.GetPortraitRingSettingKey("Offset")].x = math.max(-50, math.min(50,
+                    (tonumber(ns.db[ns.GetPortraitRingSettingKey("Offset")].x) or 0) + dir))
+                ns.RefreshPortraitGeometry()
+            end, true, y, 34)
 
-    AddStepper("Portrait ring offset Y",
-        function(v) return string.format("%+.0f", v) end,
-        function()
-            local offset = ns.db.portraitRingOffset or {}
-            return tonumber(offset.y) or 0
-        end,
-        function(dir)
-            ns.db.portraitRingOffset = ns.db.portraitRingOffset or {}
-            ns.db.portraitRingOffset.y = math.max(-50, math.min(50,
-                (tonumber(ns.db.portraitRingOffset.y) or 0) + dir))
-            ns.RefreshPortraitGeometry()
-        end, true, y, 34)
+        AddStepper("Portrait ring offset Y",
+            function(v) return string.format("%+.0f", v) end,
+            function()
+                local offset = ns.db[ns.GetPortraitRingSettingKey("Offset")] or {}
+                return tonumber(offset.y) or 0
+            end,
+            function(dir)
+                ns.db[ns.GetPortraitRingSettingKey("Offset")] = ns.db[ns.GetPortraitRingSettingKey("Offset")] or {}
+                ns.db[ns.GetPortraitRingSettingKey("Offset")].y = math.max(-50, math.min(50,
+                    (tonumber(ns.db[ns.GetPortraitRingSettingKey("Offset")].y) or 0) + dir))
+                ns.RefreshPortraitGeometry()
+            end, true, y, 34)
+
+    end)
 
     local durationScaleRow = y
     AddStepper("Display duration",
@@ -1123,9 +1213,9 @@ local function BuildOptions()
 
     AddStepper("Popup scale",
         function(v) return string.format("%.1fx", v) end,
-        function() return ns.db.scale end,
+        function() return ns.GetPopupScale() end,
         function(dir)
-            ns.db.scale = math.max(0.5, math.min(2.0, ns.db.scale + dir * 0.1))
+            ns.SetPopupScale(ns.GetPopupScale() + dir * 0.1)
         end, nil, nil, nil, LEFT + 280, CONTROL_X + 230, durationScaleRow)
     y = durationScaleRow - 34
 
@@ -1169,7 +1259,7 @@ local function BuildOptions()
     local weaponCheck, weaponLabel, costCheck, costLabel = AddCheckboxPair({
         "Show unlearned weapon skills",
         function() return ns.db.showWeaponSkills end,
-        function(v) ns.db.showWeaponSkills = v end,
+        function(v) if not ns.db.horizontalMode then ns.db.showWeaponSkills = v end end,
     }, {
         "Show learning costs",
         function() return ns.db.showTrainerCosts end,
@@ -1178,7 +1268,7 @@ local function BuildOptions()
     local function IsForeverClient()
         return ns.GetCurrentFlavor() == "forever"
     end
-    AddAvailabilityRefresh(weaponCheck, weaponLabel, IsForeverClient)
+    AddAvailabilityRefresh(weaponCheck, weaponLabel, function() return IsForeverClient() and not ns.db.horizontalMode end)
     AddAvailabilityRefresh(costCheck, costLabel, IsForeverClient)
 
     local currentLevelCheck, currentLevelLabel, petCheck, petLabel = AddCheckboxPair({
@@ -1559,6 +1649,11 @@ local function BuildOptions()
             section.label:SetText((section.collapsed and "[+] " or "[-] ") .. ns.L(section.title))
         end
         optionLayout.defer = true
+        if ns.IsDebugEnabled() and debugBuilders then
+            for _, build in ipairs(debugBuilders) do build() end
+            debugBuilders = nil
+            panel.gluDebugOptionsBuilt = true
+        end
         for _, refresh in ipairs(refreshers) do
             refresh()
         end

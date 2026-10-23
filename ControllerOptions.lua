@@ -6,6 +6,7 @@ local ADDON_NAME, ns = ...
 -- pattern as the native controller UI. Nothing is built until it is opened.
 local window
 local setupMode, manualOpen = false, false
+local setupOfferedThisSession = false
 local bindingOwner
 local bindingsConfigured = false
 local rows, tabs, inputButtons = {}, {}, {}
@@ -257,7 +258,7 @@ local function RefreshPortraitPreview()
         return
     end
 
-    local playerPortrait = db.portraitMode == "player"
+    local playerPortrait = db.portraitMode == "player" or db.portraitMode == "player3d"
     local portraitScale = playerPortrait and math.max(0.5, math.min(2.0, tonumber(db.playerPortraitScale) or 1)) or 1
     -- Keep both portrait choices the same size in this compact preview. The
     -- player portrait used the smaller preview size before the class-icon fix;
@@ -265,9 +266,9 @@ local function RefreshPortraitPreview()
     local baseSize = 90 * portraitScale
     local previewScale = 0.55
     local iconSize = baseSize * previewScale
-    local ringScale = math.max(0.5, math.min(2.0, tonumber(db.portraitRingScale) or 1.1))
+    local ringScale = math.max(0.5, math.min(2.0, tonumber(db[ns.GetPortraitRingSettingKey("Scale")]) or 1.1))
     local ringSize = (baseSize + 6) * ringScale * previewScale
-    local offset = db.portraitRingOffset or {}
+    local offset = db[ns.GetPortraitRingSettingKey("Offset")] or {}
     local offsetX = (tonumber(offset.x) or 0) * previewScale
     local offsetY = (tonumber(offset.y) or 0) * previewScale
 
@@ -343,13 +344,18 @@ end
 
 local function Toggle(label, key, after)
     local function available()
+        if key == "showWeaponSkills" then return not ns.db.horizontalMode and ns.GetCurrentFlavor() == "forever" end
+        if key == "compactMode" then return not ns.db.horizontalMode end
         if key == "frameEdgeGlow" then return ns.db.backgroundMode ~= "MODERN" end
         return key ~= "autoScanTrainers" or ns.CanCaptureTrainerData()
     end
     return {
         label = label,
         isAvailable = available,
-        get = function() return available() and ns.db[key] == true and "On" or "Off" end,
+        get = function()
+            if key == "compactMode" and ns.db.horizontalMode then return "On" end
+            return available() and ns.db[key] == true and "On" or "Off"
+        end,
         activate = function()
             if not available() then return end
             ns.db[key] = not (ns.db[key] == true)
@@ -383,7 +389,10 @@ local function EntriesFor(key)
             CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
                 function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
             Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
+            CycleChoice("Portrait", function() return ns.db.portraitMode or "player" end,
+                function(v) ns.db.portraitMode = v; ns.RefreshClassIcon(); ns.RefreshPopupLayout() end, ns.PORTRAIT_CHOICES),
             Toggle("Show time played this level", "showLevelTime"),
+            Toggle("Horizontal layout", "horizontalMode", function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end),
         }
         entries[#entries + 1] = { label = "Show pet skills",
             get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
@@ -397,6 +406,7 @@ local function EntriesFor(key)
                 ns.db.reducedMotion = not ns.db.reducedMotion
                 ns.RefreshVisualEffects()
             end }
+        entries[#entries + 1] = Toggle("Background animations", "backgroundAnimations", ns.RefreshVisualEffects)
         entries[#entries + 1] = Toggle("Right-click to close", "rightClickClose")
         entries[#entries + 1] = { label = "Ignore mouseover delay",
             get = function() return ns.db.ignoreMouseoverDelay and "On" or "Off" end,
@@ -447,6 +457,7 @@ local function EntriesFor(key)
         }
     elseif key == "mode" then
         return {
+            Toggle("Screenshot milestones", "screenshotMilestones"),
             { label = "Enable addon", get = function() return ns.db.enabled ~= false and "On" or "Off" end,
                 activate = function() ns.SetAddonEnabled(not (ns.db.enabled ~= false)) end },
             { label = "Hide Blizzard level-up toast", get = function() return ns.db.hideBlizzardLevelUp ~= false and "On" or "Off" end,
@@ -458,6 +469,7 @@ local function EntriesFor(key)
             Toggle("Show time played this level", "showLevelTime"),
             Toggle("Show minimap button", "minimapButtonShown", function(v) ns.SetMinimapButtonShown(v) end),
             Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
+            Toggle("Horizontal layout", "horizontalMode", function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end),
             Toggle("Right-click to close", "rightClickClose"),
             Toggle(ns.L("%s (recommended for gamepad)", ns.L("Allow click-through")), "clickThrough", function(v) ns.ApplyClickThrough(v) end),
             { label = ns.L("%s (recommended for gamepad)", ns.L("Ignore mouseover delay")),
@@ -496,13 +508,13 @@ local function EntriesFor(key)
                 activate = function() ns.PlayLevelUpSound(true) end },
         }
     elseif key == "animation" then
-        return {
+        local entries = {
+            Toggle("Milestone Animations", "milestoneAnimations", function() ns.RefreshVisualEffects() end),
             Toggle("Portrait pulse and starburst", "portraitAnimation", function() ns.RefreshVisualEffects() end),
             Toggle("Highlight new abilities", "highlightNewAbilities", function() ns.RefreshVisualEffects() end),
             Toggle("Emphasize stat gains", "emphasizeStatGains", function() ns.RefreshVisualEffects() end),
-            Toggle("Portrait sparks", "portraitSparks", function() ns.RefreshVisualEffects() end),
-            Toggle("New ability sparkles", "newAbilitySparkles", function() ns.RefreshVisualEffects() end),
-            Toggle("Background embers", "backgroundEmbers", function() ns.RefreshVisualEffects() end),
+            Toggle("Portrait motes", "portraitSparks", function() ns.RefreshVisualEffects() end),
+            Toggle("Background motes", "backgroundEmbers", function() ns.RefreshVisualEffects() end),
             Toggle("Frame edge glow", "frameEdgeGlow", function() ns.RefreshVisualEffects() end),
             Toggle("Portrait and ring settle", "portraitRingSettle", function() ns.RefreshVisualEffects() end),
             Toggle("Reveal dividers", "dividerReveal", function() ns.RefreshVisualEffects() end),
@@ -514,9 +526,13 @@ local function EntriesFor(key)
                 activate = function(direction) ns.db.animSpeedMultiplier = math.max(0.25, math.min(3, (tonumber(ns.db.animSpeedMultiplier) or 1) + direction * 0.1)) end },
             { label = "Display duration", get = function() return string.format("%ds", tonumber(ns.db.duration) or 7) end,
                 activate = function(direction) ns.db.duration = math.max(1, math.min(60, (tonumber(ns.db.duration) or 7) + direction)) end },
-            { label = "Popup scale", get = function() return string.format("%.1fx", tonumber(ns.db.scale) or 1) end,
-                activate = function(direction) ns.db.scale = math.max(0.5, math.min(2, (tonumber(ns.db.scale) or 1) + direction * 0.1)); Apply() end },
+            { label = "Popup scale", get = function() return string.format("%.1fx", ns.GetPopupScale()) end,
+                activate = function(direction) ns.SetPopupScale(ns.GetPopupScale() + direction * 0.1); Apply() end },
         }
+        for _, effect in ipairs(ns.EXTRA_EFFECTS) do
+            entries[#entries + 1] = Toggle(effect.label, effect.key, function() ns.RefreshVisualEffects() end)
+        end
+        return entries
     elseif key == "colors" then
         return {
             Toggle("Use class colors", "useClassColors", function(v) ns.SetClassColorsEnabled(v) end),
@@ -762,10 +778,18 @@ local function LayoutControllerChrome()
         hintTop = hintTop + height + 4
     end
     hint:SetHeight(hintTop)
+    local warningHeight = 0
+    window.modelWarning:SetText(ns.L(ns.PORTRAIT_MEMORY_WARNING))
+    window.modelWarning:SetShown(ns.db.portraitMode == "player3d")
+    if ns.db.portraitMode == "player3d" then
+        warningHeight = ns.WrapOptionsText(window.modelWarning, width, "CENTER") + 6
+        window.modelWarning:ClearAllPoints()
+        window.modelWarning:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop)
+    end
     local availabilityHeight = ns.WrapOptionsText(window.availability, width, setupMode and "CENTER" or "LEFT")
     window.availability:ClearAllPoints()
-    window.availability:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop)
-    local footerTop = hintTop + availabilityHeight + 36
+    window.availability:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop + warningHeight)
+    local footerTop = hintTop + warningHeight + availabilityHeight + 36
     if window.finishButton then
         window.finishButton:SetShown(setupMode)
         window.finishButton:ClearAllPoints()
@@ -913,10 +937,15 @@ local function ChangeTab(direction)
     Render()
 end
 
+local function FinishSetup()
+    if setupMode then ns.db.firstTimeSetupCompleted = true end
+    ns.SaveActiveProfile()
+    Close()
+end
+
 local function Activate()
     if setupMode and selected == #window.entries + 1 then
-        ns.SaveActiveProfile()
-        Close()
+        FinishSetup()
         return
     end
     local entry = window.entries[selected]
@@ -1131,7 +1160,7 @@ local function Build()
     finish:SetDisabledFontObject("GameFontNormalLarge")
     finish.text = finish:GetFontString()
     finish.text:SetFontObject("GameFontNormalLarge")
-    finish:SetScript("OnClick", function() ns.SaveActiveProfile(); Close() end)
+    finish:SetScript("OnClick", FinishSetup)
     window.finishButton = finish
     window.watermark = window:CreateTexture(nil, "BACKGROUND", nil, -5)
     window.watermark:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -24, 18)
@@ -1157,6 +1186,9 @@ local function Build()
     availability:SetText(ns.L("Some options are not available in the controller menu."))
     availability:SetTextColor(0.75, 0.75, 0.75)
     window.availability = availability
+    window.modelWarning = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    window.modelWarning:SetTextColor(1, .2, .2)
+    window.modelWarning:Hide()
     window:HookScript("OnSizeChanged", Render)
     local controllerPollElapsed = 0
     local lastCloseGlyphStyle
@@ -1235,6 +1267,7 @@ end
 function ns.OpenFirstTimeSetup()
     ns.EnsureDatabase()
     if ns.ToggleControllerOptions(true, true, true) then
+        setupOfferedThisSession = true
         ns.db.firstTimeSetupShown = true
         return true
     end
@@ -1242,7 +1275,12 @@ function ns.OpenFirstTimeSetup()
 end
 
 function ns.ShowFirstTimeSetupIfNeeded()
-    if not ns.db.firstTimeSetupShown then return ns.OpenFirstTimeSetup() end
+    ns.EnsureDatabase()
+    -- The old marker only meant Show() was called, possibly during loading.
+    -- Completion is recorded by Finish Setup; a dismissal retries next login.
+    if not ns.db.firstTimeSetupCompleted and not setupOfferedThisSession then
+        return ns.OpenFirstTimeSetup()
+    end
 end
 
 function ns.RefreshControllerOptionsWatermark()
