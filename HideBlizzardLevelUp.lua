@@ -38,15 +38,17 @@ local function ScheduleSuppressionTimer(key, delay, callback)
     end
 end
 
--- Blizzard's native level-up files. GLU mutes these while the addon is
--- active; its own sound uses a separate FileDataID below.
+-- Forever uses a separate default sound. Retail plays 567431 directly, so
+-- leave that file available while still muting the other native sound.
 local GLU_MUTED_SOUND_IDS = { 569593, 567431 }
 
 function ns.SetGnomeLevelUpSoundMuted(muted)
-    local soundFunction = muted and MuteSoundFile or UnmuteSoundFile
-    if type(soundFunction) ~= "function" then return end
+    if ns.UsesNativeLevelUpSound() then muted = false end
+    local retail = ns.GetCurrentFlavor() == "retail"
     for _, soundID in ipairs(GLU_MUTED_SOUND_IDS) do
-        pcall(soundFunction, soundID)
+        local shouldMute = muted and not (retail and soundID == 567431)
+        local soundFunction = shouldMute and MuteSoundFile or UnmuteSoundFile
+        if type(soundFunction) == "function" then pcall(soundFunction, soundID) end
     end
 end
 
@@ -62,11 +64,17 @@ local function GetFrameAlpha(frame)
     return ok and tonumber(alpha) or 1
 end
 
--- Blizzard's toast manager already knows how to stop its active animation.
--- Use that method instead of changing the shared container's alpha.
+-- Keep native toast execution intact when Blizzard owns sound playback.
+-- Replacement sounds can retain the existing StopToasting suppression path.
 local function StopEventToastManager()
     local frame = _G[eventToastFrameName]
     if not frame then return end
+    if ns.UsesNativeLevelUpSound() then
+        -- Preserve native toast execution and its sound; suppress only artwork.
+        if savedAlpha[frame] == nil then savedAlpha[frame] = GetFrameAlpha(frame) end
+        SetFrameAlpha(frame, 0)
+        return
+    end
     if type(frame.StopToasting) == "function" then
         pcall(frame.StopToasting, frame)
     end

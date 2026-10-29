@@ -168,7 +168,7 @@ local function IsGrimoireLearned(grimoire, known)
     return known.names[name] == true
 end
 
-function ns.GetUnlearnedWarlockPetAbilities(currentLevel)
+function ns.GetUnlearnedWarlockPetAbilities(currentLevel, rangeStart)
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return {} end
     local _, classToken = UnitClass("player")
     if classToken ~= "WARLOCK" then return {} end
@@ -195,7 +195,8 @@ function ns.GetUnlearnedWarlockPetAbilities(currentLevel)
     for _, grimoire in ipairs(ns.WarlockPetGrimoires or {}) do
         -- Normal level-ups show only grimoires newly available at the level
         -- reached. Debug mode can opt into the complete list unlocked so far.
-        local levelMatches = showAllAvailable
+        local levelMatches = rangeStart and grimoire.requiredLevel > rangeStart and grimoire.requiredLevel <= currentLevel
+            or showAllAvailable
             and grimoire.requiredLevel <= currentLevel
             or grimoire.requiredLevel == currentLevel
         if levelMatches and (not filterByActivePet or not family or grimoire.pet == family)

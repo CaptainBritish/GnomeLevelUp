@@ -90,3 +90,12 @@ function ns.ApplyControllerGlyph(texture, action, style)
     end
     return false
 end
+
+-- The logo artwork occupies 750x202 pixels in a losslessly padded 1024x256 TGA.
+ns.MENU_LOGO_ASPECT = 750 / 202
+function ns.CreateMenuLogo(parent)
+    local logo = parent:CreateTexture(nil, "ARTWORK", nil, 4)
+    logo:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\logo-nobot.tga", "CLAMP", "CLAMP")
+    logo:SetTexCoord(0, 750 / 1024, 0, 202 / 256)
+    return logo
+end

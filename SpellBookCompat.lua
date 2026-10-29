@@ -259,42 +259,35 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
     return futureSpells
 end
 
-function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells)
+function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells, rangeStart)
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "retail" then return {} end
     currentLevel = tonumber(currentLevel) or tonumber(UnitLevel("player")) or 0
     futureSpells = futureSpells or ns.SnapshotRetailFutureSpells()
 
     local onlyCurrentLevel = ns.db and ns.db.showOnlyCurrentLevelSkills == true
-    local onlyNewSkills = ns.db and ns.db.showOnlyNewSkills == true
     local available = {}
-    local ranked = {}
     for _, spell in ipairs(futureSpells) do
-        local levelMatches = not onlyCurrentLevel or spell.requiredLevel == currentLevel
+        local levelMatches = rangeStart and spell.requiredLevel > rangeStart
+            or not rangeStart and (not onlyCurrentLevel or spell.requiredLevel == currentLevel)
         if spell.requiredLevel <= currentLevel and levelMatches then
-            local ability = {
-                id = spell.id,
-                name = spell.name,
-                icon = spell.icon,
-            }
-            local baseName, rank
+            local rank
             if ns.GetTrainingRankInfo then
-                baseName, rank = ns.GetTrainingRankInfo(spell.name)
+                local _, parsedRank = ns.GetTrainingRankInfo(spell.name)
+                rank = parsedRank
             end
-            ability.trainingRank = rank
-            ability.isNewAbility = rank == nil or rank == 1
-            if onlyNewSkills and rank then
-                local existing = ranked[baseName]
-                if not existing or rank < existing.rank then
-                    if existing then available[existing.index] = ability end
-                    ability.rank, ability.index = rank, #available + 1
-                    ranked[baseName] = ability
-                    available[#available + 1] = ability
-                end
-            else
-                available[#available + 1] = ability
+            -- Retail upgrades happen automatically; saved rank-filter choices
+            -- from Forever must not expose them as new unlocks.
+            if rank == nil or rank == 1 then
+                available[#available + 1] = {
+                    id = spell.id,
+                    name = spell.name,
+                    icon = spell.icon,
+                    requiredLevel = spell.requiredLevel,
+                    trainingRank = rank,
+                    isNewAbility = true,
+                }
             end
         end
     end
-    for _, ability in ipairs(available) do ability.rank, ability.index = nil, nil end
     return available
 end

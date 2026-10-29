@@ -221,7 +221,7 @@ function ns.IsHunterPetTrainingEntry(entry)
     return false
 end
 
-function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
+function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
     -- Return only skills that fit the player's level and are not learned.
     currentLevel = tonumber(currentLevel) or 0
     local catalog = ns.GetTrainerCatalogIndex()
@@ -258,7 +258,8 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot)
         -- Hunters first obtain pets at level 10; defer earlier pet ranks to
         -- that level, then show later ranks only when they unlock.
         local displayLevel = hunterPetSkill and math.max(10, catalogEntry.level) or catalogEntry.level
-        local levelMatches = displayLevel == currentLevel
+        local levelMatches = rangeStart and displayLevel > rangeStart and displayLevel <= currentLevel
+            or displayLevel == currentLevel
             or (not onlyCurrentLevel and not hunterPetSkill)
         local hiddenHunterPetSkill = hunterPetSkill
             and ns.db and ns.db.showHunterPetSkills == false

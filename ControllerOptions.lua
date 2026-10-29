@@ -325,12 +325,15 @@ local function ChoiceLabel(value, choices)
     return tostring(value or "")
 end
 
-local function CycleChoice(label, get, set, choices, after)
+local function CycleChoice(label, get, set, choices, after, available)
     return {
         label = label,
+        isAvailable = available,
         get = function() return ChoiceLabel(get(), type(choices) == "function" and choices() or choices) end,
         activate = function(direction)
+            if available and not available() then return end
             local choices = type(choices) == "function" and choices() or choices
+            if not choices or #choices == 0 then return end
             local current, index = get(), 1
             for i, choice in ipairs(choices) do
                 if choice.value == current then index = i break end
@@ -343,7 +346,17 @@ local function CycleChoice(label, get, set, choices, after)
 end
 
 local function Toggle(label, key, after)
+    local setting = ns.OPTION_SETTINGS[key]
+    if setting then
+        return { label = setting.label, isAvailable = setting.isAvailable,
+            get = function() return setting.get() and "On" or "Off" end,
+            activate = function()
+                if not setting.isAvailable or setting.isAvailable() then setting.set(not setting.get()) end
+            end }
+    end
     local function available()
+        if ns.db.reducedMotion and ns.CLASSIC_FLAIR_SETTINGS[key] then return false end
+        if key == "muteNativeDing" or key == "playSound" then return not ns.UsesNativeLevelUpSound() end
         if key == "showWeaponSkills" then return not ns.db.horizontalMode and ns.GetCurrentFlavor() == "forever" end
         if key == "compactMode" then return not ns.db.horizontalMode end
         if key == "frameEdgeGlow" then return ns.db.backgroundMode ~= "MODERN" end
@@ -360,6 +373,9 @@ local function Toggle(label, key, after)
             if not available() then return end
             ns.db[key] = not (ns.db[key] == true)
             if after then after(ns.db[key]) end
+            if key == "showTrainerCosts" or key == "showWeaponSkills" or key == "useHorizontalAbilityScroll" then
+                ns.RefreshPopupLayout()
+            end
         end,
     }
 end
@@ -377,7 +393,17 @@ local function PetClassToggle(label, key, class)
     return entry
 end
 
-local function EntriesFor(key)
+local function NumericOption(key)
+    local setting = ns.OPTION_SETTINGS[key]
+    return { label = setting.label, get = function() return setting.format(setting.get()) end,
+        activate = function(direction) ns.AdjustNumericOption(key, direction) end }
+end
+
+local function TexturedAppearanceAvailable()
+    return ns.db.backgroundMode ~= "MODERN"
+end
+
+local function BuildEntries(key)
     if key == "setup" then
         local entries = {
             CycleChoice("Language", function() return ns.GetLanguageSelection(ns.db.language) end,
@@ -388,25 +414,22 @@ local function EntriesFor(key)
                 end, ns.GetLanguageChoices),
             CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
                 function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
-            Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
+            Toggle("Horizontal layout", "horizontalMode"),
             CycleChoice("Portrait", function() return ns.db.portraitMode or "player" end,
                 function(v) ns.db.portraitMode = v; ns.RefreshClassIcon(); ns.RefreshPopupLayout() end, ns.PORTRAIT_CHOICES),
             Toggle("Show time played this level", "showLevelTime"),
-            Toggle("Horizontal layout", "horizontalMode", function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end),
+            Toggle("Compact Layout", "compactMode"),
         }
-        entries[#entries + 1] = { label = "Show pet skills",
-            get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
-            activate = function()
-                local enabled = not (ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills)
-                ns.db.showHunterPetSkills, ns.db.showWarlockPetSkills = enabled, enabled
-            end }
-        entries[#entries + 1] = { label = "Enable animations",
-            get = function() return not ns.db.reducedMotion and "On" or "Off" end,
-            activate = function()
-                ns.db.reducedMotion = not ns.db.reducedMotion
-                ns.RefreshVisualEffects()
-            end }
-        entries[#entries + 1] = Toggle("Background animations", "backgroundAnimations", ns.RefreshVisualEffects)
+        if ns.GetCurrentFlavor() ~= "retail" then
+            entries[#entries + 1] = { label = "Show pet skills",
+                get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
+                activate = function()
+                    local enabled = not (ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills)
+                    ns.db.showHunterPetSkills, ns.db.showWarlockPetSkills = enabled, enabled
+                end }
+        end
+        entries[#entries + 1] = Toggle("Show secondary stats", "showSecondaryStats")
+        table.insert(entries, 2, Toggle("Classic Mode", "reducedMotion"))
         entries[#entries + 1] = Toggle("Right-click to close", "rightClickClose")
         entries[#entries + 1] = { label = "Ignore mouseover delay",
             get = function() return ns.db.ignoreMouseoverDelay and "On" or "Off" end,
@@ -414,15 +437,20 @@ local function EntriesFor(key)
         entries[#entries + 1] = { label = "Use class colors",
             get = function() return ns.db.useClassColors and "On" or "Off" end,
             activate = function() ns.SetClassColorsEnabled(not ns.db.useClassColors) end }
-        entries[#entries + 1] = CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or "xbox" end,
+        entries[#entries + 1] = CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or ns.GetDefaultControllerGlyphStyle() end,
             function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
             { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
               { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } })
-        entries[#entries + 1] = Toggle("Show unlearned weapon skills", "showWeaponSkills")
-        entries[#entries + 1] = Toggle("Show learning costs", "showTrainerCosts")
+        if ns.GetCurrentFlavor() ~= "retail" then
+            entries[#entries + 1] = Toggle("Show unlearned weapon skills", "showWeaponSkills")
+            entries[#entries + 1] = Toggle("Show learning costs", "showTrainerCosts")
+        else
+            entries[#entries + 1] = Toggle("Shorten stat totals", "shortenRetailStatTotals")
+            entries[#entries + 1] = Toggle("Relevant stats only", "relevantRetailStatsOnly")
+        end
         return entries
     elseif key == "appearance" then
-        return {
+        local entries = {
             CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
                 function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
             CycleChoice("Portrait", function() return ns.db.portraitMode or "class" end,
@@ -435,28 +463,34 @@ local function EntriesFor(key)
                     ns.RefreshPortraitRing()
                 end, ns.PORTRAIT_RING_CHOICES),
             CycleChoice("Background", function() return ns.db.backgroundChoice or "NONE" end,
-                function(v) ns.ApplyBackgroundChoice(v) end, ns.BACKGROUND_TEXTURE_CHOICES or {}),
+                function(v) ns.ApplyBackgroundChoice(v) end, ns.BACKGROUND_TEXTURE_CHOICES or {}, nil, TexturedAppearanceAvailable),
             CycleChoice("Frame", function() return ns.db.frameChoice or "BLACK_METAL" end,
-                function(v) ns.ApplyFrameChoice(v) end, ns.FRAME_CHOICES or {}),
-            CycleChoice("Background texture", function() return ns.db.backgroundStyle or "stretch" end,
+                function(v) ns.ApplyFrameChoice(v) end, ns.FRAME_CHOICES or {}, nil, TexturedAppearanceAvailable),
+            CycleChoice("Background texture", function() return ns.db.backgroundFillMode == "tile" and "tile" or "stretch" end,
                 function(v)
                     ns.db.backgroundStyle = v
                     ns.db.backgroundFillMode = v == "tile" and "tile" or "scale"
                     Apply()
-                end, ns.BACKGROUND_FILL_CHOICES or {}),
-            { label = "Background opacity", get = function() return string.format("%d%%", (tonumber(ns.db.bgOpacity) or 0.7) * 100) end,
+                end, ns.BACKGROUND_FILL_CHOICES or {}, nil, TexturedAppearanceAvailable),
+            { label = "Background opacity", get = function() return string.format("%.0f%%", (tonumber(ns.db.bgOpacity) or 0.7) * 100) end,
                 activate = function(direction)
                     ns.db.bgOpacity = math.max(0, math.min(1, (tonumber(ns.db.bgOpacity) or 0.7) + direction * 0.05))
                     ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
                 end },
-            Toggle("Lock Location", "lockFramePosition", function(v) ns.ApplyFrameLock(v) end),
+            NumericOption("duration"),
+            NumericOption("popupScale"),
+            Toggle("Lock Location", "lockFramePosition"),
             { label = "Preview Level-Up", get = function() return "A to preview" end,
                 activate = function() ns.PreviewLevelUp() end },
             { label = "Reset Appearance", get = function() return "A to reset" end,
                 activate = function() ns.ResetAppearanceToDefaults() end },
         }
+        for index, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do
+            table.insert(entries, 9 + index, NumericOption(setting.key))
+        end
+        return entries
     elseif key == "mode" then
-        return {
+        local options = {
             Toggle("Screenshot milestones", "screenshotMilestones"),
             { label = "Enable addon", get = function() return ns.db.enabled ~= false and "On" or "Off" end,
                 activate = function() ns.SetAddonEnabled(not (ns.db.enabled ~= false)) end },
@@ -468,48 +502,80 @@ local function EntriesFor(key)
             Toggle("Don't show until combat ends", "waitForCombatEnd"),
             Toggle("Show time played this level", "showLevelTime"),
             Toggle("Show minimap button", "minimapButtonShown", function(v) ns.SetMinimapButtonShown(v) end),
-            Toggle("Compact Layout", "compactMode", function() ns.RefreshPopupLayout() end),
-            Toggle("Horizontal layout", "horizontalMode", function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end),
+            Toggle("Compact Layout", "compactMode"),
+            Toggle("Horizontal layout", "horizontalMode"),
             Toggle("Right-click to close", "rightClickClose"),
             Toggle(ns.L("%s (recommended for gamepad)", ns.L("Allow click-through")), "clickThrough", function(v) ns.ApplyClickThrough(v) end),
             { label = ns.L("%s (recommended for gamepad)", ns.L("Ignore mouseover delay")),
                 get = function() return ns.db.ignoreMouseoverDelay == true and "On" or "Off" end,
                 activate = function() SetControllerIgnoreMouseoverDelay(not (ns.db.ignoreMouseoverDelay == true)) end },
-            CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or "xbox" end,
+            CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or ns.GetDefaultControllerGlyphStyle() end,
                 function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
                 { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
                   { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } }),
             CycleChoice("Frame strata", function() return ns.db.frameStrata or "HIGH" end,
                 function(v) ns.db.frameStrata = v; ns.ApplyFrameStrata(v) end, ns.STRATA_CHOICES),
         }
+        if ns.GetCurrentFlavor() == "retail" then
+            options[#options + 1] = Toggle("Shorten stat totals", "shortenRetailStatTotals")
+        end
+        options[#options + 1] = Toggle("Show secondary stats", "showSecondaryStats")
+        options[#options + 1] = Toggle("Equal-width stat text", "equalStatWidths")
+        options[#options + 1] = Toggle("Abbreviate stat names", "abbreviateStatNames")
+        if ns.GetCurrentFlavor() == "retail" then
+            options[#options + 1] = Toggle("Relevant stats only", "relevantRetailStatsOnly")
+        end
+        return options
     elseif key == "trainer" then
-        return {
+        if ns.GetCurrentFlavor() == "retail" then
+            return {
+                Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
+                Toggle("Use horizontal scrolling", "useHorizontalAbilityScroll"),
+            }
+        end
+        local options = {
             Toggle("Automatically save trainer data", "autoScanTrainers"),
             Toggle("Include profession trainers", "scanProfessionTrainers"),
             Toggle("Show unlearned weapon skills", "showWeaponSkills"),
             Toggle("Show learning costs", "showTrainerCosts"),
             Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
-            Toggle("Only display new skills", "showOnlyNewSkills"),
             PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
             PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
             PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
         }
+        if ns.GetCurrentFlavor() ~= "retail" then
+            table.insert(options, 6, Toggle("Only display new skills", "showOnlyNewSkills"))
+        end
+        return options
     elseif key == "sound" then
         return {
             Toggle("Play sound on level up", "playSound"),
             Toggle("Mute Blizzard level-up sound", "muteNativeDing", function() ns.ApplyAddonState(false) end),
             CycleChoice("Sound", function() return ns.db.soundChoice or "LEVELUP" end,
-                function(v) ns.db.soundChoice = v; ns.db.customSoundFile = nil end, ns.SOUND_CHOICES or {}),
+                function(v)
+                    ns.db.soundChoice = v
+                    if v ~= "CUSTOM" then ns.db.customSoundFile = nil end
+                    ns.SoundSelectionChanged()
+                end, ns.SOUND_CHOICES or {}),
             CycleChoice("Sound channel", function() return ns.db.soundChannel or "Master" end,
                 function(v) ns.db.soundChannel = v end, ns.SOUND_CHANNELS or {}),
-            { label = "Sound volume", get = function() return string.format("%d%%", (tonumber(ns.db.soundVolume) or 1) * 100) end,
-                activate = function(direction) ns.db.soundVolume = math.max(0, math.min(1, (tonumber(ns.db.soundVolume) or 1) + direction * 0.05)) end },
+            { label = "Sound volume", isAvailable = ns.CanAdjustSoundVolume,
+                get = function() return ns.CanAdjustSoundVolume() and string.format("%.0f%%", (tonumber(ns.db.soundVolume) or 1) * 100) or ns.L("Uses game volume") end,
+                activate = function(direction)
+                    if not ns.CanAdjustSoundVolume() then return end
+                    ns.db.soundVolume = math.max(0, math.min(1, (tonumber(ns.db.soundVolume) or 1) + direction * 0.05))
+                    ns.PlayLevelUpSound(true)
+                end },
             { label = "Play sound", get = function() return "A to play" end,
                 activate = function() ns.PlayLevelUpSound(true) end },
         }
     elseif key == "animation" then
+        local classic = Toggle("Classic Mode", "reducedMotion")
+        classic.bottomGap = 12
         local entries = {
+            classic,
             Toggle("Milestone Animations", "milestoneAnimations", function() ns.RefreshVisualEffects() end),
+            Toggle("Max Level Celebration", "maxLevelCelebration", function() ns.RefreshMaxLevelCelebration() end),
             Toggle("Portrait pulse and starburst", "portraitAnimation", function() ns.RefreshVisualEffects() end),
             Toggle("Highlight new abilities", "highlightNewAbilities", function() ns.RefreshVisualEffects() end),
             Toggle("Emphasize stat gains", "emphasizeStatGains", function() ns.RefreshVisualEffects() end),
@@ -518,16 +584,11 @@ local function EntriesFor(key)
             Toggle("Frame edge glow", "frameEdgeGlow", function() ns.RefreshVisualEffects() end),
             Toggle("Portrait and ring settle", "portraitRingSettle", function() ns.RefreshVisualEffects() end),
             Toggle("Reveal dividers", "dividerReveal", function() ns.RefreshVisualEffects() end),
-            Toggle("Reduced motion", "reducedMotion", function() ns.RefreshVisualEffects() end),
             CycleChoice("Slide direction", function() return ns.db.statSlideDirection or "alternate" end,
                 function(v) ns.db.statSlideDirection = v end,
                 { { value = "none", label = "None" }, { value = "alternate", label = "Alternate" }, { value = "left", label = "Left" }, { value = "right", label = "Right" } }),
             { label = "Animation speed", get = function() return string.format("%.1fx", tonumber(ns.db.animSpeedMultiplier) or 1) end,
                 activate = function(direction) ns.db.animSpeedMultiplier = math.max(0.25, math.min(3, (tonumber(ns.db.animSpeedMultiplier) or 1) + direction * 0.1)) end },
-            { label = "Display duration", get = function() return string.format("%ds", tonumber(ns.db.duration) or 7) end,
-                activate = function(direction) ns.db.duration = math.max(1, math.min(60, (tonumber(ns.db.duration) or 7) + direction)) end },
-            { label = "Popup scale", get = function() return string.format("%.1fx", ns.GetPopupScale()) end,
-                activate = function(direction) ns.SetPopupScale(ns.GetPopupScale() + direction * 0.1); Apply() end },
         }
         for _, effect in ipairs(ns.EXTRA_EFFECTS) do
             entries[#entries + 1] = Toggle(effect.label, effect.key, function() ns.RefreshVisualEffects() end)
@@ -537,10 +598,9 @@ local function EntriesFor(key)
         return {
             Toggle("Use class colors", "useClassColors", function(v) ns.SetClassColorsEnabled(v) end),
             Toggle("Show text shadows", "showTextShadow", function(v) ns.ApplyTextShadow(v) end),
-            Toggle("Equal-width stat text", "equalStatWidths", function() ns.RefreshStatTextLayout() end),
         }
     elseif key == "profile" then
-        return {
+        local options = {
             { label = "Save per Character", get = function() return ns.L(ns.GetSavePerCharacter() and "On" or "Off") end,
                 activate = function() ns.SetSavePerCharacter(not ns.GetSavePerCharacter()) end },
             CycleChoice("Profile", ns.GetActiveProfileName, ns.SelectProfile, ns.GetProfileChoices),
@@ -560,8 +620,16 @@ local function EntriesFor(key)
                     ns.OpenProfileTransfer()
                 end },
         }
+        if ns.GetCurrentFlavor() == "retail" then table.remove(options, 3) end
+        return options
     end
     return {}
+end
+
+local function EntriesFor(key)
+    local entries = BuildEntries(key)
+    for _, entry in ipairs(entries) do entry.description = ns.GetOptionDescription(entry.label) end
+    return entries
 end
 
 local function ClearBindings()
@@ -573,15 +641,37 @@ local function ClearBindings()
 end
 
 function ns.IsControllerOptionsShown()
-    return window and window:IsShown() or false
+    return window and (window.IsVisible and window:IsVisible() or not window.IsVisible and window:IsShown()) or false
 end
 
 Close = function()
     ClearBindings()
     SetControllerPreviewStrata(false)
-    if window then window:Hide() end
+    if window then window:StopMovingOrSizing(); window:Hide() end
+    if GameTooltip then GameTooltip:Hide() end
     ns.RefreshPreviewSuspension()
     if bindingOwner then bindingOwner:Hide() end
+end
+
+local function MenuOptionHovered()
+    for _, row in ipairs(rows) do
+        if row:IsShown() and (row.hovered or row.IsMouseOver and row:IsMouseOver()
+            or type(MouseIsOver) == "function" and MouseIsOver(row)) then return true end
+    end
+    return false
+end
+
+local function WireRightClickClose(widget)
+    if widget.gluMenuOption then return end
+    if not widget.gluRightClickClose then
+        widget.gluRightClickClose = true
+        widget:HookScript("OnMouseUp", function(_, button)
+            if button == "RightButton" and not MenuOptionHovered() then Close() end
+        end)
+    end
+    if widget.GetChildren then
+        for _, child in ipairs({widget:GetChildren()}) do WireRightClickClose(child) end
+    end
 end
 
 local CONTROLLER_BACKDROP = {
@@ -611,6 +701,31 @@ local function MakeControllerSkin()
         local level = (name == "top" or name == "bottom" or name == "left" or name == "right") and -7 or -6
         skin.pieces[name] = window:CreateTexture(nil, "BACKGROUND", nil, level)
     end
+    skin.modern = window:CreateTexture(nil, "BACKGROUND", nil, -8)
+    skin.modern:SetTexture("Interface\\Buttons\\WHITE8X8")
+    skin.modern:SetPoint("CENTER", window, "CENTER")
+    -- A uniform readable plate fills the menu; only the outer band fades.
+    -- Use an opaque source so the centre cannot inherit the veil's transparency.
+    skin.modernEdges = {}
+    for _, spec in ipairs({
+        {"TOPLEFT", "BOTTOMRIGHT", 0, 1, 0, 1, "corner"},
+        {"TOP", "BOTTOM", 1, 1, 0, 1, "horizontal"},
+        {"TOPRIGHT", "BOTTOMLEFT", 1, 0, 0, 1, "corner"},
+        {"LEFT", "RIGHT", 0, 1, 1, 1, "vertical"},
+        {"RIGHT", "LEFT", 1, 0, 1, 1, "vertical"},
+        {"BOTTOMLEFT", "TOPRIGHT", 0, 1, 1, 0, "corner"},
+        {"BOTTOM", "TOP", 1, 1, 1, 0, "horizontal"},
+        {"BOTTOMRIGHT", "TOPLEFT", 1, 0, 1, 0, "corner"},
+    }) do
+        local edge = window:CreateTexture(nil, "BACKGROUND", nil, -8)
+        edge:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\menu-fade.tga", "CLAMP", "CLAMP")
+        edge:SetTexCoord(spec[3], spec[4], spec[5], spec[6])
+        edge:SetPoint(spec[2], skin.modern, spec[1])
+        edge:SetVertexColor(0, 0, 0, .80)
+        edge:Hide()
+        skin.modernEdges[#skin.modernEdges + 1] = {texture = edge, direction = spec[7]}
+    end
+    skin.modern:Hide()
     window.gluThemeSkin = skin
     return skin
 end
@@ -647,6 +762,24 @@ end
 local function SkinControllerWindow()
     if not window then return end
     local skin = MakeControllerSkin()
+    if ns.db and ns.db.backgroundMode == "MODERN" then
+        if window.SetBackdrop then window:SetBackdrop(nil) end
+        for _, texture in pairs(skin.pieces) do texture:Hide() end
+        skin.backing:Hide()
+        -- Stop the solid plate inside the chrome; every pixel beyond it fades.
+        local width, height, fade = math.max(1, window:GetWidth() - 24), math.max(1, window:GetHeight() - 24), 64
+        skin.modern:SetSize(width, height)
+        skin.modern:SetVertexColor(0, 0, 0, .80)
+        skin.modern:Show()
+        for _, edge in ipairs(skin.modernEdges) do
+            edge.texture:SetSize(edge.direction == "horizontal" and width or fade,
+                edge.direction == "vertical" and height or fade)
+            edge.texture:Show()
+        end
+        return
+    end
+    skin.modern:Hide()
+    for _, edge in ipairs(skin.modernEdges) do edge.texture:Hide() end
     local theme = ns.GetSelectedCompositeTheme()
     if not theme or not theme.textures or not theme.textures.center then
         for _, texture in pairs(skin.pieces) do texture:Hide() end
@@ -702,12 +835,17 @@ end
 -- menu. Pagination uses remaining height rather than an assumed row count.
 local function LayoutControllerChrome()
     local width = window:GetWidth() - 48
-    local titleTop = 18
-    if setupMode then titleTop = math.max(24, portraitPreview and portraitPreview:IsShown() and portraitPreview:GetHeight() / 2 - 24 + 12 or 24) + 8 end
-    window.title:ClearAllPoints()
-    window.title:SetPoint(setupMode and "TOP" or "TOPLEFT", window, setupMode and "TOP" or "TOPLEFT", setupMode and 0 or 24, -titleTop)
-    local titleHeight = ns.WrapOptionsText(window.title, width - 40, setupMode and "CENTER" or "LEFT")
-    local top = titleTop + titleHeight + 16
+    local logoWidth = math.min(setupMode and 400 or 240, math.max(80, width - 48))
+    local logoHeight = logoWidth / ns.MENU_LOGO_ASPECT
+    window.logo:SetSize(logoWidth, logoHeight)
+    window.logo:ClearAllPoints()
+    window.logo:SetPoint("TOP", window, "TOP", 0, setupMode and 64 or -12)
+    local top = setupMode and math.max(48, logoHeight - 64 + 16) or logoHeight + 28
+    -- Keep the optional ring preview clear of the centered brand mark.
+    if portraitPreview then
+        portraitPreview:ClearAllPoints()
+        portraitPreview:SetPoint("TOPLEFT", window, "TOPLEFT", 24, 24)
+    end
     local tabCount = setupMode and 0 or #tabs
     local columns = math.max(1, math.min(tabCount, math.max(1, math.floor((width + 6) / 100))))
     local tabWidth = (width - (columns - 1) * 6) / columns
@@ -778,18 +916,10 @@ local function LayoutControllerChrome()
         hintTop = hintTop + height + 4
     end
     hint:SetHeight(hintTop)
-    local warningHeight = 0
-    window.modelWarning:SetText(ns.L(ns.PORTRAIT_MEMORY_WARNING))
-    window.modelWarning:SetShown(ns.db.portraitMode == "player3d")
-    if ns.db.portraitMode == "player3d" then
-        warningHeight = ns.WrapOptionsText(window.modelWarning, width, "CENTER") + 6
-        window.modelWarning:ClearAllPoints()
-        window.modelWarning:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop)
-    end
     local availabilityHeight = ns.WrapOptionsText(window.availability, width, setupMode and "CENTER" or "LEFT")
     window.availability:ClearAllPoints()
-    window.availability:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop + warningHeight)
-    local footerTop = hintTop + warningHeight + availabilityHeight + 36
+    window.availability:SetPoint("BOTTOM", window, "BOTTOM", 0, 20 + hintTop)
+    local footerTop = hintTop + availabilityHeight + 36
     if window.finishButton then
         window.finishButton:SetShown(setupMode)
         window.finishButton:ClearAllPoints()
@@ -834,7 +964,6 @@ local function Render()
     PlacePortraitPreviewBelowPopup()
     local def = TAB_DEFS[tabIndex]
     window.entries = EntriesFor(setupMode and "setup" or def.key)
-    window.title:SetText(ns.L(setupMode and "Welcome to GnomeLevelUp!" or "GnomeLevelUp - Controller options"))
     for _, item in ipairs(window.controllerHint and window.controllerHint.items or {}) do
         item.label:SetText(ns.L(item.labelKey))
     end
@@ -843,7 +972,7 @@ local function Render()
     selected = math.min(selected, math.max(1, entryCount + (setupMode and 1 or 0)))
     for i, tab in ipairs(tabs) do
         tab:SetShown(not setupMode)
-        local tabLabel = ns.L(TAB_DEFS[i].label)
+        local tabLabel = ns.L(TAB_DEFS[i].key == "trainer" and ns.GetCurrentFlavor() == "retail" and "Abilities" or TAB_DEFS[i].label)
         tab.text:SetText(tabLabel)
         tab.text:SetTextColor(i == tabIndex and 1 or 0.65, i == tabIndex and 0.82 or 0.65, i == tabIndex and 0.15 or 0.75)
         tab.background:SetColorTexture(0.45, 0.32, 0.12, i == tabIndex and 0.38 or 0.10)
@@ -881,7 +1010,7 @@ local function Render()
                 row:Show()
                 if entryIndex == selected then selectedVisible = true end
                 window.visibleEntryCount = window.visibleEntryCount + 1
-                cursor = cursor + height + 2
+                cursor = cursor + height + 2 + (entry.bottomGap or 0)
             end
         end
         -- Rows after the first one that did not fit may still have been shown
@@ -1005,6 +1134,16 @@ local function Build()
     if type(specialFrames) == "table" then specialFrames[#specialFrames + 1] = "GnomeLevelUpControllerOptions" end
     window:SetSize(math.min(760, UIParent:GetWidth() - 40), math.min(620, UIParent:GetHeight() - 40))
     window:SetPoint("CENTER")
+    window:SetMovable(true)
+    window:SetClampedToScreen(true)
+    window:SetDontSavePosition(true)
+    window:EnableMouse(true)
+    window:RegisterForDrag("LeftButton")
+    window:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    window:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if self.SetUserPlaced then self:SetUserPlaced(false) end
+    end)
     window:SetFrameStrata("HIGH")
     window:EnableKeyboard(true)
     window:SetScript("OnKeyDown", function(self, key)
@@ -1044,10 +1183,7 @@ local function Build()
         portraitPreview.icon:AddMaskTexture(iconMask)
     end
     portraitPreview:Hide()
-    local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 24, -18)
-    title:SetText(ns.L("GnomeLevelUp - Controller options"))
-    window.title = title
+    window.logo = ns.CreateMenuLogo(window)
     for i, def in ipairs(TAB_DEFS) do
         local tab = CreateFrame("Button", nil, window)
         local tabNumber = i
@@ -1058,7 +1194,8 @@ local function Build()
         tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         tab.text:SetPoint("CENTER")
         tab.text:SetText(ns.L(def.label))
-        tab:SetScript("OnClick", function()
+        tab:SetScript("OnClick", function(_, button)
+            if button == "RightButton" then Close(); return end
             tabIndex, selected = i, 1
             rowOffset = 0
             Render()
@@ -1076,6 +1213,7 @@ local function Build()
     for i = 1, VISIBLE_ROWS do
         local row = CreateFrame("Button", nil, window)
         local rowNumber = i
+        row.gluMenuOption = true
         row:SetSize(700, ROW_HEIGHT)
         row:SetPoint("TOPLEFT", 24, -84)
         row.background = row:CreateTexture(nil, "BACKGROUND")
@@ -1083,17 +1221,22 @@ local function Build()
         row:SetScript("OnEnter", function(self)
             self.hovered = true
             local entry = window.entries and window.entries[self.entryIndex]
-            if entry then RefreshRowHighlight(self, self.entryIndex, entry) end
+            if entry then
+                RefreshRowHighlight(self, self.entryIndex, entry)
+                ns.ShowOptionTooltip(self, entry.label, entry.description)
+            end
         end)
         row:SetScript("OnLeave", function(self)
             self.hovered = false
+            GameTooltip:Hide()
             local entry = window.entries and window.entries[self.entryIndex]
             if entry then RefreshRowHighlight(self, self.entryIndex, entry) end
         end)
-        row:SetScript("OnHide", function(self) self.hovered = false end)
+        row:SetScript("OnHide", function(self) self.hovered = false; GameTooltip:Hide() end)
         row:EnableMouseWheel(true)
         row:SetScript("OnMouseWheel", function(_, delta) Scroll(delta) end)
-        row:SetScript("OnClick", function()
+        row:SetScript("OnClick", function(_, button)
+            if button == "RightButton" then return end
             local entryIndex = rowOffset + rowNumber
             if window.entries and window.entries[entryIndex] then selected = entryIndex; Activate() end
         end)
@@ -1160,7 +1303,10 @@ local function Build()
     finish:SetDisabledFontObject("GameFontNormalLarge")
     finish.text = finish:GetFontString()
     finish.text:SetFontObject("GameFontNormalLarge")
-    finish:SetScript("OnClick", FinishSetup)
+    finish:SetScript("OnClick", function(_, button)
+        if button == "RightButton" then Close(); return end
+        FinishSetup()
+    end)
     window.finishButton = finish
     window.watermark = window:CreateTexture(nil, "BACKGROUND", nil, -5)
     window.watermark:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -24, 18)
@@ -1186,9 +1332,6 @@ local function Build()
     availability:SetText(ns.L("Some options are not available in the controller menu."))
     availability:SetTextColor(0.75, 0.75, 0.75)
     window.availability = availability
-    window.modelWarning = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    window.modelWarning:SetTextColor(1, .2, .2)
-    window.modelWarning:Hide()
     window:HookScript("OnSizeChanged", Render)
     local controllerPollElapsed = 0
     local lastCloseGlyphStyle
@@ -1242,6 +1385,7 @@ function ns.ToggleControllerOptions(force, allowKeyboard, firstTime)
     ClearBindings()
     UpdateBindings(IsActive())
     Render()
+    WireRightClickClose(window)
     window:Show()
     return true
 end

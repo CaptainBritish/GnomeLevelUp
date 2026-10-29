@@ -1,11 +1,50 @@
 # Changelog
 
-## 1.4.5 — 23/10/2026
+## 1.5
+
+##### New Features
+
+* **Retail is now fully supported.**
+* Added optional abbreviated stat totals and equal-width stat display.
+* Added fastest-level records, every level time is cached so you can see when you beat your best time!
+* Added secondary stats display.
+
+
+
+##### Customization Options
+
+* Classic Mode has been added. Classic Mode replicates the original version of GLU with no flashy animations.
+* Added special Max Level Celebration animations!
+
+
+
+###### Bug Fixes and Optimization
+
+* Fixed several wiring issues in controller options.
+* First-time setup now shows tooltips explaining what each option does.
+* Options frames can be clicked and dragged again.
+* Modern's fade-out animations now function correctly again.
+* Options menus can now be clicked and dragged.
+* Suspend Preview now checks actual visibility, preventing hidden Settings panels from holding previews open outside the menu.
+* Closing popups immediately become click-through, including icons and scroll controls; hovering cannot restart the popup.
+* Gaining two or more levels at once now coalesces into one popup.
+* Added hover descriptors to options menu.
+* Optimized particle animations by reusing anchors and cached sizes for a minor performance gain.
+
+
+
+
+
+
+
+## 1.4.5
 
 ##### New Features
 
 * Added more impactful Milestone celebrations every 10 levels.
 * Added "screenshot on milestone" toggle.
+
+
 
 ##### Customization Options
 
@@ -14,7 +53,9 @@
 * Completely redesigned "Modern" theme. Modern now has unique animations compared to themed mode.
 * Added 3D Portrait mode. (Thanks 3Zeah!)
 
-##### Bug Fixes and Optimization
+
+
+###### Bug Fixes and Optimization
 
 * Redesigned first time setup, updated it to include important settings.
 * Further optimization to reduce and pool memory usage.

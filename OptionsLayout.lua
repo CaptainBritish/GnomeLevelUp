@@ -29,6 +29,42 @@ function ns.CreateOptionsLayout(parent)
         return cell
     end
 
+    -- Labels are stable source keys, independent of translation and creation order.
+    function layout:ArrangeGroups(cells, groups, anchorY)
+        local byLabel = {}
+        for _, cell in ipairs(cells) do
+            byLabel[cell.optionLabel] = cell
+            local row = self.rows[cell.y]
+            for index = #row, 1, -1 do
+                if row[index] == cell then table.remove(row, index); break end
+            end
+        end
+        local nextRow = 0
+        local placed = {}
+        local function PlaceGroup(group)
+            for index, label in ipairs(group.labels) do
+                local cell = byLabel[label]
+                if cell then
+                    local column = group.positions and group.positions[index] or ((index - 1) % group.columns + 1)
+                    local rowIndex = nextRow + math.floor((index - 1) / group.columns)
+                    local rowY = anchorY - rowIndex * .1
+                    cell.y, cell.x, cell.columns, cell.column = rowY, column, group.columns, column
+                    self.rows[rowY] = self.rows[rowY] or {}
+                    table.insert(self.rows[rowY], cell)
+                    placed[label] = true
+                end
+            end
+            nextRow = nextRow + math.ceil(#group.labels / group.columns)
+        end
+        for _, group in ipairs(groups) do PlaceGroup(group) end
+        -- New controls get their own rows until explicitly assigned a group.
+        local remaining = {}
+        for _, cell in ipairs(cells) do
+            if not placed[cell.optionLabel] then remaining[#remaining + 1] = cell.optionLabel end
+        end
+        if #remaining > 0 then PlaceGroup({ columns = 2, labels = remaining }) end
+    end
+
     local function Place(widget, x, top)
         widget:ClearAllPoints()
         widget:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -top)
@@ -185,6 +221,7 @@ function ns.CreateOptionsLayout(parent)
                 if not cell.skip then
                     local shown = (cell.kind == "header" or not (cell.section and cell.section.collapsed))
                         and (not cell.debugOnly or debugEnabled)
+                        and (not cell.isVisible or cell.isVisible())
                     for _, widget in ipairs(cell.widgets) do widget:SetShown(shown) end
                     if shown then cells[#cells + 1] = cell end
                 end
@@ -205,15 +242,16 @@ function ns.CreateOptionsLayout(parent)
                 end
                 if allButtons and buttonWidth > 0 then cellWidth = math.min(cellWidth, buttonWidth) end
                 for first = 1, #cells, columns do
-                    local height = 0
+                    local height, bottomGap = 0, 0
                     for column = 0, columns - 1 do
                         local cell = cells[first + column]
                         if cell then
                             local slot = cell.column and columns == cell.columns and (cell.column - 1) or column
                             height = math.max(height, LayoutCell(cell, 16 + slot * (cellWidth + 16), top, cellWidth))
+                            bottomGap = math.max(bottomGap, cell.bottomGap or 0)
                         end
                     end
-                    top = top + height + 10
+                    top = top + height + 10 + bottomGap
                 end
             end
         end

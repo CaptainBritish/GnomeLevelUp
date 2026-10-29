@@ -247,17 +247,46 @@ local function BuildOptions()
     -- The original row identifiers preserve setting order; measured cells own
     -- positioning, wrapping, collapse visibility and debug-only visibility.
     local optionLayout = ns.CreateOptionsLayout(body)
+    local function IsForeverMode() return ns.GetCurrentFlavor() ~= "retail" end
+    local trainerOnlyControls = {
+        ["Check trainer lists for catalogue changes"] = true,
+        ["Export trainer report"] = true,
+        ["Automatically save trainer data"] = true,
+        ["Only display new skills"] = true,
+        ["Show unlearned weapon skills"] = true,
+        ["Show learning costs"] = true,
+        ["Show Warlock pet abilities"] = true,
+        ["Show Hunter pet abilities"] = true,
+        ["Filter grimoires by active pet"] = true,
+        ["Clear trainer cache"] = true,
+        ["Refresh Cache Status"] = true,
+    }
     local function LayoutCell(kind, rowY, x, label, control, widgets, debugOnly, extra)
         local cell = extra or {}
         cell.kind, cell.y, cell.x = kind, rowY, x
         cell.label, cell.control = label, control
         cell.section, cell.debugOnly = currentSection, debugOnly
+        local helpLabel = cell.optionLabel or (label and label:GetText()) or (control and control.GetText and control:GetText())
+        if helpLabel then
+            local extras = {}
+            for _, widget in ipairs(widgets) do
+                local textRegion = widget == label or widget == cell.value
+                    or widget.GetObjectType and widget:GetObjectType() == "FontString"
+                local owner = ns.BindOptionTooltip(widget, helpLabel, textRegion)
+                if owner and owner ~= widget then extras[#extras + 1] = owner end
+            end
+            for _, owner in ipairs(extras) do widgets[#widgets + 1] = owner end
+            if kind == "dropdown" and control then
+                local name = control:GetName()
+                if name then ns.BindOptionTooltip(_G[name .. "Button"], helpLabel) end
+            end
+        end
         return optionLayout:Replace(widgets, cell)
     end
     local function TrackElement(element, x, rowY, debugOnly)
         if not element then return end
         local text = element:GetObjectType() == "FontString"
-        LayoutCell(text and "text" or "widget", rowY, x,
+        return LayoutCell(text and "text" or "widget", rowY, x,
             text and element or nil, text and nil or element, { element }, debugOnly)
     end
     local function ReflowSections()
@@ -311,6 +340,7 @@ local function BuildOptions()
     end
 
     local function AddButton(text, width, x, rowY, onClick, debugOnly, debugRowY, debugRowHeight)
+        local trainerOnly = trainerOnlyControls[text]
         text = ns.L(text)
         local btn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
         btn:SetSize(width, 22)
@@ -318,6 +348,7 @@ local function BuildOptions()
         btn:SetPoint("TOPLEFT", body, "TOPLEFT", x, rowY)
         btn:SetScript("OnClick", onClick)
         LayoutCell("button", rowY, x, nil, btn, { btn }, debugOnly, { preferredWidth = width })
+        if trainerOnly then btn.gluOptionsCell.isVisible = IsForeverMode end
         return btn
     end
 
@@ -372,10 +403,17 @@ local function BuildOptions()
             refresh()
         end, debugOnly, trackedRowY, debugRowHeight)
         LayoutCell("stepper", rowY, left, label, nil, { label, valueText, minus, plus }, debugOnly,
-            { value = valueText, minus = minus, plus = plus })
+            { value = valueText, minus = minus, plus = plus, optionLabel = labelText })
         refreshers[#refreshers + 1] = refresh
         if not rowYOverride then y = y - 34 end
         return refresh
+    end
+
+    local function AddNumericOption(key, left, controlX, rowY)
+        local setting = ns.OPTION_SETTINGS[key]
+        return AddStepper(setting.label, setting.format, setting.get,
+            function(direction) ns.AdjustNumericOption(key, direction) end,
+            nil, nil, nil, left, controlX, rowY)
     end
 
     local dropdownCount = 0
@@ -422,7 +460,7 @@ local function BuildOptions()
         end)
 
         LayoutCell("dropdown", rowY, labelX, label, dd, { label, dd }, debugOnly,
-            { preferredWidth = widthOverride or 180 })
+            { preferredWidth = widthOverride or 180, optionLabel = labelText })
         local function refresh() UIDropDownMenu_SetText(dd, GetChoiceLabel(getCurrent())) end
         refreshers[#refreshers + 1] = refresh
         if not rowYOverride then y = y - 36 end
@@ -430,6 +468,11 @@ local function BuildOptions()
     end
 
     local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride, debugOnly, debugRowHeight, debugRowY)
+        local setting = ns.OPTION_SETTINGS_BY_LABEL[labelText]
+        if setting and not setting.step then getValue, setValue = setting.get, setting.set end
+        local trainerOnly = trainerOnlyControls[labelText]
+        local flair = false
+        for _, label in pairs(ns.CLASSIC_FLAIR_SETTINGS) do if label == labelText then flair = true; break end end
         labelText = ns.L(labelText)
         local rowY = rowYOverride or y
         local left = xOverride or LEFT
@@ -448,7 +491,12 @@ local function BuildOptions()
         cb:SetSize(26, 26)
         cb:SetPoint("TOPLEFT", body, "TOPLEFT", left - 2, rowY + 2)
         TrackElement(cb, left - 2, rowY + 2, debugOnly)
-        cb:SetScript("OnClick", function(self) setValue(self:GetChecked() and true or false) end)
+        cb.gluClassicFlair = flair
+        cb:SetScript("OnClick", function(self)
+            if flair and ns.db.reducedMotion then return end
+            setValue(self:GetChecked() and true or false)
+            if labelText == ns.L("Classic Mode") then ns.RefreshOptionsPanel() end
+        end)
         local fs = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         fs:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         fs:SetWidth((labelText == ns.L("Lock Location") and 118)
@@ -457,9 +505,22 @@ local function BuildOptions()
         fs:SetWordWrap(true)
         fs:SetText(labelText)
         LayoutCell("checkbox", rowY, left, fs, cb, { fs, cb }, debugOnly)
-        refreshers[#refreshers + 1] = function() cb:SetChecked(getValue() and true or false) end
+        if trainerOnly then cb.gluOptionsCell.isVisible = IsForeverMode end
+        refreshers[#refreshers + 1] = function()
+            local allowed = not (flair and ns.db.reducedMotion)
+            cb:SetChecked(allowed and getValue() and true or false)
+            if flair then
+                cb:SetEnabled(allowed)
+                fs:SetTextColor(allowed and 1 or .45, allowed and 1 or .45, allowed and 1 or .45)
+            end
+        end
         if not rowYOverride then y = y - 32 end
         return cb, fs, rowY
+    end
+
+    local function AddSettingCheckbox(key, ...)
+        local setting = ns.OPTION_SETTINGS[key]
+        return AddCheckbox(setting.label, setting.get, setting.set, ...)
     end
 
     local function AddCheckboxPair(first, second, firstX, secondX)
@@ -473,7 +534,7 @@ local function BuildOptions()
     local function AddAvailabilityRefresh(checkButton, label, isAvailable)
         local section = currentSection
         refreshers[#refreshers + 1] = function()
-            local available = isAvailable()
+            local available = isAvailable() and not (checkButton.gluClassicFlair and ns.db.reducedMotion)
             local visible = not (section and section.collapsed)
             checkButton:SetShown(visible)
             label:SetShown(visible)
@@ -482,23 +543,18 @@ local function BuildOptions()
         end
     end
 
-    do
-        local title = body:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-        title:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y)
-        title:SetText(ns.L(PANEL_NAME))
-
-        local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
-        version:SetTextColor(0.70, 0.70, 0.70)
-        local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.4.5"
-        version:SetText(ns.L("Version %s", tostring(addonVersion or "1.4.5")))
-
-        local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        byline:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -2)
-        byline:SetText(ns.L("By Lessá-ArgentDawn"))
-
-        y = y - 68
-    end
+    local menuLogo = ns.CreateMenuLogo(body)
+    panel.gluMenuLogo = menuLogo
+    menuLogo:SetPoint("TOP", body, "TOP", 0, -8)
+    local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
+    version:SetTextColor(0.70, 0.70, 0.70)
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5")))
+    local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
+    byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
+    y = y - 132
 
     AddSectionHeader("Appearance", "appearance")
 
@@ -510,22 +566,6 @@ local function BuildOptions()
             ns.RefreshClassIcon()
             ns.RefreshPopupLayout()
         end, appearanceRow, 140, LEFT, CONTROL_X)
-
-    local function PortraitWarning(self)
-        if ns.db.portraitMode ~= "player3d" then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(ns.L(ns.PORTRAIT_MEMORY_WARNING), 1, .2, .2, 1, true)
-        GameTooltip:Show()
-    end
-    local function HidePortraitWarning() GameTooltip:Hide() end
-    portraitDropdown:EnableMouse(true)
-    portraitDropdown:HookScript("OnEnter", PortraitWarning)
-    portraitDropdown:HookScript("OnLeave", HidePortraitWarning)
-    local portraitDropdownButton = _G[portraitDropdown:GetName() .. "Button"]
-    if portraitDropdownButton then
-        portraitDropdownButton:HookScript("OnEnter", PortraitWarning)
-        portraitDropdownButton:HookScript("OnLeave", HidePortraitWarning)
-    end
 
     local portraitRingDropdown
     if ns.PORTRAIT_RING_CHOICES then
@@ -868,6 +908,12 @@ local function BuildOptions()
         end, fontStrataRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 270)
     y = fontStrataRow - 36
 
+    local durationScaleRow = y
+    AddNumericOption("duration", LEFT, CONTROL_X, durationScaleRow)
+    AddNumericOption("popupScale", LEFT + 280, CONTROL_X + 230, durationScaleRow)
+    y = durationScaleRow - 34
+    for _, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do AddNumericOption(setting.key) end
+
     -- Pack the main Appearance settings independently of the optional debug rows.
     local appearanceCells = {}
     for _, row in pairs(optionLayout.rows) do
@@ -882,42 +928,16 @@ local function BuildOptions()
         if a.y == b.y then return a.x < b.x end
         return a.y > b.y
     end)
-    -- Frame strata and Font use the outside columns; the middle stays empty.
-    -- Steppers get two wider columns so descriptors have room beside the buttons.
-    local appearanceOrder = { 1, 2, 3, 4, 5, 6, 9, 10, 7, 8 }
-    for _, cell in ipairs(appearanceCells) do
-        local row = optionLayout.rows[cell.y]
-        for i = #row, 1, -1 do
-            if row[i] == cell then table.remove(row, i); break end
-        end
-    end
-    for index, originalIndex in ipairs(appearanceOrder) do
-        local cell = appearanceCells[originalIndex]
-        local rowIndex = index <= 6 and math.floor((index - 1) / 3) or (index <= 8 and 2 or 3)
-        local rowY = appearanceRow - rowIndex * 0.1
-        cell.y, cell.x, cell.columns = rowY, index, 3
-        if index == 7 then cell.column = 1 end
-        if index == 8 then cell.column = 3 end
-        if index >= 9 then cell.columns = 2 end
-        optionLayout.rows[rowY] = optionLayout.rows[rowY] or {}
-        local target = optionLayout.rows[rowY]
-        target[#target + 1] = cell
-    end
+    optionLayout:ArrangeGroups(appearanceCells, {
+        { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background texture", "Frame" } },
+        { columns = 3, positions = { 1, 3 }, labels = { "Frame strata", "Font" } },
+        { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Stat text size", "Heading text size", "Time to Level text size" } },
+    }, appearanceRow)
 
     local appearanceToggleRow = y
-    AddCheckbox("Lock Location",
-        function() return ns.db.lockFramePosition end,
-        function(v)
-            ns.db.lockFramePosition = v
-            ns.ApplyFrameLock(v)
-        end, LEFT, appearanceToggleRow)
+    AddSettingCheckbox("lockFramePosition", LEFT, appearanceToggleRow)
     do
-    local compactButton, compactLabel = AddCheckbox("Compact Layout",
-        function() return ns.db.horizontalMode or ns.db.compactMode end,
-        function(v)
-            ns.db.compactMode = ns.db.horizontalMode or v
-            ns.RefreshPopupLayout()
-        end, LEFT + 150, appearanceToggleRow)
+    local compactButton, compactLabel = AddSettingCheckbox("compactMode", LEFT + 150, appearanceToggleRow)
     AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
     end
     AddCheckbox("Suspend Preview",
@@ -927,8 +947,7 @@ local function BuildOptions()
             ns.RefreshPreviewSuspension()
         end, LEFT + 320, appearanceToggleRow)
     y = appearanceToggleRow - 32
-    AddCheckbox("Horizontal layout", function() return ns.db.horizontalMode end,
-        function(v) ns.SetHorizontalMode(v); ns.RefreshPopupLayout() end, LEFT, y)
+    AddSettingCheckbox("horizontalMode", LEFT, y)
     y = y - 32
 
     AddButton("Reset Appearance", 150, LEFT, y, function()
@@ -944,14 +963,23 @@ local function BuildOptions()
     AddSectionHeader("Animation", "animation")
 
     local function EffectToggle(label, key)
+        local setting = ns.OPTION_SETTINGS[key]
+        if setting then return {setting.label, setting.get, setting.set} end
         return { label, function() return ns.db[key] == true end,
             function(value)
                 ns.db[key] = value
                 ns.RefreshVisualEffects()
             end }
     end
+    local classic = EffectToggle("Classic Mode", "reducedMotion")
+    local classicCheck = AddCheckbox(classic[1], classic[2], classic[3])
+    classicCheck.gluOptionsCell.bottomGap = 12
+
     AddCheckboxPair(EffectToggle("Milestone Animations", "milestoneAnimations"),
         EffectToggle("Portrait pulse and starburst", "portraitAnimation"))
+    AddCheckbox("Max Level Celebration",
+        function() return ns.db.maxLevelCelebration ~= false end,
+        function(v) ns.db.maxLevelCelebration = v; ns.RefreshMaxLevelCelebration() end)
     AddCheckboxPair(EffectToggle("Highlight new abilities", "highlightNewAbilities"),
         EffectToggle("Emphasize stat gains", "emphasizeStatGains"))
     AddCheckboxPair(EffectToggle("Portrait motes", "portraitSparks"),
@@ -980,9 +1008,6 @@ local function BuildOptions()
         animationRow, 140, LEFT + 270, CONTROL_X + 270)
     y = animationRow - 36
 
-    local reducedMotion = EffectToggle("Reduced motion", "reducedMotion")
-    AddCheckbox(reducedMotion[1], reducedMotion[2], reducedMotion[3])
-
     AddSectionHeader("Mode", "mode")
 
     local modeRowY = y
@@ -996,6 +1021,28 @@ local function BuildOptions()
         function(v) ns.db.screenshotMilestones = v end, LEFT + 270, modeRowY)
     y = modeRowY - 32
 
+    local shortStatsCheck, _, relevantStatsCheck = AddCheckboxPair({
+        "Shorten stat totals",
+        function() return ns.db.shortenRetailStatTotals == true end,
+        function(v) ns.db.shortenRetailStatTotals = v; ns.RefreshRetailStatOptions() end,
+    }, {
+        "Relevant stats only",
+        function() return ns.db.relevantRetailStatsOnly == true end,
+        function(v) ns.db.relevantRetailStatsOnly = v; ns.RefreshRetailStatOptions() end,
+    })
+    shortStatsCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() == "retail" end
+    relevantStatsCheck.gluOptionsCell.isVisible = shortStatsCheck.gluOptionsCell.isVisible
+
+    AddCheckboxPair({
+        "Equal-width stat text",
+        function() return ns.db.equalStatWidths == true end,
+        function(v) ns.db.equalStatWidths = v; ns.RefreshStatTextLayout(); ns.RefreshPopupLayout() end,
+    }, {
+        "Abbreviate stat names",
+        function() return ns.db.abbreviateStatNames == true end,
+        function(v) ns.db.abbreviateStatNames = v; ns.RefreshStatTextLayout(); ns.RefreshPopupLayout() end,
+    })
+
     AddCheckbox("Hide Blizzard level-up toast",
         function() return ns.db.hideBlizzardLevelUp ~= false end,
         function(v)
@@ -1006,17 +1053,11 @@ local function BuildOptions()
                 ns.RestoreBlizzardBanner()
             end
         end, LEFT, y)
-    AddCheckbox("Right-click to close",
-        function() return ns.db.rightClickClose end,
-        function(v) ns.db.rightClickClose = v end, LEFT + 270, y)
+    AddSettingCheckbox("rightClickClose", LEFT + 270, y)
     y = y - 32
 
-    AddCheckbox("Show time played this level",
-        function() return ns.db.showLevelTime end,
-        function(v)
-            ns.db.showLevelTime = v
-            if v then ns.RequestLevelPlayedTime() end
-        end, LEFT, y)
+    AddSettingCheckbox("showSecondaryStats")
+    AddSettingCheckbox("showLevelTime", LEFT, y)
     AddCheckbox("Don't show until combat ends",
         function() return ns.db.waitForCombatEnd end,
         function(v) ns.db.waitForCombatEnd = v end, LEFT + 270, y)
@@ -1054,11 +1095,12 @@ local function BuildOptions()
         end, LEFT, y)
     y = y - 32
 
-    DeferDebugControls(32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34, function()
-        AddCheckbox("Show all available grimoires",
+    DeferDebugControls(math.ceil(#ns.ANIMATION_SOUND_SETTINGS / 3) * 60 + 32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34, function()
+        local allGrimoiresCheck = AddCheckbox("Show all available grimoires",
             function() return ns.db.showAllWarlockGrimoires == true end,
             function(v) ns.db.showAllWarlockGrimoires = v end,
             LEFT, y, true, 32, y)
+        allGrimoiresCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() ~= "retail" end
         y = y - 32
 
         local function AddDebugAdjustButtons(input, step, current, commit)
@@ -1106,6 +1148,29 @@ local function BuildOptions()
                 if not input:HasFocus() then refresh() end
             end
             refresh()
+        end
+        for index, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
+            local column = (index - 1) % 3 + 1
+            local label = AddLabel(ns.L(spec.label) .. " (ID)", y, LEFT + (column - 1) * 175, true)
+            local input = CreateFrame("EditBox", nil, body, "InputBoxTemplate")
+            input.gluAnimationSoundCue = spec.cue
+            input:SetSize(110, 24)
+            input:SetAutoFocus(false)
+            input:SetMaxLetters(10)
+            local function refresh() input:SetText(tostring(ns.GetAnimationSoundID(spec.cue))) end
+            local function commit()
+                ns.SetAnimationSoundID(spec.cue, input:GetText())
+                ns.RefreshVisualEffects()
+                refresh()
+            end
+            input:SetScript("OnEnterPressed", function(self) commit(); self:ClearFocus() end)
+            input:SetScript("OnEditFocusLost", commit)
+            input:SetScript("OnEscapePressed", function(self) refresh(); self:ClearFocus() end)
+            LayoutCell("edit", y, LEFT + (column - 1) * 175, label, input, { label, input }, true,
+                { columns = 3, column = column })
+            refreshers[#refreshers + 1] = function() if not input:HasFocus() then refresh() end end
+            refresh()
+            if column == 3 or index == #ns.ANIMATION_SOUND_SETTINGS then y = y - 60 end
         end
         for index, spec in ipairs(ns.MODEL_SETTINGS) do
             local column = (index - 1) % 3 + 1
@@ -1158,14 +1223,6 @@ local function BuildOptions()
         end, true, y, 32)
         y = y - 32
 
-        AddCheckbox("Equal-width stat text",
-            function() return ns.db.equalStatWidths == true end,
-            function(v)
-                ns.db.equalStatWidths = v
-                ns.RefreshStatTextLayout()
-            end, LEFT, y, true, 32, y)
-        y = y - 32
-
         AddStepper("Portrait ring scale",
             function(v) return string.format("%.2fx", v) end,
             function() return tonumber(ns.db[ns.GetPortraitRingSettingKey("Scale")]) or 1.0 end,
@@ -1203,22 +1260,6 @@ local function BuildOptions()
 
     end)
 
-    local durationScaleRow = y
-    AddStepper("Display duration",
-        function(v) return string.format("%ds", v) end,
-        function() return ns.db.duration end,
-        function(dir)
-            ns.db.duration = math.max(1, math.min(60, ns.db.duration + dir))
-        end, nil, nil, nil, LEFT, CONTROL_X, durationScaleRow)
-
-    AddStepper("Popup scale",
-        function(v) return string.format("%.1fx", v) end,
-        function() return ns.GetPopupScale() end,
-        function(dir)
-            ns.SetPopupScale(ns.GetPopupScale() + dir * 0.1)
-        end, nil, nil, nil, LEFT + 280, CONTROL_X + 230, durationScaleRow)
-    y = durationScaleRow - 34
-
     AddDropdown("Controller glyphs", {
         { value = "none", label = "None" },
         { value = "xbox", label = "Xbox" },
@@ -1243,7 +1284,7 @@ local function BuildOptions()
     y = y - 34
 
 
-    local autoScanCheck, autoScanLabel = AddCheckboxPair({
+    local autoScanCheck, autoScanLabel, newSkillsCheck = AddCheckboxPair({
         "Automatically save trainer data",
         function() return ns.CanCaptureTrainerData() and ns.db.autoScanTrainers end,
         function(v) ns.db.autoScanTrainers = v end,
@@ -1252,6 +1293,7 @@ local function BuildOptions()
         function() return ns.db.showOnlyNewSkills == true end,
         function(v) ns.db.showOnlyNewSkills = v end,
     })
+    newSkillsCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() ~= "retail" end
     AddAvailabilityRefresh(autoScanCheck, autoScanLabel, function()
         return ns.CanCaptureTrainerData()
     end)
@@ -1310,18 +1352,21 @@ local function BuildOptions()
 
     AddSectionHeader("Sound", "sound")
 
-    AddCheckboxPair({
+    local playCheck, playLabel, muteCheck, muteLabel = AddCheckboxPair({
         "Play sound on level up",
-        function() return ns.db.playSound end,
+        function() return not ns.UsesNativeLevelUpSound() and ns.db.playSound end,
         function(v) ns.db.playSound = v end,
     }, {
         "Mute Blizzard level-up sound",
-        function() return ns.db.muteNativeDing ~= false end,
+        function() return not ns.UsesNativeLevelUpSound() and ns.db.muteNativeDing ~= false end,
         function(v)
+            if ns.UsesNativeLevelUpSound() then return end
             ns.db.muteNativeDing = v
             ns.ApplyAddonState(false)
         end,
     })
+    AddAvailabilityRefresh(playCheck, playLabel, function() return not ns.UsesNativeLevelUpSound() end)
+    AddAvailabilityRefresh(muteCheck, muteLabel, function() return not ns.UsesNativeLevelUpSound() end)
 
     local refreshCustomSound -- assigned below
     local refreshSoundChoice
@@ -1364,6 +1409,7 @@ local function BuildOptions()
             end
             if refreshCustomSound then refreshCustomSound() end
             if refreshCustomSoundChoice then refreshCustomSoundChoice() end
+            ns.SoundSelectionChanged()
             ns.PlayLevelUpSound(true)
         end, soundRow, 180, LEFT, CONTROL_X)
 
@@ -1394,7 +1440,15 @@ local function BuildOptions()
             value:SetText(string.format("%d%%", math.floor(ns.db.soundVolume * 100 + 0.5)))
         end)
         LayoutCell("slider", y, LEFT, label, slider, { label, slider, value }, nil, { value = value })
-        refreshers[#refreshers + 1] = function() slider:SetValue(tonumber(ns.db.soundVolume) or 1) end
+        slider:SetScript("OnMouseUp", function() if ns.CanAdjustSoundVolume() then ns.PlayLevelUpSound(true) end end)
+        refreshers[#refreshers + 1] = function()
+            local enabled = ns.CanAdjustSoundVolume()
+            slider:SetValue(tonumber(ns.db.soundVolume) or 1)
+            slider:SetEnabled(enabled)
+            label:SetTextColor(enabled and 1 or 0.45, enabled and 1 or 0.45, enabled and 1 or 0.45)
+            value:SetText(enabled and string.format("%d%%", math.floor((ns.db.soundVolume or 1) * 100 + 0.5))
+                or ns.L("Uses game volume"))
+        end
         y = y - 32
     end
 
@@ -1411,6 +1465,7 @@ local function BuildOptions()
                         ns.db.soundChoice = "CUSTOM"
                         if refreshSoundChoice then refreshSoundChoice() end
                         if refreshCustomSound then refreshCustomSound() end
+                        ns.SoundSelectionChanged()
                         ns.PlayLevelUpSound(true)
                         break
                     end
@@ -1446,6 +1501,7 @@ local function BuildOptions()
             ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
             if refreshSoundChoice then refreshSoundChoice() end
             if refreshCustomSound then refreshCustomSound() end
+            ns.SoundSelectionChanged()
             self:ClearFocus()
         end
         edit:SetScript("OnEnterPressed", commit)
@@ -1455,6 +1511,7 @@ local function BuildOptions()
             ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
             if refreshSoundChoice then refreshSoundChoice() end
             if refreshCustomSound then refreshCustomSound() end
+            ns.SoundSelectionChanged()
         end)
         edit:SetScript("OnEscapePressed", function(self)
             self:SetText(ns.db.customSoundFile or "")
@@ -1573,12 +1630,14 @@ local function BuildOptions()
         function(value)
             ns.db.forceFlavor = value
             ns.InvalidateTrainerIndex()
+            ns.ApplyAddonState(false)
             ns.RefreshOptionsPanel()
         end)
 
     local cacheStatusText = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cacheStatusText:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT, y - 4)
-    TrackElement(cacheStatusText, LEFT, y - 4)
+    local cacheStatusCell = TrackElement(cacheStatusText, LEFT, y - 4)
+    cacheStatusCell.isVisible = IsForeverMode
     cacheStatusText:SetWidth(410)
     cacheStatusText:SetJustifyH("LEFT")
     cacheStatusText:SetWordWrap(true)
@@ -1612,18 +1671,19 @@ local function BuildOptions()
     y = y - 36
 
     optionLayout.topPadding = function(width)
+        local logoWidth = math.min(240, math.max(80, width - 24))
+        local logoHeight = logoWidth / ns.MENU_LOGO_ASPECT
+        menuLogo:SetSize(logoWidth, logoHeight)
+        ns.WrapOptionsText(byline, math.max(40, width - 32), "CENTER")
+        local headerBottom = 8 + logoHeight + 4 + version:GetStringHeight() + 2 + byline:GetStringHeight() + 16
         local caption = controllerOptionsButton:GetFontString()
-        local launcherWidth = math.min(240, width - 40)
+        local launcherWidth = math.min(240, math.max(80, width - 40))
         controllerOptionsButton:SetWidth(launcherWidth)
         local launcherHeight = caption and ns.WrapOptionsText(caption, launcherWidth - 20) + 12 or 26
         controllerOptionsButton:SetHeight(math.max(26, launcherHeight))
         controllerOptionsButton:ClearAllPoints()
-        if width < 500 then
-            controllerOptionsButton:SetPoint("TOPLEFT", body, "TOPLEFT", LEFT + 40, -78)
-            return controllerOptionsButton:IsShown() and 90 + launcherHeight or 84
-        end
-        controllerOptionsButton:SetPoint("TOPRIGHT", body, "TOPRIGHT", -8, -8)
-        return 84
+        controllerOptionsButton:SetPoint("TOP", body, "TOP", 0, -headerBottom)
+        return headerBottom + (controllerOptionsButton:IsShown() and math.max(26, launcherHeight) + 12 or 0)
     end
     optionLayout.onReflow = function()
         if optionsScroll then
@@ -1646,7 +1706,12 @@ local function BuildOptions()
         if not ns.db then return end
         for _, section in ipairs(sections) do
             section.collapsed = ns.db.collapsedSections and ns.db.collapsedSections[section.key] == true
-            section.label:SetText((section.collapsed and "[+] " or "[-] ") .. ns.L(section.title))
+            local title = section.title
+            if ns.GetCurrentFlavor() == "retail" then
+                if section.key == "trainer_data" then title = "Abilities" end
+                if section.key == "cache_status" then title = "Mode" end
+            end
+            section.label:SetText((section.collapsed and "[+] " or "[-] ") .. ns.L(title))
         end
         optionLayout.defer = true
         if ns.IsDebugEnabled() and debugBuilders then
@@ -1663,7 +1728,7 @@ local function BuildOptions()
 
     function ns.IsPreviewSuspensionRequested()
         return ns.db and ns.db.suspendPreview ~= false
-            and (panel:IsShown() or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()))
+            and ((panel.IsVisible and panel:IsVisible() or not panel.IsVisible and panel:IsShown()) or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()))
     end
 
     panel:SetScript("OnShow", function()
@@ -1712,7 +1777,7 @@ end
 ns.RefreshOptionsPanel = function() end
 function ns.IsPreviewSuspensionRequested()
     return ns.db and ns.db.suspendPreview ~= false
-        and ((panel and panel:IsShown()) or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()))
+        and ((panel and (panel.IsVisible and panel:IsVisible() or not panel.IsVisible and panel:IsShown())) or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()))
 end
 
 function ns.InitializeOptions()

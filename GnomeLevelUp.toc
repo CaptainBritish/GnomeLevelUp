@@ -1,8 +1,8 @@
-## Interface: 16001, 120007
+## Interface: 16001, 120007, 120105, 120100
 ## Title: GnomeLevelUp
 ## Notes: A gnometastic level-up screen showing stat gains and unlearned trainer abilities.
-## Author: Lessa - Argent Dawn EU
-## Version: 1.4.5
+## Author: Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU Roleplay) Captain_British on Curse
+## Version: 1.5
 ## SavedVariables: GnomeLevelUpDB, GnomeLevelUpProfilesDB
 ## SavedVariablesPerCharacter: GnomeLevelUpCharacterDB
 ## X-Website: https://welcometozombo.com/
@@ -36,6 +36,7 @@ TrainerScan.lua
 TextureCompat.lua
 UI.lua
 OptionsLayout.lua
+OptionHelp.lua
 ControllerOptions.lua
 Options.lua
 MinimapButton.lua

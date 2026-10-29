@@ -17,12 +17,7 @@ end
 
 local function OnClick(_, mouseButton)
     if mouseButton == "RightButton" then
-        if ns.SetAddonEnabled then
-            ns.SetAddonEnabled(not ns.db.enabled)
-        else
-            ns.db.enabled = not ns.db.enabled
-        end
-        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("addon %s", ns.L(ns.db.enabled and "On" or "Off")))
+        ns.PreviewLevelUp()
     elseif ns.ToggleOptions then
         ns.ToggleOptions()
     end
@@ -31,7 +26,7 @@ end
 local function OnTooltipShow(tooltip)
     tooltip:AddLine("GnomeLevelUp")
     tooltip:AddLine(ns.L("Click to open options"), 1, 1, 1)
-    tooltip:AddLine(ns.L("Right-click to toggle the addon"), 1, 1, 1)
+    tooltip:AddLine(ns.L("Right-click: Preview Level-Up"), 1, 1, 1)
     tooltip:AddLine(ns.L("Drag to move"), 1, 1, 1)
 end
 

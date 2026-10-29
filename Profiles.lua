@@ -23,7 +23,7 @@ local function NormalizeSettings(settings)
     end
     -- Old exports may contain the separate effect switches. The grouped
     -- settings now control those effects; accept and discard old booleans.
-    for _, key in ipairs({ "newAbilitySparkles", "abilityRevealShine", "backgroundDepth", "milestoneAnticipation", "statImpactSparks", "milestoneColorTransition", "popupClosingAnimation" }) do
+    for _, key in ipairs({ "portraitImpactSound", "starburstSound", "showLevelPace", "statTickerSounds", "newAbilitySparkles", "abilityRevealShine", "backgroundDepth", "milestoneAnticipation", "statImpactSparks", "milestoneColorTransition", "popupClosingAnimation" }) do
         if type(settings[key]) == "boolean" then settings[key] = nil end
     end
     if settings.horizontalMode then settings.compactMode = true end
@@ -290,11 +290,11 @@ end
 local function Decode(text)
     local pos, nodes = 1, 0
     local parse
-    local function Number()
+    local function Number(limit)
         local finish = text:find(":", pos, true)
         if not finish or finish - pos > 32 then error("number") end
         local value = tonumber(text:sub(pos, finish - 1))
-        if not value or value ~= value or math.abs(value) > 1000000 then error("number") end
+        if not value or value ~= value or math.abs(value) > (limit or 1000000) then error("number") end
         pos = finish + 1
         return value
     end
@@ -306,7 +306,7 @@ local function Decode(text)
             local digit = text:sub(pos, pos); pos = pos + 1
             if digit ~= "0" and digit ~= "1" then error("boolean") end
             return digit == "1"
-        elseif tag == "n" then return Number()
+        elseif tag == "n" then return Number(2147483647)
         elseif tag == "s" then
             local length = Number()
             if length < 0 or length > 8192 or length % 1 ~= 0 or pos + length - 1 > #text then error("length") end
@@ -335,6 +335,7 @@ local ranges = {
     portraitModelMaskSize = { 25, 300 },
     portraitModelViewportSize = { 25, 300 },
     scale = { 0.5, 2 }, horizontalScale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 },
+    statTextScale = { .5, 2 }, headingTextScale = { .5, 2 }, timeTextScale = { .5, 2 },
     animSpeedMultiplier = { 0.25, 3 }, playerPortraitScale = { 0.1, 5 },
     portraitRingScale = { 0.1, 5 }, horizontalPortraitRingScale = { 0.1, 5 }, sectionPadding = { 0, 100 },
 }
@@ -352,9 +353,9 @@ local enums = {
     soundChannel = { Master = true, SFX = true, Music = true, Ambience = true, Dialog = true },
 }
 
-local function ValidateLike(value, template, depth)
+local function ValidateLike(value, template, depth, numberLimit)
     if depth > 10 or type(value) ~= type(template) then return false end
-    if type(value) == "number" then return value == value and math.abs(value) <= 100000 end
+    if type(value) == "number" then return value == value and math.abs(value) <= (numberLimit or 100000) end
     if type(value) == "string" then return #value <= 4096 and not value:find("%z") end
     if type(value) == "boolean" then return true end
     if type(value) ~= "table" then return false end
@@ -400,9 +401,10 @@ local function ValidSettings(settings)
         else
             local template = ns.defaults[key]
             if template == nil then template = optional[key] end
-            if template == nil or not ValidateLike(value, template, 0) then return false end
+            if template == nil or not ValidateLike(value, template, 0, key:match("^animationSound_") and 2147483647 or nil) then return false end
             if enums[key] and not enums[key][value] then return false end
             if (key == "framePosition" or key == "horizontalFramePosition") and (not anchors[value.point] or not anchors[value.relativePoint]) then return false end
+            if key:match("^animationSound_") and (value < 0 or value > 2147483647 or value % 1 ~= 0) then return false end
             local range = ranges[key]
             if range and (value < range[1] or value > range[2]) then return false end
             if key:match("Opacity$") and (value < 0 or value > 100) then return false end

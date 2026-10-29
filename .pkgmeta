@@ -10,3 +10,4 @@ ignore:
   - changes.txt
   - Tools
   - CONTRIBUTING.md
+  - LOCALIZATION.md

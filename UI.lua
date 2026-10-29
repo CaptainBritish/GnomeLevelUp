@@ -7,7 +7,17 @@ local BASE_STAT_STAGGER_BASE = 0.30
 local BASE_STAT_STAGGER_STEP = 0.08
 local BASE_STAT_SLIDE_DURATION = 0.30
 local STAT_SLIDE_DISTANCE_X = 50      -- pixels each stat line slides in from
-local STAT_LINE_HEIGHT = 26
+local UI_METRICS = {
+    statLineHeight = 26, minimumStatLineHeight = 18,
+    abilityTopGap = 8, modernAbilityPadding = 12, texturedAbilityPadding = 24,
+    texturedVerticalBottomPadding = 24, texturedHorizontalMaxBottomPadding = 8,
+    automaticCloseSpeed = .85, manualCloseSpeed = 2,
+    modernCloseSeconds = .60, texturedCloseSeconds = .5,
+    textMeasurementLimit = 512,
+    verticalPortraitGrowth = 1.25,
+    modernVerticalFadeTail = 20, modernVerticalBottomLineGap = 8,
+}
+local STAT_LINE_HEIGHT = UI_METRICS.statLineHeight
 local DEFAULT_FONT_PATH = ns.DEFAULT_FONT_PATH or "Fonts\\FRIZQT__.TTF"
 local SECTION_DIVIDER_HEIGHT = 3
 local SEPARATOR_TEXTURE = "Interface\\AddOns\\GnomeLevelUp\\Textures\\seperator"
@@ -40,7 +50,7 @@ end
 
 local function PortraitIconSize()
     return IsPlayerPortrait() and PortraitBaseSize() * PortraitScale()
-        * (ns.db and ns.db.horizontalMode and 1.6 * (content and content.portraitFit or 1) or 1) or CLASS_ICON_SIZE
+        * (ns.db and ns.db.horizontalMode and 1.6 * (content and content.portraitFit or 1) or UI_METRICS.verticalPortraitGrowth) or CLASS_ICON_SIZE
 end
 
 local function PortraitArtworkSize()
@@ -49,7 +59,11 @@ end
 
 local function PortraitRingSize()
     if ns.db and ns.db.portraitMode == "none" then return 0 end
-    return PortraitIconSize() + PORTRAIT_RING_PADDING
+    local padding = PORTRAIT_RING_PADDING
+    if IsPlayerPortrait() and ns.db and not ns.db.horizontalMode then
+        padding = padding * UI_METRICS.verticalPortraitGrowth
+    end
+    return PortraitIconSize() + padding
 end
 
 local function PortraitRingScale()
@@ -149,6 +163,7 @@ local function PortraitColumnWidth()
 end
 
 local function HorizontalColumnCount()
+    if ns.GetCurrentFlavor() == "retail" and content and #(content.currentTrainerAbilities or {}) == 0 then return 1 end
     return content and #(content.currentWarlockPetAbilities or {}) > 0 and 3 or 2
 end
 
@@ -203,7 +218,7 @@ frame:SetScript("OnDragStop", function(self)
 end)
 frame:SetScript("OnMouseUp", function(self, button)
     if button == "RightButton" and ns.db and ns.db.rightClickClose then
-        ns.CloseLevelUp()
+        ns.DismissLevelUp()
     end
 end)
 ns.levelUpFrame = frame
@@ -356,10 +371,10 @@ if (ns.GetCurrentFlavor() ~= "retail")
     and type(closeButton.EnableGamePadButton) == "function" then
     closeButton:EnableGamePadButton(true)
     closeButton:SetScript("OnGamePadButtonDown", function(_, button)
-        if IsControllerBackButton(button) then ns.CloseLevelUp() end
+        if IsControllerBackButton(button) then ns.DismissLevelUp() end
     end)
 end
-closeButton:SetScript("OnClick", function() ns.CloseLevelUp() end)
+closeButton:SetScript("OnClick", function() ns.DismissLevelUp() end)
 RefreshCloseButtonLabel()
 
 function ns.ApplyFrameStrata(strata)
@@ -373,9 +388,40 @@ function ns.ApplyFrameLock(locked)
     frame:SetMovable(locked ~= true)
 end
 
+local closingInputState
+
+function ns.SetClosingClickThrough(active)
+    if active then
+        if closingInputState then return end
+        closingInputState = {}
+        frame.closingInputSuppressed = true
+        local function Suppress(widget)
+            closingInputState[#closingInputState + 1] = {
+                widget = widget,
+                mouse = widget.IsMouseEnabled and widget:IsMouseEnabled() or false,
+                wheel = widget.IsMouseWheelEnabled and widget:IsMouseWheelEnabled() or false,
+            }
+            if widget.EnableMouse then widget:EnableMouse(false) end
+            if widget.EnableMouseWheel then widget:EnableMouseWheel(false) end
+            if widget.GetChildren then for _, child in ipairs({widget:GetChildren()}) do Suppress(child) end end
+        end
+        Suppress(frame)
+        if GameTooltip then GameTooltip:Hide() end
+    else
+        frame.closingInputSuppressed = nil
+        if not closingInputState then return end
+        for _, state in ipairs(closingInputState) do
+            if state.widget.EnableMouse then state.widget:EnableMouse(state.mouse) end
+            if state.widget.EnableMouseWheel then state.widget:EnableMouseWheel(state.wheel) end
+        end
+        closingInputState = nil
+        ns.ApplyClickThrough(ns.db and ns.db.clickThrough)
+    end
+end
+
 function ns.ApplyClickThrough(enabled)
     -- A click-through popup must not consume mouse input from the game world.
-    local interactive = enabled ~= true
+    local interactive = enabled ~= true and not frame.closingInputSuppressed
     frame:EnableMouse(interactive)
     if closeButton and closeButton.EnableMouse then
         closeButton:EnableMouse(interactive)
@@ -420,7 +466,51 @@ if bg.CreateMaskTexture then
     softEdge:SetAllPoints(bg.modern)
     softEdge:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\modern-veil.tga", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     bg.modern:AddMaskTexture(softEdge)
+    bg.modernMask = softEdge
 end
+function bg.HideModernBackgroundFlash()
+    if bg.modernFlashLeft then
+        bg.modernFlashLeft:Hide()
+        bg.modernFlashRight:Hide()
+    end
+    bg.modern:SetAlpha(1)
+end
+
+function bg.ShowModernBackgroundFlash(color, hue, strength, opacity, coverage)
+    if not bg.modernFlashLeft then
+        for _, side in ipairs({"Left", "Right"}) do
+            local texture = bg:CreateTexture(nil, "BACKGROUND", nil, -8)
+            texture:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\modern-veil.tga")
+            if bg.modernMask then texture:AddMaskTexture(bg.modernMask) end
+            bg["modernFlash" .. side] = texture
+        end
+    end
+    local left, right = bg.modernFlashLeft, bg.modernFlashRight
+    local width = bg.modern:GetWidth()
+    left:SetTexCoord(0, coverage, 0, 1)
+    right:SetTexCoord(coverage, 1, 0, 1)
+    left:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", -width * (1 - coverage), 0)
+    right:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", width * coverage, 0)
+    right:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", 0, 0)
+    local r, g, b = hue[1] + (color[1] - hue[1]) * strength,
+        hue[2] + (color[2] - hue[2]) * strength, hue[3] + (color[3] - hue[3]) * strength
+    left:SetVertexColor(1, 1, 1, 1)
+    if left.SetGradient and type(CreateColor) == "function" then
+        left:SetGradient("HORIZONTAL", CreateColor(r, g, b, opacity), CreateColor(hue[1], hue[2], hue[3], opacity))
+    else
+        -- Forever retains the gradient API removed from current Retail definitions.
+        ---@cast left { SetGradientAlpha: fun(self: Texture, orientation: string, ...: number) }
+        left.SetGradientAlpha(bg.modernFlashLeft, "HORIZONTAL", r, g, b, opacity, hue[1], hue[2], hue[3], opacity)
+    end
+    right:SetVertexColor(hue[1], hue[2], hue[3], opacity)
+    -- Replacing both halves keeps the veil's original opacity and mask. The
+    -- gradient covers the celebration's chosen width; the remainder retains its hue.
+    bg.modern:SetAlpha(0)
+    bg.modernFlashLeft:Show()
+    right:Show()
+end
+
 bg.modernAccents = {}
 for _, edge in ipairs({ "TOP", "BOTTOM" }) do
     local line = bg:CreateTexture(nil, "BACKGROUND", nil, -5)
@@ -641,13 +731,13 @@ local function LayoutBackground()
     end
     backgroundWidth, backgroundHeight, backgroundHorizontal, backgroundHasPet = w, h, horizontal, hasPet
     bg.modern:ClearAllPoints()
-    bg.modern:SetPoint("CENTER", bg, "CENTER", 0, IsHorizontalLayout() and 0 or -h * 0.06)
-    bg.modern:SetSize(ModernBackdropWidth(w), horizontal and h or h * 1.12)
+    bg.modern:SetPoint("CENTER", bg, "CENTER", 0, horizontal and 0 or -UI_METRICS.modernVerticalFadeTail / 2)
+    bg.modern:SetSize(ModernBackdropWidth(w), h + (horizontal and 0 or UI_METRICS.modernVerticalFadeTail))
     for i, line in ipairs(bg.modernAccents) do
         line:SetWidth(w * 0.94)
         line:ClearAllPoints()
         if i == 1 then line:SetPoint("TOP", bg, "TOP", 0, -20)
-        else line:SetPoint("BOTTOM", bg, "BOTTOM", 0, IsHorizontalLayout() and 20 or 20 - h * 0.12) end
+        else line:SetPoint("BOTTOM", bg, "BOTTOM", 0, horizontal and 20 or -UI_METRICS.modernVerticalBottomLineGap) end
     end
     local theme = GetBackgroundTheme()
     if theme then LayoutCustomBackground(theme) end
@@ -664,6 +754,8 @@ function ns.ApplyBackgroundAppearance(opacityOverride)
     bg.modern:SetShown(not useCustom)
     local modernColor = ns.db and ns.db.backgroundColor or BLACK_COLOR
     local opacity = opacityOverride or (ns.db and ns.db.bgOpacity) or 0.70
+    bg.appliedOpacity = opacity
+    bg.HideModernBackgroundFlash()
     bg.modern:SetVertexColor(modernColor[1], modernColor[2], modernColor[3], opacity)
     local accent = ns.db and ns.db.colors and ns.db.colors.animatedElements or WHITE_COLOR
     for _, line in ipairs(bg.modernAccents) do
@@ -699,6 +791,7 @@ function ns.ApplyBackgroundAppearance(opacityOverride)
         end
     end
     LayoutBackground()
+    if ns.RefreshMaxBackgroundTint then ns.RefreshMaxBackgroundTint(true) end
 end
 
 function ns.ApplyBackgroundOpacity(opacity)
@@ -735,10 +828,26 @@ end
 function ns.ApplyFont(fontPath)
     if type(fontPath) ~= "string" or fontPath == "" then fontPath = DEFAULT_FONT_PATH end
     for _, entry in ipairs(content.fontElements) do
-        entry.fs:SetFont(fontPath, entry.size, entry.flags)
+        local scale = entry.fs.gluFontScaleKey and ns.GetTextScale(entry.fs.gluFontScaleKey) or 1
+        entry.fs:SetFont(fontPath, entry.size * scale, entry.flags)
         if entry.fs.gluStatText then entry.fs.gluFixedStatHeight = nil end
     end
+    local statScale = ns.GetTextScale("statTextScale")
+    local statSizeChanged = render.appliedStatScale ~= statScale
+    render.appliedStatScale = statScale
+    STAT_LINE_HEIGHT = math.max(UI_METRICS.minimumStatLineHeight, math.ceil(UI_METRICS.statLineHeight * statScale))
+    render.fitKey, render.headingFitKey = nil, nil
+    for _, fs in ipairs(content.statLinePool or {}) do
+        fs.statWordLayoutKey = nil
+        fs.slideFrame:SetHeight(STAT_LINE_HEIGHT)
+    end
+    if render.SyncScaledText then render.SyncScaledText() end
+    if statSizeChanged and render.ReflowStatsForFont and frame:IsShown() then render.ReflowStatsForFont() end
+    content.levelTimeMetricKey = nil
+    if render.MeasureLevelTime then render.MeasureLevelTime() end
+    if render.StylePaceRecord then render.StylePaceRecord() end
     if ns.RefreshVisualEffects then ns.RefreshVisualEffects() end
+    if frame:IsShown() and ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
 end
 
 local GLOW_ALPHA = 0.15
@@ -748,6 +857,7 @@ local GLOW_DIRS = {
 }
 
 local function CurrentShadowAlpha(text)
+    if text and text.wordLayoutActive then return 0 end
     if ns.db and ns.db.showTextShadow == false then return 0 end
     return text and text.glowAlpha or GLOW_ALPHA
 end
@@ -782,7 +892,8 @@ local function EnsureGlowLayers(main)
         glow:SetAlpha(CurrentShadowAlpha(main))
         glow:SetShown(main:IsShown())
         main.glows[i] = glow
-        RegisterFontElement(glow)
+        glow.gluFontScaleKey = main.gluFontScaleKey
+        RegisterFontElement(glow, main.gluStatText and 20 or main.gluFontBaseSize)
     end
 end
 
@@ -817,7 +928,7 @@ end
 function ns.ApplyTextShadow(enabled)
     for _, text in ipairs(content.textLayers) do
         if enabled ~= false then EnsureGlowLayers(text) end
-        local alpha = enabled == false and 0 or (text.glowAlpha or GLOW_ALPHA)
+        local alpha = (enabled == false or text.wordLayoutActive) and 0 or (text.glowAlpha or GLOW_ALPHA)
         for _, glow in ipairs(text.glows) do
             glow:SetAlpha((text.slideFrame and 1 or (text.lineAlpha or 1)) * alpha)
             if glow.animationAlpha then glow.animationAlpha:SetToAlpha(alpha) end
@@ -839,7 +950,19 @@ local function ApplyToTextLayers(text, method, ...)
 end
 
 local function RegisterGlowFont(main, size, flags)
+    main.gluFontBaseSize = size or select(2, main:GetFont())
+    main.gluFontScaleKey = main.gluStatText and "statTextScale"
+        or main == content.levelTimeText and "timeTextScale"
+        or (main == content.levelText or main == content.statsHeader or main == content.spellsHeader
+            or main == content.petSpellsHeader) and "headingTextScale" or nil
+    for _, glow in ipairs(main.glows) do glow.gluFontScaleKey = main.gluFontScaleKey end
     RegisterFontElement(main, size, flags)
+end
+
+function render.SyncScaledText()
+    for _, text in ipairs(content.textLayers) do
+        if text.gluFontScaleKey == "headingTextScale" or text.gluStatText then SyncTextGeometry(text) end
+    end
 end
 
 local function EnsureAllTextGlows()
@@ -936,6 +1059,14 @@ if content.portraitArtwork.CreateMaskTexture then
     content.classIcon:AddMaskTexture(iconMask)
 end
 
+function render.PortraitLevelGap()
+    if not IsHorizontalLayout() and IsPlayerPortrait() and ns.db.portraitRingEnabled then
+        local _, offsetY = PortraitRingOffset()
+        return 9 + math.max(0, PortraitRingSize() * (PortraitRingScale() - 1) / 2 - offsetY)
+    end
+    return 9
+end
+
 function ns.RefreshPortraitGeometry(skipEffects)
     if not content.classRing or not content.classIcon or not content.classRingGraphic then return end
 
@@ -979,7 +1110,7 @@ function ns.RefreshPortraitGeometry(skipEffects)
                 content.levelText:SetPoint("TOP", content, "TOP", 0, -SectionPadding() - 6)
             end
         else
-            content.levelText:SetPoint("TOP", content.portraitAnchor, "BOTTOM", 0, -9)
+            content.levelText:SetPoint("TOP", content.portraitAnchor, "BOTTOM", 0, -render.PortraitLevelGap())
         end
     end
     if content.title then
@@ -1014,7 +1145,7 @@ function render.ApplyPlayerModelCamera(model)
     model:SetCamDistanceScale(0.68)
     model:SetFacing(math.rad(ns.GetPlayerModelSetting("portraitModelRotation")))
     model:SetPosition(ns.GetPlayerModelSetting("portraitModelX"), ns.GetPlayerModelSetting("portraitModelY"), ns.GetPlayerModelSetting("portraitModelZ"))
-    model:SetPaused(ns.db and (ns.db.reducedMotion or ns.db.backgroundAnimations == false) or false)
+    model:SetPaused(ns.db and (ns.db.backgroundAnimations == false) or false)
     model.cameraWidth, model.cameraHeight, model.cameraScale = model:GetWidth(), model:GetHeight(), model:GetEffectiveScale()
     model.applyingCamera = nil
 end
@@ -1029,6 +1160,7 @@ function render.SyncPlayerModelCamera()
 end
 
 function ns.ApplyPlayerModelSettings()
+    ns.RefreshPlayerModelIdentity()
     ns.RefreshPortraitGeometry(true)
     render.ApplyPlayerModelCamera()
 end
@@ -1060,7 +1192,11 @@ function ns.RefreshClassIcon()
             model:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
             model:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
             model:SetScript("OnEvent", function(self)
+                local identityChanged = ns.RefreshPlayerModelIdentity()
                 if self:IsShown() then self:SetUnit("player"); ns.ApplyPlayerModelSettings() end
+                if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then
+                    ns.RefreshOptionsPanel()
+                end
             end)
             content.playerModel = model
             -- The authored ring stays above the model, sharing its parent fade.
@@ -1125,6 +1261,7 @@ end
 function ns.RefreshPortraitRing()
     if not content.classRingGraphic then return end
     local db = ns.db or {}
+    render.portraitGlintRadius = .5
     if db.portraitMode == "none" then
         content.classRing:Hide()
         content.classRingGraphic:Hide()
@@ -1150,6 +1287,14 @@ function ns.RefreshPortraitRing()
 
     local applied = ns.ApplyPortraitRingTexture(content.classRingGraphic, reference)
     if applied then
+        -- Metal artwork has transparent padding; follow the visible ring rather
+        -- than the outer texture bounds. Match the actual applied reference.
+        for _, ring in pairs(ns.PORTRAIT_RING_TEXTURES or {}) do
+            if ring.texture == reference then
+                render.portraitGlintRadius = ring.glintRadius or .5
+                break
+            end
+        end
         local tint = ringColor
         content.classRingGraphic:SetVertexColor(tint[1], tint[2], tint[3], 1)
         content.classRingGraphic:SetTexCoord(0, 1, 0, 1)
@@ -1170,13 +1315,13 @@ ApplyToTextLayers(content.title, "SetShown", false)
 RegisterGlowFont(content.title)
 
 content.levelText = NewText(content, "GameFontNormalLarge", 2)
-content.levelText:SetPoint("TOP", content.portraitAnchor, "BOTTOM", 0, -9)
+content.levelText:SetPoint("TOP", content.portraitAnchor, "BOTTOM", 0, -render.PortraitLevelGap())
 content.levelText.glowUseIntrinsicSize = true
 RegisterGlowFont(content.levelText)
 
 content.statsHeader = NewText(content, "GameFontNormalLarge", 2)
 content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
-ApplyToTextLayers(content.statsHeader, "SetText", ns.L("Stats Gained"))
+ApplyToTextLayers(content.statsHeader, "SetText", ns.L(content.statPage == "secondary" and "Secondary Stats" or "Stats Gained"))
 RegisterGlowFont(content.statsHeader)
 
 content.statsContainer = CreateFrame("Frame", nil, content)
@@ -1210,7 +1355,7 @@ content.weaponDivider = CreateSectionDivider(content)
 content.statsHeaderDivider:SetPoint("TOP", content.statsHeader, "BOTTOM", 0, -SectionGap())
 content.statsContainer:SetPoint("TOP", content.statsHeaderDivider, "BOTTOM", 0, -SectionGap())
 
-content.spellsHeader = NewText(content, "GameFontNormal", 2)
+content.spellsHeader = NewText(content, "GameFontNormalLarge", 2)
 ApplyToTextLayers(content.spellsHeader, "SetText", ns.L("Abilities"))
 RegisterGlowFont(content.spellsHeader)
 
@@ -1220,16 +1365,47 @@ for _, glow in ipairs(content.levelTimeText.glows) do glow:SetAlpha(content.leve
 content.levelTimeText:SetWidth(TEXT_WIDTH)
 content.levelTimeText:SetHeight(18)
 ApplyToTextLayers(content.levelTimeText, "SetJustifyH", "CENTER")
-ApplyToTextLayers(content.levelTimeText, "SetJustifyV", "MIDDLE")
+ApplyToTextLayers(content.levelTimeText, "SetJustifyV", "BOTTOM")
 ApplyToTextLayers(content.levelTimeText, "SetTextColor", 0.25, 1.0, 0.25)
 RegisterGlowFont(content.levelTimeText)
+content.levelTimeBaseFontSize = select(2, content.levelTimeText:GetFont())
 ApplyToTextLayers(content.levelTimeText, "SetShown", false)
 
+function render.LevelTimeFontSize()
+    return (content.levelTimeBaseFontSize + (IsHorizontalLayout() and 2 or 1)) * ns.GetTextScale("timeTextScale")
+end
+
+function render.MeasureLevelTime()
+    local horizontal = IsHorizontalLayout()
+    local size = render.LevelTimeFontSize()
+    local path = ns.db and ns.db.customFontPath or DEFAULT_FONT_PATH
+    if type(path) ~= "string" or path == "" then path = DEFAULT_FONT_PATH end
+    local text = content.levelTimeText:GetText() or ""
+    local key = path .. ":" .. size .. ":" .. TEXT_WIDTH .. ":" .. text
+    if content.levelTimeMetricKey ~= key then
+        ApplyToTextLayers(content.levelTimeText, "SetFont", path, size, "")
+        ApplyToTextLayers(content.levelTimeText, "SetWidth", TEXT_WIDTH)
+        ApplyToTextLayers(content.levelTimeText, "SetWordWrap", true)
+        ApplyToTextLayers(content.levelTimeText, "SetHeight", 0)
+        local lines = text:find("\n", 1, true) and 2 or 1
+        content.levelTimeNaturalHeight = math.max((size + 4) * lines, content.levelTimeText:GetStringHeight() or 0)
+        content.levelTimeMetricKey = key
+    end
+    ApplyToTextLayers(content.levelTimeText, "SetJustifyV", horizontal and "BOTTOM" or "MIDDLE")
+    ApplyToTextLayers(content.levelTimeText, "SetHeight", (content.levelTimeNaturalHeight or 18) + (content.paceRowExtra or 0))
+end
+
 local ABILITY_ICON_SIZE = 40
-local NEW_ABILITY_ICON_SIZE = ABILITY_ICON_SIZE * 1.05
+local function NewAbilityIconSize()
+    return ns.GetCurrentFlavor() == "retail" and 48 or ABILITY_ICON_SIZE * 1.05
+end
 local ABILITY_COST_HEIGHT = 14
 local ABILITY_COST_GAP = 1
-local ABILITY_COST_TOP_PADDING = 8
+local ABILITY_COST_TOP_PADDING = 0
+
+function render.AbilitySectionPadding()
+    return math.min(6, SectionGap())
+end
 
 local MONEY_ICON_PATHS = {
     gold = "Interface\\MoneyFrame\\UI-GoldIcon",
@@ -1256,17 +1432,17 @@ local function FormatTrainerCost(cost)
     return #parts > 0 and table.concat(parts, " ") or nil
 end
 
-local function FormatPlayedTime(seconds)
+function render.FormatLevelClock(seconds)
     seconds = math.max(0, math.floor(tonumber(seconds) or 0))
-    local hours = math.floor(seconds / 3600)
-    local minutes = math.floor((seconds % 3600) / 60)
-    local remainingSeconds = seconds % 60
-    if hours > 0 then
-        return ns.L("Time to level: %dh %02dm", hours, minutes)
-    elseif minutes > 0 then
-        return ns.L("Time to level: %dm %02ds", minutes, remainingSeconds)
-    end
-    return ns.L("Time to level: %ds", remainingSeconds)
+    return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+function render.FormatPaceTime(seconds)
+    seconds = math.floor(seconds)
+    local hours, minutes, remaining = math.floor(seconds / 3600), math.floor(seconds % 3600 / 60), seconds % 60
+    if hours > 0 then return ns.L("%dh %02dm %02ds", hours, minutes, remaining) end
+    if minutes > 0 then return ns.L("%dm %02ds", minutes, remaining) end
+    return ns.L("%ds", remaining)
 end
 
 local function AbilityCellHeight(iconSize)
@@ -1351,7 +1527,7 @@ content.abilityViewport, content.abilityRow = CreateAbilityViewport()
 content.abilityIconPool = {}
 content.currentTrainerAbilities = {}
 
-content.petSpellsHeader = NewText(content, "GameFontNormal", 2)
+content.petSpellsHeader = NewText(content, "GameFontNormalLarge", 2)
 ApplyToTextLayers(content.petSpellsHeader, "SetText", ns.L("Warlock Grimoires"))
 RegisterGlowFont(content.petSpellsHeader)
 content.petAbilityViewport, content.petAbilityRow = CreateAbilityViewport()
@@ -1376,11 +1552,20 @@ ApplyToTextLayers(content.noAbilitiesText, "SetJustifyV", "MIDDLE")
 RegisterGlowFont(content.noAbilitiesText)
 ApplyToTextLayers(content.noAbilitiesText, "SetText", ns.L("No unlearned skills available"))
 
+function render.RefreshAbilityHeader()
+    ApplyToTextLayers(content.spellsHeader, "SetText", ns.L("Abilities"))
+end
+
 -- These headings are created before SavedVariables load. Core refreshes them
 -- after selecting the saved language, before any level-up can be displayed.
 function ns.RefreshLocalizedPopupText()
-    ApplyToTextLayers(content.statsHeader, "SetText", ns.L("Stats Gained"))
-    ApplyToTextLayers(content.spellsHeader, "SetText", ns.L("Abilities"))
+    if content.currentReachedLevel then
+        ApplyToTextLayers(content.levelText, "SetText", content.levelRangeStart
+            and ns.L("Level %d - %d", content.levelRangeStart, content.currentReachedLevel)
+            or ns.L("Level %d", content.currentReachedLevel))
+    end
+    ApplyToTextLayers(content.statsHeader, "SetText", ns.L(content.statPage == "secondary" and "Secondary Stats" or "Stats Gained"))
+    render.RefreshAbilityHeader()
     ApplyToTextLayers(content.petSpellsHeader, "SetText", ns.L("Warlock Grimoires"))
     ApplyToTextLayers(content.noAbilitiesText, "SetText", ns.L("No unlearned skills available"))
 end
@@ -1413,7 +1598,7 @@ local function ApplyPopupWidth()
     local compact = IsCompactLayout()
     local gap = compact and 6 or 10
     local textWidth = compact
-        and (COMPACT_MAX_SKILLS * NEW_ABILITY_ICON_SIZE + (COMPACT_MAX_SKILLS - 1) * gap)
+        and (COMPACT_MAX_SKILLS * NewAbilityIconSize() + (COMPACT_MAX_SKILLS - 1) * gap)
         or DEFAULT_TEXT_WIDTH
     if compact and ns.db and ns.db.emphasizeStatGains then textWidth = textWidth + 40 end
     local horizontal = IsHorizontalLayout()
@@ -1423,17 +1608,24 @@ local function ApplyPopupWidth()
         textWidth = math.max(textWidth, MeasureStatContentWidth and MeasureStatContentWidth() or 0)
     end
     if horizontal then
-        textWidth = compact and textWidth or math.max(340, MeasureStatContentWidth and MeasureStatContentWidth() or 0)
+        textWidth = math.max(420, compact and textWidth or (MeasureStatContentWidth and MeasureStatContentWidth() or 0))
         local scale = ns.GetPopupScale()
         local columnCount = HorizontalColumnCount()
-        local trainingWidth = TrainingWidth(content.abilityViewport)
+        local trainingWidth = columnCount == 1 and 0 or TrainingWidth(content.abilityViewport)
         if columnCount == 3 then trainingWidth = trainingWidth + TrainingWidth(content.petAbilityViewport) + 28 end
         local available = UIParent:GetWidth() / scale - PortraitColumnWidth() - trainingWidth - 88 - render.HorizontalEndPadding() - render.HorizontalTrailingWidth()
         textWidth = math.max(160, math.min(textWidth, available))
         if FitStatFont then fontChanged = FitStatFont(textWidth, true) or fontChanged end
     end
+    if not horizontal then
+        local available = math.max(160, UIParent:GetWidth() / ns.GetPopupScale() - 60)
+        if textWidth > available then
+            textWidth = available
+            if FitStatFont then fontChanged = FitStatFont(textWidth, true) or fontChanged end
+        end
+    end
     local columnCount = HorizontalColumnCount()
-    local trainingWidth = TrainingWidth(content.abilityViewport)
+    local trainingWidth = columnCount == 1 and 0 or TrainingWidth(content.abilityViewport)
     if columnCount == 3 then trainingWidth = trainingWidth + TrainingWidth(content.petAbilityViewport) + 28 end
     local sidePadding = 30
     -- Balance both ends without moving the existing column anchors.
@@ -1447,7 +1639,7 @@ local function ApplyPopupWidth()
     FRAME_WIDTH = frameWidth
     frame:SetWidth(FRAME_WIDTH)
     content.statsContainer:SetWidth(TEXT_WIDTH)
-    content.levelTimeText:SetWidth(TEXT_WIDTH)
+    render.MeasureLevelTime()
     content.weaponSkillsText:SetWidth(TEXT_WIDTH)
     SyncTextGeometry(content.weaponSkillsText)
     for _, fs in ipairs(content.statLinePool) do
@@ -1473,7 +1665,42 @@ local function AnchorBelow(frame, anchor, gap)
     frame:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
 end
 
+function render.FitSectionHeadings()
+    local scale = ns.GetTextScale("headingTextScale")
+    if scale == 1 then return end
+    local horizontal = IsHorizontalLayout()
+    local specs = {{content.statsHeader, TEXT_WIDTH}}
+    if ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0 then
+        specs[#specs + 1] = {content.spellsHeader, horizontal and TrainingWidth(content.abilityViewport) or TEXT_WIDTH}
+    end
+    if ns.GetCurrentFlavor() ~= "retail" and #(content.currentWarlockPetAbilities or {}) > 0 then
+        specs[#specs + 1] = {content.petSpellsHeader, horizontal and TrainingWidth(content.petAbilityViewport) or TEXT_WIDTH}
+    end
+    local parts = {tostring(scale)}
+    for _, spec in ipairs(specs) do
+        local path, _, flags = spec[1]:GetFont()
+        parts[#parts + 1] = table.concat({path or DEFAULT_FONT_PATH, flags or "", spec[1]:GetText(), tostring(spec[2])}, "\031")
+    end
+    local key = table.concat(parts, "\030")
+    if render.headingFitKey == key then return end
+    local fit = 1
+    for _, spec in ipairs(specs) do
+        local text, width = spec[1], spec[2]
+        local path, _, flags = text:GetFont()
+        local naturalWidth = render.MeasureTextWidth(path, text.gluFontBaseSize * scale, flags, text:GetText())
+        fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
+    end
+    -- One fit factor keeps all section headings the same size.
+    for _, text in ipairs({content.statsHeader, content.spellsHeader, content.petSpellsHeader}) do
+        local path, _, flags = text:GetFont()
+        ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, text.gluFontBaseSize * scale * fit), flags or "")
+        SyncTextGeometry(text)
+    end
+    render.headingFitKey = key
+end
+
 local function PositionSections()
+    render.FitSectionHeadings()
     local current = content.statsContainer
     local gap = SectionGap()
     content.statsHeader:ClearAllPoints()
@@ -1484,13 +1711,21 @@ local function PositionSections()
         content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
     end
     AnchorBelow(content.statsHeaderDivider, content.statsHeader, gap)
-    AnchorBelow(content.statsContainer, content.statsHeaderDivider, gap)
+    local topGap = IsHorizontalLayout() and 8 / math.max(.001, content:GetScale()) or gap
+    AnchorBelow(content.statsContainer, content.statsHeaderDivider, topGap)
     AnchorBelow(content.statsBottomDivider, current, gap)
     content.statsBottomDivider:SetShown(not IsHorizontalLayout())
     current = IsHorizontalLayout() and content.statsContainer or content.statsBottomDivider
 
     if content.levelTimeText:IsShown() then
-        AnchorBelow(content.levelTimeText, current, IsHorizontalLayout() and 2 or gap + 2)
+        if IsHorizontalLayout() then
+            -- Section refreshes must preserve the footer anchor too.
+            content.levelTimeText:ClearAllPoints()
+            content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOMLEFT",
+                24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2, 26 / math.max(.001, content:GetScale()))
+        else
+            AnchorBelow(content.levelTimeText, current, gap + 2)
+        end
         if IsHorizontalLayout() then
             content.timeBottomDivider:Hide()
             current = content.levelTimeText
@@ -1504,16 +1739,21 @@ local function PositionSections()
         content.timeBottomDivider:Hide()
     end
 
-    if IsHorizontalLayout() then
-        content.spellsHeader:ClearAllPoints()
-        content.spellsHeader:SetPoint("TOP", content, "TOPLEFT", 24 + PortraitColumnWidth() + 36 + TEXT_WIDTH + TrainingWidth(content.abilityViewport) / 2, -24)
-    else
-        AnchorBelow(content.spellsHeader, current, gap)
+    local showAbilities = ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0
+    ApplyToTextLayers(content.spellsHeader, "SetShown", showAbilities)
+    content.abilitiesDivider:SetShown(showAbilities)
+    content.abilityViewport:SetShown(showAbilities)
+    if showAbilities then
+        if IsHorizontalLayout() then
+            content.spellsHeader:ClearAllPoints()
+            content.spellsHeader:SetPoint("TOP", content, "TOPLEFT", 24 + PortraitColumnWidth() + 36 + TEXT_WIDTH + TrainingWidth(content.abilityViewport) / 2, -24)
+        else
+            AnchorBelow(content.spellsHeader, current, gap)
+        end
+        AnchorBelow(content.abilitiesDivider, content.spellsHeader, gap)
+        AnchorBelow(content.abilityViewport, content.abilitiesDivider, IsHorizontalLayout() and topGap or render.AbilitySectionPadding())
+        current = content.abilityViewport
     end
-    AnchorBelow(content.abilitiesDivider, content.spellsHeader, gap)
-    AnchorBelow(content.abilityViewport, content.abilitiesDivider, gap)
-    content.abilityViewport:Show()
-    current = content.abilityViewport
 
     if content.petSpellsHeader:IsShown() then
         content.petDivider:Show()
@@ -1527,7 +1767,7 @@ local function PositionSections()
             AnchorBelow(content.petSpellsHeader, content.petDivider, gap)
         end
         AnchorBelow(content.petHeaderDivider, content.petSpellsHeader, gap)
-        AnchorBelow(content.petAbilityViewport, content.petHeaderDivider, gap)
+        AnchorBelow(content.petAbilityViewport, content.petHeaderDivider, IsHorizontalLayout() and topGap or render.AbilitySectionPadding())
         content.petAbilityViewport:Show()
         if not IsHorizontalLayout() then current = content.petAbilityViewport end
     else
@@ -1568,6 +1808,32 @@ function render.Size(region, width, height)
     if region:GetWidth() ~= width or region:GetHeight() ~= height then region:SetSize(width, height) end
 end
 
+-- Animated particles keep one anchor. Rebuild it only when the target changes;
+-- positions still update each frame, without clearing the native anchor first.
+function render.ParticlePoint(texture, relative, relativePoint, x, y)
+    if texture.gluPointTarget ~= relative or texture.gluPointName ~= relativePoint then
+        texture:ClearAllPoints()
+        texture.gluPointTarget, texture.gluPointName = relative, relativePoint
+        texture.gluPointX, texture.gluPointY = nil, nil
+    end
+    if texture.gluPointX ~= x or texture.gluPointY ~= y then
+        texture:SetPoint("CENTER", relative, relativePoint, x, y)
+        texture.gluPointX, texture.gluPointY = x, y
+    end
+end
+
+-- Particle dimensions are owned by this renderer. Cache logical sizes in Lua
+-- instead of querying two native dimensions for every moving texture/frame.
+-- General layout regions keep render.Size, since other code can resize them.
+function render.ParticleSize(texture, width, height)
+    if texture.gluParticleWidth ~= width or texture.gluParticleHeight ~= height then
+        texture:SetSize(width, height)
+        texture.gluParticleWidth, texture.gluParticleHeight = width, height
+    end
+end
+
+
+
 local ApplyStatLineText
 local activeLineAnims = {}
 local activeIconAnims = {}
@@ -1579,7 +1845,7 @@ local function SetLineAlpha(fs, alpha)
         -- Hide zero-alpha rows so rebuilding them cannot expose stale glyphs.
         render.Alpha(fs.slideFrame, alpha)
         render.Shown(fs.slideFrame, alpha > 0)
-        render.Alpha(fs, 1)
+        render.Alpha(fs, fs.wordLayoutActive and 0 or 1)
         for _, glow in ipairs(fs.glows) do render.Alpha(glow, CurrentShadowAlpha(fs)) end
     else
         render.Alpha(fs, alpha)
@@ -1589,7 +1855,17 @@ end
 
 local function EntranceAlpha(stage, age, moving)
     if not moving or not stage then return 1 end
-    local t = math.max(0, math.min(1, (age - stage.start) / math.max(0.001, stage.finish - stage.start)))
+    local duration = math.max(0.001, stage.finish - stage.start)
+    local t = math.max(0, math.min(1, (age - stage.start) / duration))
+    if render.closing then
+        -- All stages reverse together, preserving any partially completed entrance.
+        local closing = render.closing
+        t = math.max(0, math.min(1, (closing.startAge - stage.start) / duration))
+        if stage == entranceTimeline.abilities or stage == entranceTimeline.petAbilities then
+            duration = BASE_STAT_SLIDE_DURATION / closing.speed
+        end
+        t = math.max(0, t - closing.age / duration)
+    end
     return 1 - (1 - t) ^ 2
 end
 
@@ -1597,9 +1873,14 @@ local function UpdateDividerEntrance(divider, stage, age, moving, fullWidth, isA
     local texture = isAccent and divider or divider.texture
     local alpha = EntranceAlpha(stage, age, moving)
     local reveal = 1
-    if ns.db and ns.db.backgroundAnimations ~= false and ns.db.dividerReveal and moving and stage then
+    if ns.db and moving and stage and (isAccent and ns.db.backgroundMode == "MODERN"
+        or ns.db.backgroundAnimations ~= false and not ns.db.reducedMotion and ns.db.dividerReveal) then
         -- Let the full-opacity centre expand slowly enough to read as motion.
-        local t = math.max(0, math.min(1, (age - stage.start) / (0.60 / Speed())))
+        local duration = .60 / (render.closing and render.closing.speed or Speed())
+        local t = math.max(0, math.min(1, (age - stage.start) / duration))
+        if render.closing then
+            t = math.max(0, math.min(1, (render.closing.startAge - stage.start) / duration) - render.closing.age / duration)
+        end
         reveal = t * t * (3 - 2 * t)
         alpha = math.min(1, t * 6)
     end
@@ -1642,7 +1923,7 @@ local function UpdateSectionEntrance(age, moving)
         for i, line in ipairs(bg.modernAccents) do
             local reveal = UpdateDividerEntrance(line, plan.background, age, moving, FRAME_WIDTH * 0.94, true)
             if i == 1 then
-                render.Size(bg.modern, math.max(0.001, ModernBackdropWidth(FRAME_WIDTH) * reveal), frame:GetHeight() * (IsHorizontalLayout() and 1 or 1.12))
+                render.Size(bg.modern, math.max(0.001, ModernBackdropWidth(FRAME_WIDTH) * reveal), frame:GetHeight() + (IsHorizontalLayout() and 0 or UI_METRICS.modernVerticalFadeTail))
                 bg.modern:SetTexCoord((1 - reveal) / 2, (1 + reveal) / 2, 0, 1)
             end
         end
@@ -1673,10 +1954,10 @@ local function StopLineAnimation(fs)
 end
 
 local function UpdateStatSlides(_, elapsed)
+    local perf = ns.PerfStart("stat_animation_frame")
     for fs, motion in pairs(activeLineAnims) do
         motion.age = motion.age + elapsed
         local t = math.max(0, math.min(1, (motion.age - motion.delay) / motion.duration))
-        if ns.db and ns.db.reducedMotion then t = 1 end
         local eased = 1 - (1 - t) ^ 3
         local startX = ns.db and ns.db.statSlideDirection == "none" and 0 or motion.startX
         local x = startX * (1 - eased)
@@ -1708,30 +1989,28 @@ local function UpdateStatSlides(_, elapsed)
         if t == 1 and countFinished then activeLineAnims[fs] = nil end
     end
     if not next(activeLineAnims) then statSlideDriver:SetScript("OnUpdate", nil) end
+    ns.PerfEnd(perf)
 end
 
-local function StartLineAnimation(fs, container, startX, y, delay, duration)
+local function StartLineAnimation(fs, container, startX, y, delay, duration, timingScale)
     StopLineAnimation(fs)
+    timingScale = timingScale or 1
     fs.slideFrame:SetWidth(TEXT_WIDTH)
     fs.slideFrame:ClearAllPoints()
     fs.countFinishAt = fs.statData and fs.statData.new ~= fs.statData.old
         and ns.db and ns.db.emphasizeStatGains and not ns.db.reducedMotion
-        and delay + 1.0 / Speed() or nil
+        and delay + timingScale / Speed() or nil
     fs.displayGain = fs.statData and (ns.db and ns.db.emphasizeStatGains and not ns.db.reducedMotion and 0 or fs.statData.new - fs.statData.old) or nil
     ApplyStatLineText(fs)
-    if ns.db and ns.db.reducedMotion then
-        fs.slideFrame:SetPoint("TOP", container, "TOP", 0, y)
-        SetLineAlpha(fs, 1)
-    else
-        fs.slideFrame:SetPoint("TOP", container, "TOP", startX, y)
-        SetLineAlpha(fs, 0)
-        activeLineAnims[fs] = {
-            container = container, startX = startX, y = y,
-            delay = delay, duration = duration, age = 0, lastX = startX,
-            countDuration = 1.0 / Speed(),
-        }
-        statSlideDriver:SetScript("OnUpdate", UpdateStatSlides)
-    end
+    fs.slideFrame:SetPoint("TOP", container, "TOP", startX, y)
+    SetLineAlpha(fs, 0)
+    fs.entranceMotion = { container = container, startX = startX, y = y, delay = delay, duration = duration }
+    activeLineAnims[fs] = {
+        container = container, startX = startX, y = y,
+        delay = delay, duration = duration, age = 0, lastX = startX,
+        countDuration = timingScale / Speed(),
+    }
+    statSlideDriver:SetScript("OnUpdate", UpdateStatSlides)
     SetLineShown(fs, true)
 end
 
@@ -1741,9 +2020,11 @@ local function ReleaseStatLine(fs)
     StopLineAnimation(fs)
     fs.statData, fs.plainText, fs.displayGain, fs.gainFlash = nil, nil, nil, 0
     fs.entranceEnd, fs.countFinishAt = nil, nil
+    if fs.statTextCache then fs.statTextCache.name, fs.statTextCache.plain = nil, nil end
     SetLineShown(fs, false)
     fs.slideFrame:Hide()
     if fs.gainCounter then ApplyToTextLayers(fs.gainCounter, "Hide") end
+    for _, word in ipairs(fs.statWords or {}) do ApplyToTextLayers(word, "Hide") end
 end
 
 local function GetStatLine(index)
@@ -1766,7 +2047,7 @@ local function GetStatLine(index)
     ApplyToTextLayers(fs, "SetJustifyH", "CENTER")
     ApplyToTextLayers(fs, "SetWordWrap", false)
     RegisterGlowFont(fs, 20, "")
-    ApplyToTextLayers(fs, "SetFont", fontPath, 20, "")
+    ApplyToTextLayers(fs, "SetFont", fontPath, 20 * ns.GetTextScale("statTextScale"), "")
     if not ns.db or ns.db.showTextShadow ~= false then EnsureGlowLayers(fs) end
     local counter = NewText(holder, "GameFontHighlight", 2)
     counter.slideFrame = holder
@@ -1776,7 +2057,7 @@ local function GetStatLine(index)
     counter:SetWordWrap(false)
     counter:SetHeight(STAT_LINE_HEIGHT)
     RegisterGlowFont(counter, 20, "")
-    ApplyToTextLayers(counter, "SetFont", fontPath, 20, "")
+    ApplyToTextLayers(counter, "SetFont", fontPath, 20 * ns.GetTextScale("statTextScale"), "")
     if not ns.db or ns.db.showTextShadow ~= false then EnsureGlowLayers(counter) end
     fs.gainCounter = counter
     ApplyToTextLayers(counter, "Hide")
@@ -1806,10 +2087,11 @@ local function StartIconPop(icon, container, x, y, delay, duration, skipAnimatio
         icon.animationTranslation = translation
         icon.animationAlpha = alpha
     end
+    icon.entranceMotion = { delay = delay, duration = duration, skip = skipAnimation }
     activeIconAnims[icon] = nil
     if icon.animationGroup then icon.animationGroup:Stop() end
     icon.animationContainer, icon.animationX, icon.animationY = container, x, y
-    if skipAnimation or (ns.db and ns.db.reducedMotion) then
+    if skipAnimation then
         icon:ClearAllPoints()
         icon:SetPoint("CENTER", container, "CENTER", x, y)
         icon:SetScale(1)
@@ -1903,12 +2185,11 @@ local function GetAbilityIcon(index, row, pool)
     glow:SetVertexColor(1, 0.82, 0.20)
     glow:Hide()
     btn.newAbilityGlow = glow
-    btn.cornerSparkles = { NewSparkTexture(btn), NewSparkTexture(btn) }
+    btn.cornerSparkles = {}
     btn.ambientSparkle = NewSparkTexture(btn)
-    btn.cornerSparkles[1]:SetPoint("CENTER", btn, "TOPLEFT", 1, -1)
-    btn.cornerSparkles[2]:SetPoint("CENTER", btn, "BOTTOMRIGHT", -1, 1)
 
     btn:SetScript("OnEnter", function(self)
+        if frame.closingInputSuppressed then return end
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if self.spellID and GameTooltip.SetSpellByID then
             GameTooltip:SetSpellByID(self.spellID)
@@ -1947,7 +2228,9 @@ local function EmptyTrainerSkillsMessage()
 end
 
 local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText, skipAnimation)
+    local newIconSize = NewAbilityIconSize()
     local count = #abilities
+    row.viewport.abilityCount = count
     local speed = Speed()
     local staggerBase = BASE_STAT_STAGGER_BASE / speed
     local staggerStep = BASE_STAT_STAGGER_STEP / speed
@@ -1956,7 +2239,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local controller = row.viewport.scrollController or row.viewport.slider
     local previousValue = skipAnimation and row.viewport.verticalLayout == vertical and controller:GetValue() or 0
     row.viewport.requestedScroll = previousValue
-    row.viewport.cellHeight = AbilityCellHeight(NEW_ABILITY_ICON_SIZE)
+    row.viewport.cellHeight = AbilityCellHeight(NewAbilityIconSize())
     row.viewport.layoutScale = 1
     row.viewport.sharedScroll, row.viewport.scrollController = nil, nil
     row.viewport.slider:SetParent(row.viewport)
@@ -1970,7 +2253,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     row.viewport:SetVerticalScroll(0)
 
     if count == 0 then
-        local emptyWidth = showEmptyText and (NEW_ABILITY_ICON_SIZE * 3 + AbilityIconGap() * 2 + 16) or 120
+        local emptyWidth = showEmptyText and (NewAbilityIconSize() * 3 + AbilityIconGap() * 2 + 16) or 120
         row.viewport.horizontalWidth = emptyWidth
         row.viewport:SetWidth(vertical and emptyWidth or TEXT_WIDTH)
         row:SetWidth(vertical and emptyWidth or TEXT_WIDTH)
@@ -2009,12 +2292,12 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local rowIconSize = ABILITY_ICON_SIZE
     for i, spell in ipairs(abilities) do
         local icon = GetAbilityIcon(i, row, pool)
-        local iconSize = spell.isNewAbility == true and NEW_ABILITY_ICON_SIZE or ABILITY_ICON_SIZE
+        local iconSize = spell.isNewAbility == true and newIconSize or ABILITY_ICON_SIZE
         icon:SetSize(iconSize, iconSize)
         icon.newAbilityGlow:SetSize(iconSize * 1.85, iconSize * 1.85)
         cellWidth = math.max(cellWidth, iconSize)
         rowIconSize = math.max(rowIconSize, iconSize)
-        local formattedCost = ns.db and ns.db.showTrainerCosts and FormatTrainerCost(spell.cost)
+        local formattedCost = ns.GetCurrentFlavor() ~= "retail" and ns.db and ns.db.showTrainerCosts and FormatTrainerCost(spell.cost)
         if formattedCost ~= icon.formattedCost then
             icon.costText:SetText(formattedCost or "")
             icon.formattedCost = formattedCost
@@ -2039,17 +2322,18 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local rows = shouldScroll and 1 or math.ceil(count / maxColumns)
     if horizontalGrid then
         columns = 3
-        rows = math.min(count, 4) + math.ceil(math.max(0, count - 12) / 3)
+        rows = math.min(count, 3) + math.ceil(math.max(0, count - 9) / 3)
     end
     local totalWidth = columns * cellWidth + (columns - 1) * gap
     local cellHeight = AbilityCellHeight(rowIconSize)
     local verticalGap = vertical and 0 or gap
     row.viewport.cellHeight = cellHeight
     local totalHeight = rows * cellHeight + (rows - 1) * verticalGap
+    row.viewport.rowContentHeight = totalHeight
     local viewportHeight = totalHeight
     if vertical then
         -- Keep a fixed viewport height while additional entries scroll vertically.
-        local visibleRows = 4
+        local visibleRows = 3
         viewportHeight = math.min(totalHeight, visibleRows * cellHeight + (visibleRows - 1) * verticalGap)
         shouldScroll = count >= 10 and totalHeight > viewportHeight
     end
@@ -2132,16 +2416,16 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         local zeroIndex = i - 1
         local column = zeroIndex % columns
         local rowIndex = math.floor(zeroIndex / columns)
-        if horizontalGrid and i <= 12 then
-            column = math.floor(zeroIndex / 4)
-            rowIndex = zeroIndex % 4
+        if horizontalGrid and i <= 9 then
+            column = math.floor(zeroIndex / 3)
+            rowIndex = zeroIndex % 3
         elseif horizontalGrid then
-            column = (i - 13) % 3
-            rowIndex = 4 + math.floor((i - 13) / 3)
+            column = (i - 10) % 3
+            rowIndex = 3 + math.floor((i - 10) / 3)
         end
         local x = startX + column * (cellWidth + gap)
-        if horizontalGrid and count <= 8 then
-            local occupiedColumns = math.ceil(count / 4)
+        if horizontalGrid and count <= 6 then
+            local occupiedColumns = math.ceil(count / 3)
             x = x + (3 - occupiedColumns) * (cellWidth + gap) / 2
         end
         if not vertical and not shouldScroll then
@@ -2149,7 +2433,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
             x = -(rowColumns * cellWidth + (rowColumns - 1) * gap) / 2
                 + cellWidth / 2 + column * (cellWidth + gap)
         end
-        local iconSize = spell.isNewAbility == true and NEW_ABILITY_ICON_SIZE or ABILITY_ICON_SIZE
+        local iconSize = spell.isNewAbility == true and newIconSize or ABILITY_ICON_SIZE
         local visibleCellHeight = formattedCost and cellHeight or rowIconSize
         local iconY = startY + (visibleCellHeight - iconSize) / 2
             - rowIndex * (cellHeight + verticalGap)
@@ -2168,13 +2452,84 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     end
 end
 
+-- Fit visible icon groups after the normal frame geometry has been finalized.
+-- must never feed back into column widths, row heights or the popup's scale.
+function render.FitSparseAbilityIcons(viewport, pool)
+    local count = viewport.abilityCount or 0
+    local vertical = IsHorizontalLayout()
+    if count < 1 or count > 3 or (viewport.scrollMaximum or 0) > 0 then return end
+    local gap = AbilityIconGap()
+    local width, height = viewport:GetWidth(), viewport:GetHeight()
+    local base = NewAbilityIconSize()
+    local function IconSize(icon, size)
+        return icon.isNewAbility == true and size or math.min(ABILITY_ICON_SIZE, ABILITY_ICON_SIZE * size / base)
+    end
+    local function Measure(size, position)
+        local columns, rows = {}, {}
+        for i = 1, count do
+            local icon = pool[i]
+            local iconSize = IconSize(icon, size)
+            local column = vertical and math.floor((i - 1) / 3) + 1 or i
+            local row = vertical and (i - 1) % 3 + 1 or 1
+            local cellWidth = math.max(iconSize, icon.formattedCost and icon.costText:GetWidth() or 0)
+            local cellHeight = iconSize + (icon.formattedCost and ABILITY_COST_GAP + ABILITY_COST_HEIGHT or 0)
+            columns[column] = math.max(columns[column] or 0, cellWidth)
+            rows[row] = math.max(rows[row] or 0, cellHeight)
+        end
+        local groupWidth, groupHeight = gap * (#columns - 1), gap * (#rows - 1)
+        for _, value in ipairs(columns) do groupWidth = groupWidth + value end
+        for _, value in ipairs(rows) do groupHeight = groupHeight + value end
+        if position then
+            for i = 1, count do
+                local icon = pool[i]
+                local iconSize = IconSize(icon, size)
+                local column = vertical and math.floor((i - 1) / 3) + 1 or i
+                local row = vertical and (i - 1) % 3 + 1 or 1
+                local x, y = -groupWidth / 2 + columns[column] / 2, (vertical and viewport.row:GetHeight() or groupHeight) / 2 - iconSize / 2
+                if vertical and count == 1 then
+                    local lift = 18 / math.max(.001, content:GetScale() * viewport:GetScale())
+                    y = math.min(lift, math.max(0, (viewport.row:GetHeight() - iconSize) / 2))
+                end
+                for j = 1, column - 1 do x = x + columns[j] + gap end
+                for j = 1, row - 1 do y = y - rows[j] - gap end
+                render.Size(icon, iconSize, iconSize)
+                render.Size(icon.newAbilityGlow, iconSize * 1.85, iconSize * 1.85)
+                icon.animationX, icon.animationY = x, y
+                icon:ClearAllPoints()
+                icon:SetPoint("CENTER", viewport.row, "CENTER", x, y - (activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
+            end
+        end
+        local centeredCost = vertical and count == 1 and pool[1].formattedCost and ABILITY_COST_GAP + ABILITY_COST_HEIGHT or 0
+        return groupWidth + (vertical and 16 or 0), groupHeight + centeredCost
+    end
+    local low, high = base, base * (count <= 3 and 1.5 or 1)
+    local baseWidth, baseHeight = Measure(base)
+    if baseWidth > width or baseHeight > height then low = 0 end
+    local capWidth, capHeight = Measure(high)
+    if capWidth <= width and capHeight <= height then
+        low = high
+    else
+        for _ = 1, 18 do
+            local mid = (low + high) / 2
+            local neededWidth, neededHeight = Measure(mid)
+            if neededWidth <= width and neededHeight <= height then low = mid else high = mid end
+        end
+    end
+    Measure(math.max(.1, math.floor(low * 100) / 100), true)
+end
+
 -- Fill the main ability row with the current unlearned skills.
 local function UpdateTrainerAbilityIcons(trainerAbilities, skipAnimation)
     content.currentTrainerAbilities = trainerAbilities or {}
     UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, content.noAbilitiesText, trainerAbilities, true, skipAnimation)
+    if ns.GetCurrentFlavor() == "retail" then
+        ApplyToTextLayers(content.noAbilitiesText, "Hide")
+    end
+    render.RefreshAbilityHeader()
 end
 
 local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
+    if ns.GetCurrentFlavor() == "retail" then petAbilities = {} end
     content.currentWarlockPetAbilities = petAbilities or {}
     local hasAbilities = type(petAbilities) == "table" and #petAbilities > 0
     if not hasAbilities then
@@ -2190,6 +2545,7 @@ local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
 end
 
 local function UpdateWeaponSkillText(unlearnedWeaponSkills)
+    if ns.GetCurrentFlavor() == "retail" then unlearnedWeaponSkills = {} end
     content.currentWeaponSkills = unlearnedWeaponSkills or {}
     local enabled = ns.db and ns.db.showWeaponSkills ~= false and not IsHorizontalLayout()
     if not enabled or type(unlearnedWeaponSkills) ~= "table" or #unlearnedWeaponSkills == 0 then
@@ -2251,34 +2607,133 @@ local function UpdateWeaponSkillText(unlearnedWeaponSkills)
     return true
 end
 
-local statMeasureFont
-local function MeasureStatText(fs, text)
-    statMeasureFont = statMeasureFont or content:CreateFontString(nil, "ARTWORK")
-    local fontPath, fontSize, fontFlags = fs:GetFont()
-    if fontPath and fontSize then statMeasureFont:SetFont(fontPath, fontSize, fontFlags or "") end
-    statMeasureFont:SetText(text or "")
-    return statMeasureFont:GetStringWidth() or 0
+-- Cache unconstrained glyph widths, not fitted boxes. The font tuple and locale
+-- invalidate measurements naturally; changing column width still reruns fitting.
+-- Bounding the cache prevents previews/counters from retaining unlimited strings.
+function render.MeasureTextWidth(fontPath, fontSize, fontFlags, text)
+    fontPath, fontFlags, text = fontPath or DEFAULT_FONT_PATH, fontFlags or "", text or ""
+    local locale = ns.GetLocale()
+    local cache = render.textMeasurements
+    if not cache or cache.locale ~= locale then
+        cache = { locale = locale, count = 0, widths = {} }
+        render.textMeasurements = cache
+    end
+    local key = table.concat({fontPath, tostring(fontSize), fontFlags, text}, "\031")
+    local cached = cache.widths[key]
+    if cached then return cached end
+    if not render.textMeasureFont then
+        -- This region must remain measurable while the popup is hidden.
+        local measure = UIParent:CreateFontString(nil, "ARTWORK")
+        measure:SetAlpha(0)
+        measure:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 0, -64)
+        measure:SetWordWrap(false)
+        measure:Show()
+        render.textMeasureFont = measure
+    end
+    local measure = render.textMeasureFont
+    measure:SetFont(fontPath, fontSize, fontFlags)
+    measure:SetWidth(0)
+    measure:SetHeight(0)
+    measure:SetText(text)
+    local width = measure:GetStringWidth() or 0
+    if cache.count >= UI_METRICS.textMeasurementLimit then cache.widths, cache.count = {}, 0 end
+    cache.widths[key], cache.count = width, cache.count + 1
+    return width
 end
 
-local function GainCounterWidth(fs, target)
+local function MeasureStatText(textRegion, text)
+    local fontPath, fontSize, fontFlags = textRegion:GetFont()
+    return render.MeasureTextWidth(fontPath, fontSize, fontFlags, text)
+end
+
+local function GainCounterWidth(fs, target, stat)
     local path, size, flags = fs:GetFont()
-    local digits = #tostring(math.floor(math.abs(target)))
-    if fs.gainWidthPath ~= path or fs.gainWidthSize ~= size or fs.gainWidthFlags ~= flags or fs.gainWidthDigits ~= digits then
+    local digits = #ns.FormatStatInteger(math.abs(target))
+    if fs.gainWidthPath ~= path or fs.gainWidthSize ~= size or fs.gainWidthFlags ~= flags or fs.gainWidthDigits ~= digits or fs.gainWidthUnit ~= (stat and stat.unit) then
         local width = 0
         for digit = 0, 9 do
             local number = string.rep(tostring(digit), digits)
-            width = math.max(width, MeasureStatText(fs, " (+" .. number .. ")"), MeasureStatText(fs, " (-" .. number .. ")"))
+            width = math.max(width, MeasureStatText(fs, ns.FormatStatGain(tonumber(number), stat)), MeasureStatText(fs, ns.FormatStatGain(-tonumber(number), stat)))
         end
         -- Native FontStrings can ellipsize a box sized exactly to glyph
         -- advances. Leave room for rounding, kerning and the glow outline.
         fs.gainWidthPath, fs.gainWidthSize, fs.gainWidthFlags, fs.gainWidthDigits = path, size, flags, digits
+        fs.gainWidthUnit = stat and stat.unit
         fs.gainReservedWidth = math.ceil(width) + 12
     end
     return fs.gainReservedWidth
 end
 
-local function StatGainColor(flash)
-    local color = ColorOf("statNew")
+function render.StatWordMetrics(fs, data)
+    local path, size, flags = fs:GetFont()
+    local counting = ns.db and ns.db.emphasizeStatGains == true
+    local threshold = ns.GetStatAbbreviationThreshold()
+    local label = ns.GetStatDisplayLabel(data)
+    local key = table.concat({tostring(path),tostring(size),tostring(flags),label,tostring(data.unit),tostring(data.old),tostring(data.new),tostring(counting),tostring(threshold),ns.GetLocale()}, "\031")
+    if fs.statWordMetricKey == key then return fs.statWordWidths, fs.statWordNatural end
+    local widths = {MeasureStatText(fs, label .. ":")+12, MeasureStatText(fs, ns.FormatStatTotal(data.old, data))+12,
+        MeasureStatText(fs, "->")+12, MeasureStatText(fs, ns.FormatStatTotal(data.new, data)) + 12}
+    if counting then
+        widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(data.old, data)) + 12)
+        local digits = math.max(#ns.FormatStatInteger(math.abs(data.old)), #ns.FormatStatInteger(math.abs(data.new)))
+        for digit = 0, 9 do
+            local value = tonumber(string.rep(tostring(digit), digits)) or 0
+            widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(value, data)) + 12)
+            if math.min(data.old,data.new) < 0 then widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(-value, data))+12) end
+        end
+        if threshold and math.min(data.old,data.new)<threshold and math.max(data.old,data.new)>=threshold then
+            widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(threshold-1, data))+12)
+        end
+        widths[5] = GainCounterWidth(fs, data.new-data.old, data)
+    end
+    if counting and threshold and math.max(math.abs(data.old),math.abs(data.new)) >= 1100000
+        and math.min(math.abs(data.old),math.abs(data.new)) < 1000000000 then
+        local millions = math.min(999, math.max(1, math.floor(math.max(math.abs(data.old),math.abs(data.new))/1000000)))
+        for digit=0,9 do
+            widths[4]=math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(millions*1000000+digit*111000, data))+12)
+        end
+    end
+    local space = MeasureStatText(fs," ")
+    local natural = space * (#widths-1)
+    for _, width in ipairs(widths) do natural = natural + width end
+    fs.statWordEndWidth = MeasureStatText(fs, counting and ns.FormatStatGain(data.new-data.old, data) or ns.FormatStatTotal(data.new, data))
+    fs.statWordMetricKey, fs.statWordWidths, fs.statWordNatural = key, widths, natural
+    fs.statWordSpace=space
+    return widths, natural
+end
+
+function render.UpdateStatWordTargets(changes)
+    local columns, space, endWidth = {}, 0, 0
+    local function Include(fs,data)
+        local widths=render.StatWordMetrics(fs,data)
+        for i,width in ipairs(widths) do columns[i]=math.max(columns[i] or 0,width) end
+        space=math.max(space,fs.statWordSpace or 0)
+        endWidth=math.max(endWidth,fs.statWordEndWidth or 0)
+    end
+    if changes then
+        for i,data in ipairs(changes) do
+            local fs = content.statLinePool[i] or GetStatLine(i)
+            Include(fs,data)
+        end
+    else
+        for _,fs in ipairs(content.statLinePool) do
+            if fs.statData then Include(fs,fs.statData) end
+        end
+    end
+    local target=space*math.max(0,#columns-1)
+    for _,width in ipairs(columns) do target=target+width end
+    local trailing=math.max(0,(columns[#columns] or 0)-endWidth)
+    local key=table.concat(columns,",")..":"..trailing
+    for i,fs in ipairs(content.statLinePool) do
+        if changes and i<=#changes or not changes and fs.statData then
+            fs.statWordTarget,fs.statWordColumns,fs.statWordColumnKey,fs.statWordTrailing=target,columns,key,trailing
+            fs.statTracking=0
+        end
+    end
+end
+
+local function StatGainColor(flash, data)
+    local color = data and data.new < data.old and {1, .2, .2} or ColorOf("statNew")
     flash = flash or 0
     -- Blend a white highlight over the normal gain colour, independent of tint.
     return color[1] + (1 - color[1]) * flash, color[2] + (1 - color[2]) * flash, color[3] + (1 - color[3]) * flash
@@ -2290,15 +2745,15 @@ local function BuildStatLineText(data, tracking, gainFlash, omitGain, displayVal
     local value = displayValue == nil and data.new or displayValue
     if ns.db and ns.db.emphasizeStatGains then
         local label = ColorOf("statLabel")
-        local r, g, b = StatGainColor(gainFlash)
+        local r, g, b = StatGainColor(gainFlash, data)
         local gainHex = render.HexRGB(r, g, b)
-        local base = string.format("%s%s: %d%s |r%s->%s %d|r",
+        local base = string.format("%s%s: %s%s |r%s->%s %s|r",
             Hex(label),
-            data.name, data.old, spaces, gainHex, spaces, value)
-        return omitGain and base or (base .. gainHex .. string.format(" (%+d)|r", data.new - data.old))
+            ns.GetStatDisplayLabel(data), ns.FormatStatTotal(data.old, data), spaces, gainHex, spaces, ns.FormatStatTotal(value, data))
+        return omitGain and base or (base .. gainHex .. (ns.FormatStatGain(data.new - data.old, data) .. "|r"))
     end
-    local base = string.format("%s: %d%s %s->%s %d|r",
-        data.name, data.old, spaces, Hex(ColorOf("statNew")), spaces, value)
+    local base = string.format("%s: %s%s %s->%s %s|r",
+        ns.GetStatDisplayLabel(data), ns.FormatStatTotal(data.old, data), spaces, Hex(ColorOf("statNew")), spaces, ns.FormatStatTotal(value, data))
     return base
 end
 
@@ -2306,10 +2761,11 @@ end
 -- the label and old value fixed even when a proportional-font digit changes.
 local function CountingBaseWidth(fs, data, tracking)
     local path, size, flags = fs:GetFont()
+    local threshold = ns.GetStatAbbreviationThreshold()
     if fs.countBasePath ~= path or fs.countBaseSize ~= size or fs.countBaseFlags ~= flags
-        or fs.countBaseName ~= data.name or fs.countBaseOld ~= data.old or fs.countBaseNew ~= data.new
-        or fs.countBaseTracking ~= tracking then
-        local digits = math.max(#tostring(math.floor(math.abs(data.old))), #tostring(math.floor(math.abs(data.new))))
+        or fs.countBaseName ~= ns.GetStatDisplayLabel(data) or fs.countBaseOld ~= data.old or fs.countBaseNew ~= data.new
+        or fs.countBaseUnit ~= data.unit or fs.countBaseTracking ~= tracking or fs.countBaseThreshold ~= threshold then
+        local digits = math.max(#ns.FormatStatInteger(math.abs(data.old)), #ns.FormatStatInteger(math.abs(data.new)))
         local width = 0
         for digit = 0, 9 do
             local value = tonumber(string.rep(tostring(digit), digits)) or 0
@@ -2318,25 +2774,39 @@ local function CountingBaseWidth(fs, data, tracking)
                 width = math.max(width, MeasureStatText(fs, BuildStatLineText(data, tracking, nil, true, -value)))
             end
         end
+        if threshold and math.min(data.old, data.new) < threshold and math.max(data.old, data.new) >= threshold then
+            width = math.max(width, MeasureStatText(fs, BuildStatLineText(data, tracking, nil, true, threshold - 1)))
+        end
+        if threshold and math.max(math.abs(data.old),math.abs(data.new)) >= 1100000
+            and math.min(math.abs(data.old),math.abs(data.new)) < 1000000000 then
+            local millions = math.min(999, math.max(1, math.floor(math.max(math.abs(data.old),math.abs(data.new))/1000000)))
+            for digit=0,9 do
+                width=math.max(width,MeasureStatText(fs,BuildStatLineText(data,tracking,nil,true,millions*1000000+digit*111000)))
+            end
+        end
+        fs.countBaseUnit = data.unit
+        fs.countBaseThreshold = threshold
         fs.countBasePath, fs.countBaseSize, fs.countBaseFlags = path, size, flags
-        fs.countBaseName, fs.countBaseOld, fs.countBaseNew = data.name, data.old, data.new
+        fs.countBaseName, fs.countBaseOld, fs.countBaseNew = ns.GetStatDisplayLabel(data), data.old, data.new
         fs.countBaseTracking, fs.countBaseWidth = tracking, width
     end
     return fs.countBaseWidth
 end
 
 local function StatTextWidth(fs, data, tracking)
+    if ns.db and ns.db.equalStatWidths then local _,width=render.StatWordMetrics(fs,data);return math.max(width,fs.statWordTarget or 0) end
     local counting = ns.db and ns.db.emphasizeStatGains
     local width = counting and CountingBaseWidth(fs, data, tracking)
         or MeasureStatText(fs, BuildStatLineText(data, tracking, nil, counting))
-    return width + (counting and GainCounterWidth(fs, data.new - data.old) or 0)
+    return width + (counting and GainCounterWidth(fs, data.new - data.old, data) or 0)
 end
 
 -- Include the complete reserved count range and a small horizontal inset.
 MeasureStatContentWidth = function()
+    if ns.db and ns.db.equalStatWidths then render.UpdateStatWordTargets() end
     local width = 0
     for _, fs in ipairs(content.statLinePool) do
-        if fs:IsShown() and fs.statData then
+        if fs.statData then
             local tracking = ns.db and ns.db.equalStatWidths and fs.statTracking or 0
             width = math.max(width, StatTextWidth(fs, fs.statData, tracking))
         end
@@ -2368,19 +2838,19 @@ FitStatFont = function(availableWidth, compact)
         end
     end
     local parts = { tostring(availableWidth), tostring(compact), tostring(ns.db and ns.db.emphasizeStatGains),
-        tostring(ns.db and ns.db.equalStatWidths) }
+        tostring(ns.db and ns.db.equalStatWidths), tostring(ns.GetTextScale("statTextScale")), tostring(ns.GetStatAbbreviationThreshold()), ns.GetLocale() }
     for _, fs in ipairs(content.statLinePool) do
-        if fs:IsShown() and fs.statData then
+        if fs.statData then
             local path, _, flags = fs:GetFont()
             local d = fs.statData
-            parts[#parts + 1] = table.concat({ tostring(path), tostring(flags), tostring(d.name), tostring(d.old), tostring(d.new), tostring(fs.statTracking) }, "\031")
+            parts[#parts + 1] = table.concat({ tostring(path), tostring(flags), tostring(ns.GetStatDisplayLabel(d)), tostring(d.unit), tostring(d.old), tostring(d.new), tostring(fs.statTracking) }, "\031")
         end
     end
     local key = table.concat(parts, "\030")
     if key == render.fitKey then SetSize(render.fitSize); return changed end
     -- Keep the smaller compact presentation for the whole popup so finishing
     -- a count never changes its font or frame width mid-display.
-    local baseSize = compact and ns.db and ns.db.emphasizeStatGains and 19 or 20
+    local baseSize = (compact and ns.db and ns.db.emphasizeStatGains and 19 or 20) * ns.GetTextScale("statTextScale")
     local fittedSize = baseSize
     SetSize(baseSize)
     if compact then
@@ -2410,19 +2880,7 @@ local function UpdateStatTracking(statChanges)
         return
     end
 
-    local target = 0
-    for _, data in ipairs(statChanges) do
-        target = math.max(target, StatTextWidth(content.statLinePool[1] or GetStatLine(1), data, 0))
-    end
-    for i, data in ipairs(statChanges) do
-        local fs = content.statLinePool[i] or GetStatLine(i)
-        local best, bestDelta = 0, math.huge
-        for tracking = 0, 20 do
-            local delta = math.abs(StatTextWidth(fs, data, tracking) - target)
-            if delta < bestDelta then best, bestDelta = tracking, delta end
-        end
-        fs.statTracking = best
-    end
+    render.UpdateStatWordTargets(statChanges)
 end
 
 function ns.RefreshStatTextLayout()
@@ -2441,17 +2899,99 @@ function render.StatColor(text, r, g, b)
     end
 end
 
+function render.ApplyStatWords(fs, amount, counting)
+    -- Keep the original row for existing timing/measurement consumers. Only
+    -- these pooled word layers render; their shared parent supplies the fade.
+    local d = fs.statData
+    local ownWidths, natural = render.StatWordMetrics(fs,d)
+    local widths=fs.statWordColumns or ownWidths
+    local target = fs.statWordTarget or natural
+    local key = fs.statWordMetricKey .. "\030" .. tostring(target) .. "\030" .. tostring(fs:GetWidth()) .. "\030" .. (fs.statWordColumnKey or "")
+    if not fs.statWords then
+        fs.statWords = {}
+        for i=1,4 do
+            local word = NewText(fs.slideFrame,"GameFontHighlight",2)
+            word.gluStatText,word.slideFrame = true,fs.slideFrame
+            word:SetWordWrap(false);word:SetJustifyH("LEFT")
+            RegisterGlowFont(word,20,"")
+            fs.statWords[i] = word
+        end
+    end
+    local path,size,flags = fs:GetFont()
+    local wordPath,wordSize,wordFlags = fs.statWords[1]:GetFont()
+    local fontChanged = wordPath ~= path or wordSize ~= size or (wordFlags or "") ~= (flags or "")
+    if fontChanged then fs.statWordLayoutKey = nil end
+    if fs.statWordLayoutKey ~= key then
+        local sum=0;for _,width in ipairs(widths) do sum=sum+width end
+        local spacing = math.max(0,(target-sum)/(#widths-1))
+        local x=(fs:GetWidth()-target+(not IsHorizontalLayout() and fs.statWordTrailing or 0))/2
+        for i=1,#widths do
+            local word=i==5 and fs.gainCounter or fs.statWords[i]
+            -- A page can change its text/columns while keeping the same font
+            -- and row height. Avoid resetting all eight glow layers needlessly.
+            if fontChanged then ApplyToTextLayers(word,"SetFont",path,size,flags or "") end
+            if word:GetWidth() ~= widths[i] then ApplyToTextLayers(word,"SetWidth",widths[i]) end
+            local height = fs:GetHeight()
+            if word:GetHeight() ~= height then ApplyToTextLayers(word,"SetHeight",height) end
+            word.gluFixedStatHeight=true
+            word:ClearAllPoints();word:SetPoint("TOPLEFT",fs.slideFrame,"TOPLEFT",x,0)
+            x=x+widths[i]+spacing
+        end
+        ApplyToTextLayers(fs.gainCounter,"SetJustifyH","LEFT")
+        fs.statWordLayoutKey=key
+    end
+    local values={ns.GetStatDisplayLabel(d)..":",ns.FormatStatTotal(d.old, d),"->",ns.FormatStatTotal(counting and d.old+amount or d.new, d)}
+    local label=ActiveColor("statLabel")
+    local r,g,b=StatGainColor(counting and fs.gainFlash or 0, d)
+    for i,word in ipairs(fs.statWords) do
+        if word.wordText~=values[i] then ApplyToTextLayers(word,"SetText",values[i]);word.wordText=values[i] end
+        if ns.db.showTextShadow~=false then EnsureGlowLayers(word) end
+        if not word:IsShown() then ApplyToTextLayers(word,"SetShown",true) end
+        if i<3 then render.StatColor(word,label[1],label[2],label[3]) else render.StatColor(word,r,g,b) end
+    end
+    fs.wordLayoutActive=true
+    render.Alpha(fs,0)
+    for _,glow in ipairs(fs.glows) do render.Alpha(glow,0) end
+end
+
 ApplyStatLineText = function(fs)
     local d = fs.statData
+    local wordMode = d and ns.db and ns.db.equalStatWidths == true
+    if not wordMode and fs.wordLayoutActive then
+        fs.wordLayoutActive=false;fs.statWordLayoutKey=nil
+        fs.layoutWidth,fs.counterBaseWidth,fs.renderedGainText=nil,nil,nil
+        render.Alpha(fs,1)
+        for _,glow in ipairs(fs.glows) do render.Alpha(glow,CurrentShadowAlpha(fs)) end
+        for _,word in ipairs(fs.statWords or {}) do ApplyToTextLayers(word,"Hide") end
+        ApplyToTextLayers(fs.gainCounter,"SetJustifyH","LEFT")
+    end
     local counting = d and ns.db and ns.db.emphasizeStatGains
     local tracking = ns.db and ns.db.equalStatWidths and fs.statTracking or 0
     local amount = d and (fs.displayGain == nil and d.new - d.old or fs.displayGain)
     local displayedValue = counting and d.old + amount or nil
-    local text = d and BuildStatLineText(d, tracking, fs.gainFlash, counting, displayedValue)
-        or (fs.plainText or "")
-    if text ~= fs.renderedStatText then
-        ApplyToTextLayers(fs, "SetText", text)
-        fs.renderedStatText = text
+    local cache = fs.statTextCache
+    if not cache then cache = {}; fs.statTextCache = cache end
+    local labelColor, gainColor = ColorOf("statLabel"), ColorOf("statNew")
+    local name, old, new = d and ns.GetStatDisplayLabel(d), d and d.old, d and d.new
+    local flash = counting and fs.gainFlash or 0
+    local threshold = ns.GetStatAbbreviationThreshold()
+    if fs.renderedStatText == nil or cache.name ~= name or cache.old ~= old or cache.new ~= new
+        or cache.tracking ~= tracking or cache.counting ~= counting or cache.value ~= displayedValue
+        or cache.flash ~= flash or cache.plain ~= fs.plainText or cache.threshold ~= threshold
+        or cache.lr ~= labelColor[1] or cache.lg ~= labelColor[2] or cache.lb ~= labelColor[3]
+        or cache.gr ~= gainColor[1] or cache.gg ~= gainColor[2] or cache.gb ~= gainColor[3] then
+        local text = d and BuildStatLineText(d, tracking, flash, counting, displayedValue)
+            or (fs.plainText or "")
+        if text ~= fs.renderedStatText then
+            ApplyToTextLayers(fs, "SetText", text)
+            fs.renderedStatText = text
+        end
+        cache.name, cache.old, cache.new = name, old, new
+        cache.tracking, cache.counting, cache.value = tracking, counting, displayedValue
+        cache.flash, cache.plain = flash, fs.plainText
+        cache.threshold = threshold
+        cache.lr, cache.lg, cache.lb = labelColor[1], labelColor[2], labelColor[3]
+        cache.gr, cache.gg, cache.gb = gainColor[1], gainColor[2], gainColor[3]
     end
     if fs.slideFrame and fs.slideFrame.modernShade then
         fs.slideFrame.modernShade:SetShown(ns.db and ns.db.backgroundMode == "MODERN")
@@ -2459,10 +2999,10 @@ ApplyStatLineText = function(fs)
     local label = ActiveColor("statLabel")
     render.StatColor(fs, label[1], label[2], label[3])
     local path, size, flags = fs:GetFont()
-    local geometryChanged = fs.layoutName ~= (d and d.name) or fs.layoutOld ~= (d and d.old)
+    local geometryChanged = fs.layoutName ~= (d and ns.GetStatDisplayLabel(d)) or fs.layoutOld ~= (d and d.old)
         or fs.layoutNew ~= (d and d.new) or fs.layoutTracking ~= tracking or fs.layoutCounting ~= counting
         or fs.layoutPath ~= path or fs.layoutSize ~= size or fs.layoutFlags ~= flags
-        or fs.layoutWidth ~= fs:GetWidth()
+        or fs.layoutWidth ~= fs:GetWidth() or fs.layoutThreshold ~= threshold
     local offset = fs.statTextOffset or 0
     if fs.countingLayout ~= (counting == true) then
         ApplyToTextLayers(fs, "SetJustifyH", counting and "LEFT" or "CENTER")
@@ -2471,9 +3011,9 @@ ApplyStatLineText = function(fs)
     if counting then
         local target = d.new - d.old
         if geometryChanged then
-          local width = GainCounterWidth(fs, target)
+          local width = GainCounterWidth(fs, target, d)
           local baseWidth = CountingBaseWidth(fs, d, tracking)
-          offset = (fs:GetWidth() - baseWidth - width) / 2
+          offset = (fs:GetWidth() - baseWidth - (IsHorizontalLayout() and width or MeasureStatText(fs, ns.FormatStatGain(target, d)))) / 2
           if fs.counterBaseWidth ~= baseWidth or fs.counterWidth ~= width then
             fs.gainCounter:ClearAllPoints()
             fs.gainCounter:SetPoint("LEFT", fs, "LEFT", baseWidth, 0)
@@ -2481,19 +3021,23 @@ ApplyStatLineText = function(fs)
             fs.counterBaseWidth, fs.counterWidth = baseWidth, width
           end
         end
-        local counterText = string.format(" (%+d)", amount)
-        if counterText ~= fs.renderedGainText then
-            ApplyToTextLayers(fs.gainCounter, "SetText", counterText)
-            fs.renderedGainText = counterText
+        if fs.renderedGainText == nil or fs.renderedGainAmount ~= amount then
+            local counterText = ns.FormatStatGain(amount, d)
+            if counterText ~= fs.renderedGainText then
+                ApplyToTextLayers(fs.gainCounter, "SetText", counterText)
+                fs.renderedGainText = counterText
+            end
+            fs.renderedGainAmount = amount
         end
-        local r, g, b = StatGainColor(fs.gainFlash)
+        local r, g, b = StatGainColor(fs.gainFlash, d)
         render.StatColor(fs.gainCounter, r, g, b)
     end
     if not counting then offset = 0 end
     if fs.gainCounter and fs.gainCounter:IsShown() ~= (counting == true) then ApplyToTextLayers(fs.gainCounter, "SetShown", counting == true) end
     if geometryChanged then
-        fs.layoutName, fs.layoutOld, fs.layoutNew = d and d.name, d and d.old, d and d.new
+        fs.layoutName, fs.layoutOld, fs.layoutNew = d and ns.GetStatDisplayLabel(d), d and d.old, d and d.new
         fs.layoutTracking, fs.layoutCounting = tracking, counting
+        fs.layoutThreshold = threshold
         fs.layoutPath, fs.layoutSize, fs.layoutFlags, fs.layoutWidth = path, size, flags, fs:GetWidth()
         SyncTextGeometry(fs)
         if fs.gainCounter then SyncTextGeometry(fs.gainCounter) end
@@ -2503,6 +3047,7 @@ ApplyStatLineText = function(fs)
         fs:SetPoint("TOP", fs.slideFrame, "TOP", offset, 0)
         fs.statTextOffset = offset
     end
+    if wordMode then render.ApplyStatWords(fs,amount,counting) end
 end
 
 -- Repeat the overlapping count-completion flashes using the same row offsets.
@@ -2512,7 +3057,7 @@ local function UpdateStatHighlights(cycleTime, enabled, age)
     for _, fs in ipairs(content.statLinePool) do
         local visible = fs.statData and fs:IsShown()
         local value = 0
-        if visible and fs.countFinishAt then
+        if visible and fs.countFinishAt and entranceTimeline.statFlashStart then
             count = count + 1
             local offset = fs.countFinishAt - entranceTimeline.statFlashStart
             local phase = (cycleTime - offset) / 0.40
@@ -2558,20 +3103,20 @@ render.abilityPools = { content.abilityIconPool, content.petAbilityIconPool }
 render.portraitMotePools = { content.portraitSparks, content.starburstMotes }
 render.particlePools = { content.portraitSparks, content.starburstMotes, content.backgroundEmbers }
 render.smallEffectPools = { content.portraitSparks, content.starburstMotes, content.backgroundEmbers, content.edgeGlows }
-content.portraitSparks[1] = NewSparkTexture(content)
-for i = 1, 2 do content.starburstMotes[i] = NewSparkTexture(content) end
-for i = 1, 40 do content.backgroundEmbers[i] = NewSparkTexture(content, "BACKGROUND") end
 content.edgeLayer = CreateFrame("Frame", nil, frame)
 content.edgeLayer:SetAllPoints(frame)
 content.edgeLayer:SetFrameLevel(frame:GetFrameLevel() + 4)
 content.edgeLayer:SetAlpha(0.30)
-for _, side in ipairs({ "LEFT", "RIGHT", "TOP", "BOTTOM" }) do
-    for layer = 1, 3 do
-        local texture = NewSparkTexture(content.edgeLayer)
-        texture:SetTexture("Interface\\Buttons\\WHITE8X8")
-        texture.side, texture.softness = side, layer
-        texture:SetPoint("CENTER", frame, side, 0, 0)
-        content.edgeGlows[#content.edgeGlows + 1] = texture
+function render.EnsureEdgeGlows()
+    if #content.edgeGlows > 0 then return end
+    for _, side in ipairs({ "LEFT", "RIGHT", "TOP", "BOTTOM" }) do
+        for layer = 1, 3 do
+            local texture = NewSparkTexture(content.edgeLayer)
+            texture:SetTexture("Interface\\Buttons\\WHITE8X8")
+            texture.side, texture.softness = side, layer
+            texture:SetPoint("CENTER", frame, side, 0, 0)
+            content.edgeGlows[#content.edgeGlows + 1] = texture
+        end
     end
 end
 
@@ -2610,6 +3155,8 @@ for i = 1, #ns.PARTICLE_SETTINGS do render.particleSettings[i] = {} end
 function render.RefreshParticleSettings()
     local db = ns.db or {}
     local milestone = content.isMilestone and db.milestoneAnimations ~= false and not db.reducedMotion and db.backgroundAnimations ~= false
+    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false and not db.reducedMotion and db.backgroundAnimations ~= false
+    render.backgroundMoteSpeed = maxLevel and 2 or 1
     render.milestoneScale = milestone and 1.25 or 1
     render.milestonePortraitScale = milestone and 1.10 or 1
     render.milestoneStarburstScale = render.milestoneScale * (milestone and 0.8 or 1) * render.milestonePortraitScale
@@ -2619,7 +3166,12 @@ function render.RefreshParticleSettings()
         settings.count = milestone and math.min(spec.maxCount, math.ceil(count * (i == 1 and 3 or i == 3 and 1.5 or 2))) or count
         settings.size = ns.GetParticleValue(spec, "size") / 100 * render.milestoneScale
         settings.opacity = math.min(1, ns.GetParticleValue(spec, "opacity") / 100 * (i == 3 and 1 or render.milestoneScale))
+        if maxLevel and i == 3 then
+            settings.count = math.min(spec.maxCount, math.ceil(count * 3))
+        end
     end
+    -- The foreground ember pool keeps the user's opacity; only depth motes brighten.
+    render.backgroundMoteOpacity = math.min(1, render.particleSettings[3].opacity * (maxLevel and 1.8 or 1))
     render.starburstOpacity = ns.GetParticleValue(ns.EFFECT_OPACITY_SETTINGS[1], "opacity") / 100 * render.milestoneScale * render.milestonePortraitScale
     render.starburstOpacity = math.min(1, render.starburstOpacity)
     render.pulseOpacity = ns.GetParticleValue(ns.EFFECT_OPACITY_SETTINGS[2], "opacity") / 100 * render.milestoneScale * render.milestonePortraitScale
@@ -2640,7 +3192,7 @@ local function PositionContainedMote(texture, radius, distance, eased, width, he
     -- hard stop at an edge. Both endpoints include room for the rotated mote.
     local endX = math.max(inset, math.min(width - inset, x + math.cos(heading) * distance))
     local endY = math.min(y, math.max(inset, math.min(height - inset, y + math.sin(heading) * distance)))
-    texture:SetPoint("CENTER", frame, "BOTTOMLEFT", x + (endX - x) * eased, y + (endY - y) * eased)
+    render.ParticlePoint(texture, frame, "BOTTOMLEFT", x + (endX - x) * eased, y + (endY - y) * eased)
 end
 
 local function RandomMoteSize(base)
@@ -2663,7 +3215,8 @@ end
 local function RollBackgroundEmber(texture, index)
     texture.opacityVariation = math.random() * .20 - .10
     texture.emberSpeed = 0.50 + math.random() * 0.50
-    texture.emberDuration = (5.5 + ((index - 1) % 8 + 1) * 0.41) / (texture.emberSpeed * 0.85)
+    texture.emberSpeedMultiplier = render.backgroundMoteSpeed or 1
+    texture.emberDuration = (5.5 + ((index - 1) % 8 + 1) * 0.41) / (texture.emberSpeed * 0.85 * texture.emberSpeedMultiplier)
     texture.moteSize = RandomMoteSize((4 + index % 3) * 1.15)
     texture.wanderPhase = math.random() * 2 * math.pi
     texture.wanderRate = 0.65 + math.random() * 0.50
@@ -2712,8 +3265,7 @@ end
 function render.PositionSparkle(icon, texture)
     local corner = math.random(4)
     local left, top = corner == 1 or corner == 4, corner <= 2
-    texture:ClearAllPoints()
-    texture:SetPoint("CENTER", icon, "CENTER",
+    render.ParticlePoint(texture, icon, "CENTER",
         (left and -1 or 1) * icon:GetWidth() * (0.30 + math.random() * 0.18),
         (top and 1 or -1) * icon:GetHeight() * (0.30 + math.random() * 0.18))
 end
@@ -2746,7 +3298,7 @@ function render.UpdateAmbientSparkles()
                     local phase = age / 0.42
                     local shine = math.sin(math.pi * phase)
                     local size = (6 + 8 * shine) * settings.size
-                    render.Size(texture, size, size)
+                    render.ParticleSize(texture, size, size)
                     texture:SetAlpha(settings.opacity * 0.70 * shine ^ 2)
                     texture:SetRotation(phase * math.pi / 2)
                     render.ambientWake = effectAge
@@ -2812,12 +3364,11 @@ local function UpdateSmallEffects(cycleTime, moving)
                 distance = distance * 1.7
             end
             texture.renderSize = size
-            render.Size(texture, size, size)
-            texture:ClearAllPoints()
+            render.ParticleSize(texture, size, size)
             if pool == content.starburstMotes then
                 PositionContainedMote(texture, radius, distance, eased, width, height, centerX, centerY)
             else
-                texture:SetPoint("CENTER", content.classRing, "CENTER",
+                render.ParticlePoint(texture, content.classRing, "CENTER",
                     math.cos(origin) * radius + math.cos(heading) * distance * eased,
                     math.sin(origin) * radius + math.sin(heading) * distance * eased)
             end
@@ -2836,7 +3387,7 @@ local function UpdateSmallEffects(cycleTime, moving)
         local visible = db.backgroundEmbers and i <= settings.count and ambientAge >= 0
         render.Shown(texture, visible == true)
         if visible then
-            if texture.emberCycle == nil then
+            if texture.emberCycle == nil or texture.emberSpeedMultiplier ~= render.backgroundMoteSpeed then
                 RollBackgroundEmber(texture, i)
                 texture.emberCycle = 0
                 texture.emberStartedAt = -((i * 0.71) % texture.emberDuration)
@@ -2852,13 +3403,12 @@ local function UpdateSmallEffects(cycleTime, moving)
             local progress = (t - 0.15 * t * t) / 0.85
             local x = ((i * 0.61803398875) % 1 - 0.5) * math.max(1, width - 40)
             local size = texture.moteSize * settings.size
-            render.Size(texture, size, size)
-            texture:ClearAllPoints()
+            render.ParticleSize(texture, size, size)
             local phase = texture.wanderPhase
             local drift = texture.wanderWidth * math.sin(phase + progress * math.pi * 2 * texture.wanderRate)
                 + 2 * math.sin(phase * 1.7 + progress * math.pi * 3)
             local limit = math.max(0, width / 2 - size * 0.75 - 2)
-            texture:SetPoint("CENTER", content, "BOTTOM", math.max(-limit, math.min(limit, x + drift)),
+            render.ParticlePoint(texture, content, "BOTTOM", math.max(-limit, math.min(limit, x + drift)),
                 18 + progress * math.max(1, height - 36))
             texture:SetRotation(progress * math.pi)
             texture:SetAlpha((settings.opacity > 0 and math.max(0, math.min(1, settings.opacity + texture.opacityVariation)) or 0) * math.sin(math.pi * t) ^ 2 * math.min(1, ambientAge / 0.30))
@@ -2875,7 +3425,7 @@ local function UpdateSmallEffects(cycleTime, moving)
             local thickness = texture.softness == 1 and 1 or (texture.softness == 2 and 3 or 7)
             local strength = texture.softness == 1 and 0.70 or (texture.softness == 2 and 0.22 or 0.08)
             local vertical = texture.side == "LEFT" or texture.side == "RIGHT"
-            render.Size(texture, vertical and thickness or width, vertical and math.max(1, height - 14) or thickness)
+            render.ParticleSize(texture, vertical and thickness or width, vertical and math.max(1, height - 14) or thickness)
             texture:SetAlpha(strength * math.sin(math.pi * edgeAge / 1.25) ^ 0.7)
         end
     end
@@ -2901,7 +3451,7 @@ local function UpdateSmallEffects(cycleTime, moving)
                         end
                         local shine = math.sin(math.pi * phase)
                         local size = (6 + 8 * shine) * settings.size
-                        render.Size(texture, size, size)
+                        render.ParticleSize(texture, size, size)
                         texture:SetAlpha(settings.opacity * shine ^ 2)
                         texture:SetRotation(phase * math.pi / 2)
                     end
@@ -2927,9 +3477,16 @@ function render.RefreshMilestoneLevelText()
         if entry.fs == text then base = entry.size; break end
     end
     local enabled = content.isMilestone and ns.db and ns.db.milestoneAnimations ~= false
-    local target = base * (enabled and 1.43 or 1)
+    local target = base * ns.GetTextScale("headingTextScale") * (enabled and 1.43 or 1)
+    local fitHeading = content.levelRangeStart or ns.GetTextScale("headingTextScale") ~= 1
+    if fitHeading then
+        ApplyToTextLayers(text, "SetFont", path, target, flags)
+        local available = IsHorizontalLayout() and PortraitColumnWidth() - 12 or FRAME_WIDTH - 40
+        local width = text:GetStringWidth()
+        if width > available then target = math.max(8, target * available / width) end
+    end
     local changed = size ~= target
-    if changed then ApplyToTextLayers(text, "SetFont", path, target, flags) end
+    if changed or fitHeading then ApplyToTextLayers(text, "SetFont", path, target, flags) end
     return changed
 end
 
@@ -3062,6 +3619,10 @@ function render.UpdateMilestoneAccents()
         local shown = shockwaves and t >= 0 and t < 1
         render.Shown(ring, shown == true)
         if shown then
+            if i == 1 and not render.portraitImpactPlayed then
+                render.portraitImpactPlayed = true
+                ns.PlayPortraitImpactSound()
+            end
             local size = PortraitRingSize() * (1 + 1.7 * (1 - (1 - t) ^ 3)) * render.milestonePortraitScale
             render.Size(ring, size, size)
             ring:SetAlpha(render.pulseOpacity * 0.65 * math.min(1, t / 0.08) * (1 - t) ^ 2)
@@ -3101,9 +3662,8 @@ function render.UpdateMilestoneAccents()
             render.Shown(texture, shown == true)
             if shown then
                 local direction = i <= 3 and -1 or 1
-                texture:ClearAllPoints()
-                texture:SetPoint("CENTER", trail.divider, "CENTER", direction * half * position, 0)
-                render.Size(texture, 22 - tail * 4, 10 - tail * 2)
+                render.ParticlePoint(texture, trail.divider, "CENTER", direction * half * position, 0)
+                render.ParticleSize(texture, 22 - tail * 4, 10 - tail * 2)
                 texture:SetAlpha((0.9 - tail * 0.22) * math.sin(math.pi * position))
             end
         end
@@ -3134,9 +3694,8 @@ function render.UpdateMilestoneAccents()
             local distance = (texture.burstDistance or 90) * (1 - (1 - burstTime) ^ 3)
             local size = math.min(36, (texture.burstSize or 7) * render.particleSettings[3].size * 1.25 * accents.burstScales[ordinal]) * render.fireworkSize
             local origin = accents.burstOrigins[ordinal] * math.max(0, row:GetWidth() / 2 - size / 2)
-            render.Size(texture, size, size)
-            texture:ClearAllPoints()
-            texture:SetPoint("CENTER", row, "CENTER", origin + math.cos(angle) * distance, math.sin(angle) * distance * accents.burstHeights[ordinal])
+            render.ParticleSize(texture, size, size)
+            render.ParticlePoint(texture, row, "CENTER", origin + math.cos(angle) * distance, math.sin(angle) * distance * accents.burstHeights[ordinal])
             texture:SetAlpha(math.min(1, alpha * (texture.burstOpacity or 1)) * math.min(1, burstTime / 0.06) * (1 - burstTime) ^ 1.4)
             texture:SetRotation(angle + burstTime)
         end
@@ -3146,11 +3705,188 @@ function render.UpdateMilestoneAccents()
 end
 
 local UpdateVisualEffects
+function render.PortraitGlintDuration()
+    return content.isMaxLevel and ns.db and ns.db.maxLevelCelebration ~= false and .75 or 1.1
+end
+
 function render.PortraitGlintFinish()
     local db = ns.db or {}
     if not entranceTimeline or not db.portraitRingGlint or db.portraitMode == "none"
         or db.reducedMotion or db.backgroundAnimations == false then return 0 end
-    return entranceTimeline.portrait.finish + (.08 + 1.1 * 1.08) / Speed()
+    return entranceTimeline.portrait.finish + (.08 + render.PortraitGlintDuration() * 1.08) / Speed()
+end
+
+function render.HideMaxCelebration()
+    local effects = content.maxLevelEffects
+    if not effects or effects.hidden then return end
+    effects.hidden = true
+    effects.frame:Hide()
+    for _, pool in ipairs(effects.pools) do for _, texture in ipairs(pool) do texture:Hide() end end
+end
+
+function render.MaxClassTint(texture)
+    local _, class = UnitClass("player")
+    local color = ns.CLASS_COLORS[class] or { 1, 0.82, 0.2 }
+    local r, g, b = color[1], color[2], color[3]
+    local hi, lo = math.max(r, g, b), math.min(r, g, b)
+    local delta, hue = hi - lo, 0
+    if delta > 0 then
+        if hi == r then hue = ((g - b) / delta) % 6
+        elseif hi == g then hue = (b - r) / delta + 2
+        else hue = (r - g) / delta + 4 end
+        hue = hue / 6
+    end
+    local saturation = hi > 0 and delta / hi or 0
+    if saturation < .08 then
+        hue, saturation = .50 + math.random() * .16, .08 + math.random() * .18
+    else
+        hue = (hue + (math.random() - .5) * .12) % 1
+        saturation = math.min(1, saturation * (.75 + math.random() * .3))
+    end
+    local value = .78 + math.random() * .22
+    local function channel(offset)
+        local k = (offset + hue * 6) % 6
+        return value * (1 - saturation * math.max(0, math.min(k, 4 - k, 1)))
+    end
+    texture.maxR, texture.maxG, texture.maxB = channel(5), channel(3), channel(1)
+    texture:SetVertexColor(texture.maxR, texture.maxG, texture.maxB)
+end
+
+function render.PrepareMaxCelebration()
+    local effects = content.maxLevelEffects
+    if not effects then
+        effects = { fireworks = {}, sparks = {}, surge = {}, origins = {} }
+        effects.frame = CreateFrame("Frame", nil, frame)
+        effects.frame:SetAllPoints(frame)
+        effects.frame:SetClipsChildren(false)
+        effects.frame:SetFrameLevel(frame:GetFrameLevel() + 12)
+        effects.pools = { effects.fireworks, effects.sparks, effects.surge }
+        content.maxLevelEffects = effects
+        EnsureParticlePool(effects.fireworks, effects.frame, 240)
+        EnsureParticlePool(effects.sparks, effects.frame, 24)
+        EnsureParticlePool(effects.surge, effects.frame, 16)
+    end
+    if effects.prepared then return effects end
+    effects.prepared, effects.fireworksFinished = true, false
+    for i = 1, 8 do effects.origins[i] = (i % 2 == 0 and .28 or -.28) + (math.random() - .5) * .12 end
+    for i, texture in ipairs(effects.fireworks) do
+        if i % 2 == 1 then
+            texture.distance, texture.spread, texture.bend = 110 + math.random() * 115, (math.random() - .5) * 200, (math.random() - .5) * 95
+            texture.maxSize = 11 + math.random() * 9
+            render.MaxClassTint(texture)
+        else
+            local head = effects.fireworks[i - 1]
+            texture.distance, texture.spread, texture.bend, texture.maxSize = head.distance, head.spread, head.bend, head.maxSize
+            texture:SetVertexColor(head.maxR, head.maxG, head.maxB)
+        end
+    end
+    for i, texture in ipairs(effects.sparks) do
+        texture.maxAngle = (i - 1) * math.pi * 2 / 24 + math.random() * .15
+        texture.maxDistance, texture.maxDuration = 35 + math.random() * 60, 1.1 + math.random() * .7
+        render.MaxClassTint(texture)
+    end
+    local _, class = UnitClass("player")
+    local surgeColor = ns.CLASS_COLORS[class] or { 1, .82, .2 }
+    for i, texture in ipairs(effects.surge) do
+        texture:SetVertexColor(surgeColor[1], surgeColor[2], surgeColor[3])
+        if i % 2 == 1 then
+            texture.surgePeriod = .8 + math.random() * .6
+            texture.surgeDuration = .24 + math.random() * .14
+            texture.surgeOffset = math.random() * texture.surgePeriod
+            texture.surgeCycle = nil
+        end
+    end
+    return effects
+end
+
+function render.UpdateMaxCelebration()
+    local db, plan = ns.db or {}, entranceTimeline
+    if not content.isMaxLevel or db.maxLevelCelebration == false or db.reducedMotion
+        or db.backgroundAnimations == false or not plan or not frame:IsShown() then
+        render.HideMaxCelebration()
+        return false
+    end
+    local effects = render.PrepareMaxCelebration()
+    effects.hidden = false
+    effects.frame:Show()
+    local speed, active = Speed(), false
+    local age = (effectAge - plan.finish) * speed
+    local fireworkSpan = math.max(.35, math.min(3, (tonumber(db.duration) or 7) * speed - .15))
+    local fireworkAge = age * 3 / fireworkSpan
+    if not effects.fireworksFinished then
+        if fireworkAge > 3 then
+            for _, texture in ipairs(effects.fireworks) do texture:Hide() end
+            effects.fireworksFinished = true
+        else
+            local width, height = frame:GetWidth(), frame:GetHeight()
+            for i, texture in ipairs(effects.fireworks) do
+                local emitter = math.floor((i - 1) / 30)
+                local t = (fireworkAge - emitter * .16) / 1.65 - (i % 2 == 0 and .055 or 0)
+                local shown = t >= 0 and t < 1
+                render.Shown(texture, shown)
+                if shown then
+                    local side, origin = math.floor(emitter / 2), effects.origins[emitter + 1]
+                    local nx, ny = side == 0 and -1 or side == 1 and 1 or 0, side == 2 and 1 or side == 3 and -1 or 0
+                    local x, y = nx * width / 2 + (nx == 0 and origin * width or 0), ny * height / 2 + (ny == 0 and origin * height or 0)
+                    local outward = texture.distance * (2 * t - t * t)
+                    local curve = texture.spread * t + texture.bend * math.sin(math.pi * t)
+                    x, y = x + nx * outward - ny * curve, y + ny * outward + nx * curve - 32 * t * t
+                    render.ParticlePoint(texture, frame, "CENTER", x, y)
+                    local size = texture.maxSize * math.max(.7, render.fireworkSize) * (i % 2 == 0 and .65 or 1) * (1 - .25 * t)
+                    render.ParticleSize(texture, size, size)
+                    texture:SetRotation(t * math.pi)
+                    texture:SetAlpha(math.min(1, t / .05) * math.sin(math.pi * t) ^ .55 * math.min(1, render.fireworkOpacity * 1.4) * (i % 2 == 0 and .65 or 1))
+                end
+            end
+            active = true
+        end
+    end
+    local portrait = db.portraitMode ~= "none"
+    local surgeAge = render.ringSurgeStartedAt and (effectAge - render.ringSurgeStartedAt - .2) * speed or -1
+    local surgeEnabled = portrait and IsPlayerPortrait() and db.portraitAnimation and surgeAge >= 0
+    local ring = db.portraitRingEnabled and content.classRingGraphic or content.classRing
+    local ringRadius = ring:GetWidth() * .5 * content:GetScale()
+    for i, texture in ipairs(effects.surge) do
+        -- Independent slower flashes stay at one random spot for their whole life.
+        local head = effects.surge[i % 2 == 1 and i or i - 1]
+        local beat = (surgeAge + head.surgeOffset) / head.surgePeriod
+        local cycle, phase = math.floor(beat), (beat % 1) * head.surgePeriod
+        local shown = surgeEnabled and phase < head.surgeDuration
+        if shown and head.surgeCycle ~= cycle then
+            head.surgeCycle = cycle
+            head.surgeAngle = math.random() * math.pi * 2
+            head.surgeSize = .5 + math.random() * 1.25
+        end
+        render.Shown(texture, shown == true)
+        if shown then
+            local angle = head.surgeAngle
+            local branch = i % 2 == 0 and 1 or -1
+            local distance = ringRadius + branch
+            local pulse = math.sin(math.pi * phase / head.surgeDuration)
+            render.ParticlePoint(texture, ring, "CENTER", math.cos(angle) * distance, math.sin(angle) * distance)
+            local scale = content:GetScale() * head.surgeSize
+            render.ParticleSize(texture, (16 + 20 * pulse) * scale, 6 * scale)
+            texture:SetRotation(angle + branch * .5)
+            texture:SetAlpha(pulse)
+        end
+    end
+    if surgeEnabled then active = true end
+    local radius = (PortraitRingSize() * PortraitRingScale() * .56 + 12) * content:GetScale()
+    local sparkAge = (effectAge - starburstStartedAt) * speed - .12
+    for i, texture in ipairs(effects.sparks) do
+        local t = (sparkAge - (i - 1) * .023) / texture.maxDuration
+        local shown = portrait and IsPlayerPortrait() and db.portraitAnimation and portraitStage == "starburst" and t >= 0 and t < 1
+        render.Shown(texture, shown == true)
+        if shown then
+            local angle = texture.maxAngle + t * .65
+            local distance = radius * .45 + texture.maxDistance * (2 * t - t * t)
+            render.ParticlePoint(texture, content.portraitAnchor, "CENTER", math.cos(angle) * distance, math.sin(angle) * distance)
+            local size = (7 + i % 4) * (1 - .5 * t)
+            render.ParticleSize(texture, size, size);texture:SetAlpha(math.sin(math.pi * t) * .9)
+            active = true
+        end
+    end
+    return active
 end
 
 function render.StartPortraitStarburst()
@@ -3165,7 +3901,7 @@ end
 function render.PortraitStarburstTime()
     local finish = render.PortraitGlintFinish()
     -- Begin growth .12s before the leading glint reaches the top of the ring.
-    return finish > 0 and finish - (.12 + 1.1 * .08) / Speed() or 0
+    return finish > 0 and finish - (.12 + render.PortraitGlintDuration() * .08) / Speed() or 0
 end
 
 local portraitPulseGroup = content.portraitPulse:CreateAnimationGroup()
@@ -3215,6 +3951,7 @@ end
 function render.HideTrialEffects()
     local effects = content.trialEffects
     if not effects then return end
+    if effects.portraitShimmer then effects.portraitShimmer:Hide() end
     for _, pool in ipairs({effects.glints, effects.depth}) do
         for _, texture in ipairs(pool) do texture:Hide() end
     end
@@ -3235,6 +3972,7 @@ function render.TintTrialImpact(white)
     Tint(content.portraitPulse);Tint(content.portraitStarburst)
     for _, pool in ipairs(render.smallEffectPools) do for _, texture in ipairs(pool) do Tint(texture) end end
     for _, pool in ipairs({effects.glints, effects.depth}) do for _, texture in ipairs(pool) do Tint(texture) end end
+    if effects.portraitShimmer then Tint(effects.portraitShimmer.texture) end
     for _, pool in pairs(effects.impacts) do for _, texture in ipairs(pool) do Tint(texture) end end
     for _, pool in ipairs(render.abilityPools) do
         for _, icon in ipairs(pool) do
@@ -3263,10 +4001,12 @@ function render.UpdateTrialEffects()
         content.trialEffects = effects
     end
     local active, speed = false, Speed()
+    local perf = ns.PerfStart("ring_glint_frame", effectAge)
     local color = ActiveColor("animatedElements")
     local portrait = db.portraitMode ~= "none"
     local milestone = content.isMilestone and db.milestoneAnimations ~= false
-    local glintAge = (effectAge-plan.portrait.finish-.08/speed)/(1.1/speed)
+    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
+    local glintAge = (effectAge-plan.portrait.finish-.08/speed)/(render.PortraitGlintDuration()/speed)
     local willStarburst = db.portraitAnimation and IsPlayerPortrait()
     local flareDuration = (milestone and .42 or .34) / speed
     local flare = (effectAge-render.PortraitGlintFinish())/flareDuration
@@ -3274,7 +4014,7 @@ function render.UpdateTrialEffects()
     local flaring = flare >= 0 and flare < 1
     -- A short attack creates a spark, followed by a shrinking, lightly flickering tail.
     local spark = flaring and (flare < .22 and 1-(1-flare/.22)^3 or (1-(flare-.22)/.78)^2) or 0
-    local flicker = flaring and .92+.08*math.cos(flare*math.pi*6) or 1
+    local flicker = flaring and (maxLevel and .65+.35*math.cos(flare*math.pi*10) or .92+.08*math.cos(flare*math.pi*6)) or 1
     if db.portraitRingGlint and portrait and (glintAge < 1.12 or holding or flaring) then
         if not effects.glintLayer then
             effects.glintLayer = CreateFrame("Frame", nil, content.portraitArtwork)
@@ -3291,10 +4031,11 @@ function render.UpdateTrialEffects()
             render.Shown(texture, visible)
             if visible then
                 local angle = onPath and math.pi/2-t*math.pi*2 or math.pi/2
-                local radius = ring:GetWidth()/2
+                local radius = ring:GetWidth() * (ring == content.classRingGraphic and render.portraitGlintRadius or .5)
                 texture:ClearAllPoints();texture:SetPoint("CENTER", ring, "CENTER", math.cos(angle)*radius,math.sin(angle)*radius)
-                local size = (22-(i-1)*6) * (flaring and .18+((milestone and 2.4 or 1.45)-.18)*spark or 1)
-                render.Size(texture,size,size)
+                local size = (22-(i-1)*6) * (flaring and .18+((maxLevel and 6.4 or milestone and 2.4 or 1.45)-.18)*spark or 1)
+                render.ParticleSize(texture,size,size)
+                texture:SetRotation(maxLevel and flaring and (flare-.22)*.6 or 0)
                 local alpha = flaring and spark^.45*flicker*(milestone and 1 or .9)
                     or onPath and math.sin(math.pi*t)^.5 or .35
                 texture:SetAlpha(alpha*(.75^(i-1)))
@@ -3305,6 +4046,49 @@ function render.UpdateTrialEffects()
         active = true
     else for _, texture in ipairs(effects.glints) do texture:Hide() end end
 
+    ns.PerfEnd(perf)
+    perf = ns.PerfStart("portrait_shimmer_frame", effectAge)
+    local shimmerAge = render.ringSurgeStartedAt and effectAge-render.ringSurgeStartedAt-.28/speed or -1
+    local shimmerDuration = .85/speed
+    local shimmerCycle = math.max(4, shimmerDuration+.5)
+    local shimmerTime = shimmerAge >= 0 and (shimmerAge % shimmerCycle)/shimmerDuration or -1
+    local shimmerVisible = (milestone or maxLevel) and db.portraitAnimation and IsPlayerPortrait()
+        and shimmerTime >= 0 and shimmerTime < 1
+    if shimmerVisible and not effects.portraitShimmer then
+        local clip = CreateFrame("Frame", nil, content.portraitArtwork)
+        clip:SetClipsChildren(true)
+        clip.texture = render.TrialSpark(clip)
+        clip.texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+        clip.texture:SetRotation(-math.pi/4)
+        if clip.CreateMaskTexture then
+            clip.mask = clip:CreateMaskTexture()
+            clip.mask:SetAllPoints(clip)
+            clip.mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            clip.texture:AddMaskTexture(clip.mask)
+        end
+        effects.portraitShimmer = clip
+    end
+    if effects.portraitShimmer then
+        local clip = effects.portraitShimmer
+        render.Shown(clip, shimmerVisible == true)
+        if shimmerVisible then
+            local target = db.portraitMode == "player3d" and content.modelBacking or content.classIcon
+            local width, height = target:GetWidth(), target:GetHeight()
+            clip:SetFrameLevel(math.max(content.portraitArtwork:GetFrameLevel(),
+                content.playerModel and content.playerModel:GetFrameLevel() or 0)+4)
+            clip:ClearAllPoints();clip:SetPoint("CENTER", target, "CENTER")
+            render.Size(clip,width,height);render.Alpha(clip,1)
+            local texture = clip.texture
+            texture:Show();render.ParticleSize(texture,width*1.8,18)
+            render.ParticlePoint(texture,clip,"CENTER",(-.8+1.6*shimmerTime)*width,(-.8+1.6*shimmerTime)*height)
+            texture:SetVertexColor(.6+.4*color[1],.6+.4*color[2],.6+.4*color[3])
+            texture:SetAlpha(.85*math.sin(math.pi*shimmerTime)^.5)
+            active = true
+        end
+    end
+
+    ns.PerfEnd(perf)
+    perf = ns.PerfStart("ability_shine_frame", effectAge)
     if not effects.shinesFinished then
     local pending=false
     for _, pool in ipairs(render.abilityPools) do
@@ -3324,8 +4108,8 @@ function render.UpdateTrialEffects()
                 render.Shown(icon.revealShine, visible == true)
                 if visible then
                     local texture,w,h = icon.revealShine.texture,icon:GetWidth(),icon:GetHeight()
-                    texture:Show();render.Size(texture,w*1.8,16)
-                    texture:ClearAllPoints();texture:SetPoint("CENTER",icon,"CENTER",(-.8+1.6*t)*w,(-.8+1.6*t)*h)
+                    texture:Show();render.ParticleSize(texture,w*1.8,16)
+                    render.ParticlePoint(texture,icon,"CENTER",(-.8+1.6*t)*w,(-.8+1.6*t)*h)
                     texture:SetAlpha(.95*math.sin(math.pi*t)^.5)
                 end
             end
@@ -3337,6 +4121,8 @@ function render.UpdateTrialEffects()
     active=active or pending
     end
 
+    ns.PerfEnd(perf)
+    perf = ns.PerfStart("stat_impacts_frame", effectAge)
     if not effects.impactsFinished then
     local enabled = milestone and db.emphasizeStatGains
     local pending=false
@@ -3353,8 +4139,8 @@ function render.UpdateTrialEffects()
             if visible then
                 local t,angle = age/(.65/speed),(i-1)*math.pi*2/3
                 local distance=6+28*(1-(1-t)^2)
-                texture:ClearAllPoints();texture:SetPoint("CENTER",row.gainCounter,"RIGHT",math.cos(angle)*distance,math.sin(angle)*distance)
-                render.Size(texture,15-i*2,15-i*2);texture:SetAlpha(math.sin(math.pi*t)^.5*(1-.45*t))
+                render.ParticlePoint(texture,row.gainCounter,"RIGHT",math.cos(angle)*distance,math.sin(angle)*distance)
+                render.ParticleSize(texture,15-i*2,15-i*2);texture:SetAlpha(math.sin(math.pi*t)^.5*(1-.45*t))
             end
         end end
         if enabled and row:IsShown() and row.countFinishAt and age<.65/speed then pending=true end
@@ -3364,10 +4150,13 @@ function render.UpdateTrialEffects()
     active=active or pending
     end
 
+    ns.PerfEnd(perf)
+    perf = ns.PerfStart("depth_particles_frame", effectAge)
     local ambient = effectAge-fadeFinished-.50
     local depth = db.backgroundEmbers and render.particleSettings[3].count>0
     if depth then
-        local depthCount = milestone and 36 or 24
+        local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
+        local depthCount = maxLevel and 60 or milestone and 36 or 24
         EnsureParticlePool(effects.depth,content,depthCount,"BACKGROUND")
         local settings = render.particleSettings[3]
         local width,height = content:GetWidth(),content:GetHeight()
@@ -3381,7 +4170,7 @@ function render.UpdateTrialEffects()
             end
             render.Shown(texture,ambient>=0 and i<=depthCount)
             if ambient>=0 and i<=depthCount then
-                if not texture.depthStart or ambient-texture.depthStart>=texture.emberDuration then
+                if not texture.depthStart or texture.emberSpeedMultiplier ~= render.backgroundMoteSpeed or ambient-texture.depthStart>=texture.emberDuration then
                     RollBackgroundEmber(texture,i)
                     texture.emberDuration=texture.emberDuration*(far and 2.2 or 1.6)
                     texture.depthStart=texture.depthStart and ambient or -((i*.9)%texture.emberDuration)
@@ -3391,13 +4180,16 @@ function render.UpdateTrialEffects()
                 local size=texture.moteSize*settings.size*(far and 1.4 or 2.5)
                 local limit=math.max(0,width/2-size)
                 local x=(((i*.61803398875)%1)-.5)*span+math.sin(texture.wanderPhase+progress*3)*12
-                texture:ClearAllPoints();texture:SetPoint("CENTER",content,"BOTTOM",math.max(-limit,math.min(limit,x)),18+progress*rise)
-                render.Size(texture,size,size);texture:SetAlpha((settings.opacity > 0 and math.max(0, math.min(1, settings.opacity + texture.opacityVariation)) or 0)*(far and .14 or .22)*math.sin(math.pi*t)^2*fade)
+                render.ParticlePoint(texture,content,"BOTTOM",math.max(-limit,math.min(limit,x)),18+progress*rise)
+                local opacity = render.backgroundMoteOpacity
+                render.ParticleSize(texture,size,size);texture:SetAlpha((opacity > 0 and math.max(0, math.min(1, opacity + texture.opacityVariation)) or 0)*(far and .14 or .22)*math.sin(math.pi*t)^2*fade)
             end
         end
         active=true
     else for _,texture in ipairs(effects.depth) do texture:Hide() end end
 
+    ns.PerfEnd(perf)
+    perf = ns.PerfStart("portrait_anticipation_frame", effectAge)
     local afterGlint = db.portraitRingGlint and portraitStage == "glint"
     local pre = afterGlint and (effectAge-render.PortraitStarburstTime()+.18/speed)/(.18/speed)
         or (effectAge-plan.portrait.finish)/(PORTRAIT_PULSE_GAP/speed)
@@ -3418,6 +4210,7 @@ function render.UpdateTrialEffects()
     local white=milestone and portrait and db.portraitAnimation and impact>=0 and impact<1 and .95*(1-impact)^2 or 0
     render.TintTrialImpact(white)
     if milestone and portrait and db.portraitAnimation and impact<1 then active=true end
+    ns.PerfEnd(perf)
     return active
 end
 
@@ -3425,9 +4218,11 @@ function render.CancelClosing()
     local closing = render.closing
     if not closing then return end
     render.closing=nil
+    ns.SetClosingClickThrough(false)
     for texture,alpha in pairs(closing.textures) do texture:SetAlpha(alpha) end
-    for texture,point in pairs(closing.points) do texture:ClearAllPoints();texture:SetPoint(point[1],point[2],point[3],point[4],point[5]) end
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
+    if entranceTimeline then render.ApplyClosingEntrance(entranceTimeline.finish) end
+    render.sectionComplete = nil
     frame:SetScale(ns.GetPopupScale());frame:SetAlpha(1)
     if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then
         UpdateModelMaskGeometry(ModelPortraitDiameter())
@@ -3435,32 +4230,132 @@ function render.CancelClosing()
     end
 end
 
-function render.UpdateClosing(elapsed)
-    local closing=render.closing
-    if not closing then return end
-    closing.age=closing.age+elapsed
-    local progress=math.min(1,closing.age/.45)
-    for texture,alpha in pairs(closing.textures) do texture:SetAlpha(alpha*(1-progress)^2) end
-    for texture,point in pairs(closing.points) do
-        texture:ClearAllPoints()
-        texture:SetPoint(point[1],point[2],point[3],point[4]+point.dx*progress,point[5]+12*progress)
+function render.ApplyClosingEntrance(age)
+    render.sectionComplete = nil
+    UpdateSectionEntrance(age, true)
+    render.Alpha(bg, EntranceAlpha(entranceTimeline.background, age, true))
+    local alpha = EntranceAlpha(entranceTimeline.portrait, age, true)
+    render.Alpha(content.portraitArtwork, alpha)
+    if content.playerModel then render.Alpha(content.playerModel, alpha) end
+    for _, fs in ipairs(content.statLinePool) do
+        local motion = fs.entranceMotion
+        if motion and (fs.statData or fs.plainText) then
+            local t = math.max(0, math.min(1, (age - motion.delay) / motion.duration))
+            if render.closing then
+                t = math.max(0, math.min(1, ((motion.clockOffset and render.closing.startEffectAge or render.closing.startAge) - (motion.clockOffset or 0) - motion.delay) / motion.duration) - render.closing.age / motion.duration)
+            end
+            local x = ns.db.statSlideDirection == "none" and 0 or motion.startX * (1 - t)^3
+            fs.slideFrame:SetPoint("TOP", motion.container, "TOP", x, motion.y)
+            SetLineAlpha(fs, t * t)
+        end
     end
-    if closing.age>=.50 then frame:Hide() end
-end
-
-function render.BeginClosing()
-    render.CancelClosing()
-    local closing={age=0,textures={},points={}}
-    local function Capture(texture) if texture:IsShown() then closing.textures[texture]=texture:GetAlpha() end end
-    for _,pool in ipairs(render.smallEffectPools) do for i,texture in ipairs(pool) do
-        Capture(texture)
-        if pool ~= content.edgeGlows and texture:IsShown() then
-            local point={texture:GetPoint()}
-            if point[1] and point[2] and point[3] and point[4] and point[5] then
-                point.dx=i%2==0 and 24 or -24;closing.points[texture]=point
+    for _, pool in ipairs(render.abilityPools) do
+        for _, icon in ipairs(pool) do
+            local motion = icon.entranceMotion
+            if icon:IsShown() and motion and icon.animationContainer then
+                local t = motion.skip and 1 or math.max(0, math.min(1, (age - motion.delay) / motion.duration))
+                if render.closing and not motion.skip then
+                    t = math.max(0, math.min(1, (render.closing.startAge - motion.delay) / motion.duration) - render.closing.age / motion.duration)
+                end
+                icon:SetPoint("CENTER", icon.animationContainer, "CENTER", icon.animationX,
+                    icon.animationY - ABILITY_POP_DISTANCE * (1 - t)^3)
+                icon:SetAlpha(t * t)
             end
         end
-    end end
+    end
+    if content.levelTimeRecord and content.levelTimeRecord:IsShown() then
+        content.levelTimeRecord:SetAlpha(EntranceAlpha(entranceTimeline.levelTime, age, true))
+        SetLineAlpha(content.levelTimeText, 0)
+    end
+end
+
+function render.UpdateClosing(elapsed)
+    local closing = render.closing
+    if not closing then return end
+    closing.age = closing.age + elapsed * closing.multiplier
+    local progress = math.min(1, closing.age / (.45 / closing.speed))
+    for texture, alpha in pairs(closing.textures) do texture:SetAlpha(alpha * (1 - progress)^2) end
+    render.ApplyClosingEntrance(closing.startAge)
+    if closing.age >= closing.duration then frame:Hide() end
+end
+
+function render.RefreshAnimationSoundSettings()
+    render.hasOptionalSounds = false
+    for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
+        if spec.cue ~= "portraitImpact" and spec.cue ~= "starburst" and ns.GetAnimationSoundID(spec.cue) > 0 then
+            render.hasOptionalSounds = true
+            break
+        end
+    end
+end
+
+-- Optional cues follow visible stages and share the existing effect driver.
+function render.UpdateAnimationSounds()
+    local db, plan = ns.db or {}, entranceTimeline
+    if not render.hasOptionalSounds or not plan or not frame:IsShown() or db.reducedMotion or db.backgroundAnimations == false then return end
+    local seen = render.animationCueSeen
+    if not seen then return end
+    local function Once(cue, visible)
+        if visible and not seen[cue] then seen[cue] = true; ns.PlayAnimationSound(cue) end
+    end
+    local function Any(pool)
+        for _, texture in ipairs(pool or {}) do if texture:IsShown() then return true end end
+        return false
+    end
+    local effects, maximum = content.trialEffects or {}, content.maxLevelEffects or {}
+    local portrait = db.portraitAnimation and IsPlayerPortrait()
+    Once("portraitPulse", portrait and portraitStage == "pulse")
+    Once("ringGlint", db.portraitRingGlint and Any(effects.glints))
+    Once("glintSpark", db.portraitRingGlint and effectAge >= render.PortraitGlintFinish() and Any(effects.glints))
+    Once("ringSettle", db.portraitRingSettle and db.portraitMode ~= "none" and effectAge >= plan.portrait.start)
+    Once("statCount", db.emphasizeStatGains and next(activeLineAnims) ~= nil)
+    local impact = false
+    if not seen.statImpact then
+        for _, pool in pairs(effects.impacts or {}) do if Any(pool) then impact = true; break end end
+    end
+    Once("statImpact", impact)
+    local revealed, shine = false, false
+    for _, pool in ipairs(render.abilityPools) do
+        for _, icon in ipairs(pool) do
+            if icon:IsShown() and effectAge >= (icon.entranceEnd or math.huge) then revealed = true end
+            if icon.revealShine and icon.revealShine:IsShown() then shine = true end
+        end
+    end
+    Once("abilityReveal", db.highlightNewAbilities and revealed)
+    Once("abilityShine", db.highlightNewAbilities and shine)
+    Once("portraitMotes", Any(content.portraitSparks) or Any(content.starburstMotes))
+    Once("backgroundMotes", Any(content.backgroundEmbers))
+    Once("frameEdge", Any(content.edgeGlows))
+    Once("dividers", db.dividerReveal and effectAge >= plan.statsHeader.start)
+    Once("depth", Any(effects.depth))
+    local milestone = content.isMilestone and db.milestoneAnimations ~= false
+    Once("anticipation", milestone and portrait and portraitStage == "pulse")
+    Once("milestoneTint", milestone and (effects.white or 0) > 0)
+    Once("milestone", milestone and effectAge >= plan.portrait.finish)
+    Once("maxFireworks", Any(maximum.fireworks))
+    Once("ringSurges", Any(maximum.surge))
+    Once("maxSparks", Any(maximum.sparks))
+    local visible = effects.portraitShimmer and effects.portraitShimmer:IsShown() or false
+    if visible and not render.animationCueVisible.portraitShine then ns.PlayAnimationSound("portraitShine") end
+    render.animationCueVisible.portraitShine = visible
+end
+
+function render.BeginClosing(multiplier)
+    if not entranceTimeline or render.closing then return end
+    ns.SetClosingClickThrough(true)
+    if bg.entranceGroup then bg.entranceGroup:Stop() end
+    ns.StopAnimationSounds()
+    ns.PlayAnimationSound("closing")
+    local closing = { age = 0, startEffectAge = effectAge, startAge = math.min(effectAge, entranceTimeline.finish),
+        speed = Speed(), multiplier = multiplier or UI_METRICS.automaticCloseSpeed, duration = UI_METRICS.modernCloseSeconds / Speed(), textures = {} }
+    for _, fs in ipairs(content.statLinePool) do StopLineAnimation(fs) end
+    for _, pool in ipairs(render.abilityPools) do
+        for _, icon in ipairs(pool) do StopIconAnimation(icon) end
+    end
+    local function Capture(texture) if texture:IsShown() then closing.textures[texture]=texture:GetAlpha() end end
+    for _, pool in ipairs(render.smallEffectPools) do
+        for _, texture in ipairs(pool) do Capture(texture) end
+    end
     Capture(content.portraitStarburst)
     for _,pool in ipairs(render.abilityPools) do for _,icon in ipairs(pool) do
         Capture(icon.newAbilityGlow);Capture(icon.ambientSparkle)
@@ -3469,8 +4364,13 @@ function render.BeginClosing()
     end end
     local effects=content.trialEffects
     if effects then
+        if effects.portraitShimmer then Capture(effects.portraitShimmer) end
         for _,pool in ipairs({effects.glints,effects.depth}) do for _,texture in ipairs(pool) do Capture(texture) end end
         for _,pool in pairs(effects.impacts) do for _,texture in ipairs(pool) do Capture(texture) end end
+    end
+    local maxEffects = content.maxLevelEffects
+    if maxEffects then
+        for _, pool in ipairs(maxEffects.pools) do for _, texture in ipairs(pool) do Capture(texture) end end
     end
     local accents=content.milestoneAccents
     if accents then
@@ -3479,30 +4379,246 @@ function render.BeginClosing()
     end
     portraitPulseGroup:Stop();content.portraitPulse:Hide()
     render.closing=closing
-    frame.fadeOutGroup:Play()
-    effectDriver:SetScript("OnUpdate",function(_,elapsed) render.UpdateClosing(elapsed) end)
+    render.ApplyClosingEntrance(closing.startAge)
+    effectDriver:SetScript("OnUpdate",function(_,elapsed)
+        local perf = ns.PerfStart("closing_frame")
+        render.UpdateClosing(elapsed)
+        ns.PerfEnd(perf)
+    end)
 end
 
 local previewActive = false
 
-local function RunVisualEffects(_, elapsed)
-    -- Visible motion updates every frame; idle bursts skip their pool scans.
-    effectAge = effectAge + elapsed
+function render.StylePaceRecord()
+    local record = content.levelTimeRecord
+    if not record or not record:IsShown() then return end
+    local path, size, flags = content.levelTimeText:GetFont()
+    for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
+        ApplyToTextLayers(record[key], "SetFont", path, size + (key == "label" and 3 or 0), key == "label" and "THICKOUTLINE" or flags or "")
+    end
+end
+
+function render.AlignPaceRecord(eased)
+    local record = content.levelTimeRecord
+    if not record or not record:IsShown() then return end
+    record.transition = eased
+    local valueWidth = record.oldWidth + (record.newWidth - record.oldWidth) * eased
+    record.prefix:ClearAllPoints()
+    record.prefix:SetPoint("BOTTOM", record, "BOTTOM", -(valueWidth + 4) / 2, 0)
+    record.oldTime:ClearAllPoints()
+    record.oldTime:SetPoint("BOTTOM", record, "BOTTOM", record.valueX, 0)
+    record.newTime:ClearAllPoints()
+    record.newTime:SetPoint("BOTTOM", record, "BOTTOM", record.valueX - 32 * (1 - eased), 0)
+end
+
+function render.PositionPaceRecord()
+    render.StylePaceRecord()
+    local record = content.levelTimeRecord
+    if not record or not record:IsShown() then return end
+    local widths = {}
+    -- Clear old constraints before measuring: the client may report a clipped
+    -- width after a font/layout change. Padding includes the heavy outline.
+    for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
+        local text = record[key]
+        ApplyToTextLayers(text, "SetWordWrap", false)
+        ApplyToTextLayers(text, "SetJustifyH", "CENTER")
+        ApplyToTextLayers(text, "SetWidth", 0)
+        ApplyToTextLayers(text, "SetHeight", 0)
+        widths[key] = text:GetStringWidth()
+    end
+    record.oldWidth, record.newWidth = widths.oldTime, widths.newTime
+    record.valueX = (widths.prefix + 4) / 2
+    for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
+        local text = record[key]
+        ApplyToTextLayers(text, "SetWidth", widths[key] + (key == "label" and 12 or 8))
+        ApplyToTextLayers(text, "SetHeight", key == "label" and render.LevelTimeFontSize() + 13 or content.levelTimeNaturalHeight or 18)
+    end
+    render.AlignPaceRecord(record.transition or 0)
+    record.label:ClearAllPoints()
+    record.label:SetPoint("BOTTOM", record, "BOTTOM", 0, (content.levelTimeNaturalHeight or 18) - (IsHorizontalLayout() and 4 or 0))
+end
+
+function render.PreparePaceRecord(seconds, previous)
+    local record = content.levelTimeRecord
+    if not record then
+        record = CreateFrame("Frame", nil, content)
+        record:SetAllPoints(content.levelTimeText)
+        for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
+            local text = NewText(record, "GameFontHighlightSmall", 1.5)
+            text.glowAlpha = 0.08
+            ApplyToTextLayers(text, "SetWordWrap", false)
+            RegisterGlowFont(text)
+            record[key] = text
+        end
+        content.levelTimeRecord = record
+    end
+    record.transition = 0
+    record:Show()
+    ApplyToTextLayers(record.label, "SetText", ns.L("New Best Time!"))
+    ApplyToTextLayers(record.prefix, "SetText", ns.L("Time to Level: %s", ""):match("^(.-)%s*$"))
+    ApplyToTextLayers(record.oldTime, "SetText", render.FormatLevelClock(previous))
+    ApplyToTextLayers(record.newTime, "SetText", render.FormatLevelClock(seconds))
+    local path, size, flags = content.levelTimeText:GetFont()
+    for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
+        ApplyToTextLayers(record[key], "SetFont", path, size + (key == "label" and 3 or 0), key == "label" and "THICKOUTLINE" or flags or "")
+        ApplyToTextLayers(record[key], "SetTextColor", .25, 1, .25)
+    end
+    render.PositionPaceRecord()
+end
+
+function render.UpdatePaceTransition(age, moving)
+    local record = content.levelTimeRecord
+    if not record or not record:IsShown() then return false end
+    SetLineAlpha(content.levelTimeText, 0)
+    local stage = entranceTimeline and entranceTimeline.levelTime
+    record:SetAlpha(EntranceAlpha(stage, age, moving))
+    local elapsed = (age - (stage and stage.finish or 0)) * Speed()
+    local red = moving and math.max(0, math.min(1, elapsed / .18)) or 1
+    local t = moving and math.max(0, math.min(1, (elapsed - .18) / .38)) or 1
+    local eased = t * t * (3 - 2 * t)
+    local expansion = moving and math.max(0, math.min(1, (elapsed - .56) / .22)) or 1
+    expansion = expansion * expansion * (3 - 2 * expansion)
+    local extra = (render.LevelTimeFontSize() + 13 - (IsHorizontalLayout() and 4 or 0)) * expansion
+    if math.abs((content.paceRowExtra or 0) - extra) > .01 then
+        content.paceRowExtra = extra
+        if render.ResizeTimeRow then render.ResizeTimeRow() end
+    end
+    local label = moving and math.max(0, math.min(1, (elapsed - .78) / .18)) or 1
+    SetLineAlpha(record.prefix, 1)
+    SetLineAlpha(record.label, label)
+    SetLineAlpha(record.oldTime, 1 - eased)
+    SetLineAlpha(record.newTime, eased)
+    ApplyToTextLayers(record.oldTime, "SetTextColor", .25 + .75 * red, 1 - .75 * red, .25)
+    render.AlignPaceRecord(eased)
+    return moving and label < 1
+end
+
+function render.UpdateLevelTime()
+    content.paceRowExtra, render.timeRowOrigin = 0, nil
+    local seconds, previous = tonumber(content.currentLevelPlayedTime), tonumber(content.previousFastestLevelTime)
+    if content.levelTimeRecord then content.levelTimeRecord:Hide() end
+    SetLineAlpha(content.levelTimeText, EntranceAlpha(entranceTimeline and entranceTimeline.levelTime,
+        effectAge, true))
+    local maxLevel = content.isMaxLevel and ns.db.maxLevelCelebration ~= false
+    if maxLevel and (ns.db.showLevelTime or content.pacePreview) then
+        local total = ns.GetTimeToMaxLevel()
+        if total then
+            local duration = total >= 86400 and ns.L("%dd %02dh %02dm %02ds", math.floor(total / 86400),
+                math.floor(total % 86400 / 3600), math.floor(total % 3600 / 60), math.floor(total % 60))
+                or render.FormatPaceTime(total)
+            ApplyToTextLayers(content.levelTimeText, "SetText", ns.L("Time to max level: %s", duration))
+            render.MeasureLevelTime()
+            ApplyToTextLayers(content.levelTimeText, "SetShown", true)
+            return
+        end
+    end
+    local compare = not maxLevel and (ns.db.showLevelTime or content.pacePreview) and (not previewActive or content.pacePreview)
+        and seconds and previous and seconds >= 1 and previous >= 1
+    local faster = compare and seconds < previous
+    local visible = seconds and (ns.db.showLevelTime or content.pacePreview)
+    if visible then
+        local text = content.levelRangeStart
+            and ns.L("Time for %d levels: %s", content.currentReachedLevel - content.levelRangeStart, render.FormatLevelClock(seconds))
+            or ns.L("Time to Level: %s", render.FormatLevelClock(seconds))
+        ApplyToTextLayers(content.levelTimeText, "SetText", text)
+        render.MeasureLevelTime()
+        if faster then render.PreparePaceRecord(seconds, previous) end
+    else
+        ApplyToTextLayers(content.levelTimeText, "SetText", "")
+    end
+    ApplyToTextLayers(content.levelTimeText, "SetShown", visible and true or false)
+end
+
+function ns.RefreshLevelPaceDisplay()
+    if not frame:IsShown() then return end
+    render.UpdateLevelTime()
+    ns.RefreshPopupLayout()
     UpdateVisualEffects()
 end
+
+function ns.ClearLevelPaceComparison()
+    content.previousFastestLevelTime = nil
+    ns.RefreshLevelPaceDisplay()
+end
+
+function ns.RefreshMaxLevelCelebration()
+    if ns.db.maxLevelCelebration then ns.RequestLevelPlayedTime() end
+    ns.RefreshLevelPaceDisplay()
+    ns.RefreshVisualEffects()
+end
+
+local function RunVisualEffects(_, elapsed)
+    local perf = ns.PerfStart("visual_effects_frame", effectAge)
+    -- Visible motion updates every frame; idle bursts skip their pool scans.
+    effectAge = effectAge + elapsed
+    if render.AdvanceStatPages then render.AdvanceStatPages(elapsed) end
+    UpdateVisualEffects()
+    ns.PerfEnd(perf)
+end
+
+function render.ResetMaxBackgroundTint()
+    if not render.maxBackgroundTinted then return end
+    render.maxBackgroundTinted, render.maxBackgroundProgress, render.maxBackgroundFlash = nil, nil, nil
+    ns.ApplyBackgroundAppearance()
+end
+
+
+function render.UpdateMaxBackgroundTint(force)
+    local db = ns.db or {}
+    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
+    local milestone = not content.isMaxLevel and content.isMilestone and db.milestoneAnimations ~= false
+    if db.backgroundMode ~= "MODERN" or not (maxLevel or milestone)
+        or db.backgroundAnimations == false or db.reducedMotion or not frame:IsShown() then
+        render.ResetMaxBackgroundTint()
+        return false
+    end
+    -- The finishing spark fires after the starburst starts growing.
+    local flashStart = render.ringSurgeStartedAt and math.max(render.ringSurgeStartedAt, render.PortraitGlintFinish())
+    local flashAge = flashStart and (effectAge - flashStart) * Speed() or -1
+    if flashAge < 0 then
+        render.ResetMaxBackgroundTint()
+        return false
+    end
+    local duration = maxLevel and .60 or .45
+    if flashAge >= duration then
+        if render.maxBackgroundTinted and (force or render.maxBackgroundFlash ~= 0) then
+            bg.HideModernBackgroundFlash()
+            local hue = db.backgroundColor or BLACK_COLOR
+            bg.modern:SetVertexColor(hue[1], hue[2], hue[3], bg.appliedOpacity or db.bgOpacity or .8)
+            render.maxBackgroundFlash = 0
+        end
+        return false
+    end
+    local t = flashAge / duration
+    local strength = 1 - t * t * (3 - 2 * t)
+    if force or render.maxBackgroundFlash ~= strength then
+        local _, class = UnitClass("player")
+        bg.ShowModernBackgroundFlash(ns.CLASS_COLORS[class] or WHITE_COLOR, db.backgroundColor or BLACK_COLOR,
+            strength, bg.appliedOpacity or db.bgOpacity or .8, maxLevel and .6 or .4)
+        render.maxBackgroundTinted, render.maxBackgroundFlash = true, strength
+    end
+    return true
+end
+
+ns.RefreshMaxBackgroundTint = render.UpdateMaxBackgroundTint
 
 UpdateVisualEffects = function()
     if render.closing then return end
     local db = ns.db or {}
-    local moving = not db.reducedMotion
+    local moving = true
     local speed = Speed()
+    local sectionPerf = ns.PerfStart("section_entrance_frame", effectAge)
     local active = UpdateSectionEntrance(effectAge, moving)
+    ns.PerfEnd(sectionPerf)
+    if render.statPages and (not render.statPages.paused or render.statPages.phase ~= "waiting") then active = true end
+    if render.UpdatePaceTransition(effectAge, moving) then active = true end
     if render.reducedFade then
         local t = math.max(0, math.min(1, effectAge / render.reducedFade))
         render.Alpha(frame, 1 - (1 - t) ^ 2)
         if t < 1 then active = true else render.reducedFade = nil end
     end
-    local decorative = db.backgroundAnimations ~= false
+    local decorative = db.backgroundAnimations ~= false and not db.reducedMotion
+    local portraitPerf = ns.PerfStart("portrait_effects_frame", effectAge)
     local portraitEnabled = decorative and not db.reducedMotion and db.portraitAnimation and db.portraitMode ~= "none" and frame:IsShown()
     -- Keep the portrait hidden until setup and its entrance delay are complete.
     local portraitEntrance = entranceTimeline and entranceTimeline.portrait
@@ -3557,6 +4673,14 @@ UpdateVisualEffects = function()
     local growDuration = STAR_GROW_DURATION / speed
     local settleDuration = STAR_SETTLE_DURATION / speed
     local starVisible = starburst and (not moving or portraitStage == "starburst")
+    if starVisible and moving and render.starburstOpacity > 0 and not render.ringSurgeStartedAt then
+        render.ringSurgeStartedAt = effectAge
+    end
+    if starVisible and moving and render.starburstOpacity > 0 and not render.starburstSoundPlayed then
+        render.starburstSoundPlayed = true
+        ns.PlayStarburstSound()
+    end
+    if render.UpdateMaxBackgroundTint() then active = true end
     render.Shown(content.portraitStarburst, starVisible == true)
     if starburst then
         local grow = moving and (starVisible and math.max(0, math.min(1, starTime / growDuration)) or 0) or 1
@@ -3575,6 +4699,8 @@ UpdateVisualEffects = function()
         content.portraitStarburst:SetAlpha(alpha)
         active = moving
     end
+    ns.PerfEnd(portraitPerf)
+    local glowPerf = ns.PerfStart("ability_glow_frame", effectAge)
     -- Stat waves follow the last count; abilities keep their own entrance clock.
     local statCountFinish = entranceTimeline and entranceTimeline.statCountFinish or fadeFinished
     local shimmerAge = effectAge - statCountFinish - 1.50
@@ -3597,7 +4723,9 @@ UpdateVisualEffects = function()
         end
     end
     if render.glowActive then active = true end
-    local statsCounting = db.emphasizeStatGains and moving and next(activeLineAnims) ~= nil
+    ns.PerfEnd(glowPerf)
+    local statPerf = ns.PerfStart("stat_highlights_frame", effectAge)
+    local statsCounting = db.emphasizeStatGains and not db.reducedMotion and next(activeLineAnims) ~= nil
     if statsCounting and frame:IsShown() then active = true end
     local statEnabled = decorative and db.emphasizeStatGains and moving and frame:IsShown()
     local completionPending = effectAge < statCountFinish + 0.40
@@ -3608,9 +4736,18 @@ UpdateVisualEffects = function()
     end
     render.statIdle, render.statEnabled = statIdle, statEnabled
     if statEnabled and render.statActive then active = true end
+    ns.PerfEnd(statPerf)
+    local particlePerf = ns.PerfStart("ambient_particles_frame", effectAge)
     if UpdateSmallEffects(cycleTime, moving and decorative) then active = true end
+    ns.PerfEnd(particlePerf)
+    local milestonePerf = ns.PerfStart("milestone_accents_frame", effectAge)
     if render.UpdateMilestoneAccents() then active = true end
+    ns.PerfEnd(milestonePerf)
     if render.UpdateTrialEffects() then active = true end
+    local maxPerf = content.isMaxLevel and ns.PerfStart("max_celebration_frame", effectAge)
+    if render.UpdateMaxCelebration() then active = true end
+    ns.PerfEnd(maxPerf)
+    render.UpdateAnimationSounds()
     if render.screenshotAt then
         if effectAge >= render.screenshotAt then
             render.screenshotAt = nil
@@ -3627,12 +4764,16 @@ UpdateVisualEffects = function()
 end
 
 function ns.RefreshVisualEffects()
+    render.RefreshAnimationSoundSettings()
+    if ns.db and (ns.db.reducedMotion or ns.db.backgroundAnimations == false or not ns.db.portraitAnimation) then
+        ns.StopAnimationSounds()
+    end
     if render.closing or frame.fadeOutGroup and frame.fadeOutGroup:IsPlaying() then return end
     if content.trialEffects then
         content.trialEffects.white = nil
         content.trialEffects.shinesFinished, content.trialEffects.impactsFinished = false, false
     end
-    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then content.playerModel:SetPaused(ns.db.reducedMotion or ns.db.backgroundAnimations == false) end
+    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then content.playerModel:SetPaused(ns.db.backgroundAnimations == false) end
     render.RefreshParticleSettings()
     local levelChanged = render.RefreshMilestoneLevelText()
     render.glowWake, render.sparkleWake, render.statIdle = nil, nil, nil
@@ -3651,13 +4792,25 @@ function ns.RefreshVisualEffects()
     pulseAlpha:SetDuration(0.65 / Speed())
     content.edgeLayer:SetAlpha(render.edgeOpacity)
     RefreshAbilityEffectSchedule()
-    for i, pool in ipairs(render.particlePools) do
-        EnsureParticlePool(pool, content, render.particleSettings[i].count,
-            i == 3 and "BACKGROUND" or nil)
-    end
-    for _, pool in ipairs(render.abilityPools) do
-        for _, icon in ipairs(pool) do
-            EnsureParticlePool(icon.cornerSparkles, icon, render.particleSettings[4].count, nil, true)
+    -- Keep disabled effects empty until they are actually used. Once created,
+    -- their textures stay pooled for later popups and live settings changes.
+    if (frame:IsShown() or portraitPreparing) and not db.reducedMotion and db.backgroundAnimations ~= false then
+        local portraitMotes = db.portraitSparks and db.portraitAnimation and IsPlayerPortrait()
+        for i, pool in ipairs(render.particlePools) do
+            if (i < 3 and portraitMotes) or (i == 3 and db.backgroundEmbers) then
+                EnsureParticlePool(pool, content, render.particleSettings[i].count,
+                    i == 3 and "BACKGROUND" or nil)
+            end
+        end
+        if db.frameEdgeGlow and db.backgroundMode ~= "MODERN" then render.EnsureEdgeGlows() end
+        if db.highlightNewAbilities then
+            for _, pool in ipairs(render.abilityPools) do
+                for _, icon in ipairs(pool) do
+                    if icon:IsShown() and icon.isNewAbility == true then
+                        EnsureParticlePool(icon.cornerSparkles, icon, render.particleSettings[4].count, nil, true)
+                    end
+                end
+            end
         end
     end
     local portraitColor = ActiveColor("animatedElements")
@@ -3698,6 +4851,14 @@ function ns.RefreshVisualEffects()
 end
 
 local function StartVisualEffects()
+    render.maxBackgroundProgress = nil
+    ns.StopAnimationSounds()
+    render.animationCueSeen, render.animationCueVisible = {}, {}
+    render.RefreshAnimationSoundSettings()
+    render.portraitImpactPlayed, render.starburstSoundPlayed = false, false
+    render.ringSurgeStartedAt = nil
+    render.HideMaxCelebration()
+    if content.maxLevelEffects then content.maxLevelEffects.prepared = false end
     render.screenshotAt = nil
     if render.CancelHideTimer then render.CancelHideTimer() end
     render.CancelClosing()
@@ -3722,7 +4883,7 @@ local function StartVisualEffects()
     render.glowWake, render.sparkleWake, render.statIdle = nil, nil, nil
     render.ambientWake = nil
     effectAge = 0
-    render.reducedFade = ns.db and ns.db.reducedMotion and BASE_BG_FADE_DURATION / Speed() or nil
+    render.reducedFade = nil
     portraitStage, starburstStartedAt = "waiting", 0
     for _, pool in ipairs(render.abilityPools) do
         for _, icon in ipairs(pool) do
@@ -3754,6 +4915,13 @@ local function StartVisualEffects()
 end
 
 function render.ReleasePopupData()
+    render.timeRowOrigin = nil
+    render.statPages = nil
+    content.secondaryStatChanges, content.statPageRowCount, content.statPage = nil, nil, nil
+    content.currentLevelPlayedTime, content.previousFastestLevelTime, content.pacePreview, content.paceRowExtra = nil, nil, nil, nil
+    if content.levelTimeRecord then content.levelTimeRecord:Hide() end
+    content.currentStatChanges = nil
+    content.levelRangeStart, content.currentReachedLevel = nil, nil
     content.currentTrainerAbilities = {}
     content.currentWarlockPetAbilities = {}
     for _, fs in ipairs(content.statLinePool) do
@@ -3768,6 +4936,10 @@ function render.ReleasePopupData()
 end
 
 frame:HookScript("OnHide", function()
+    ns.SetClosingClickThrough(false)
+    render.ResetMaxBackgroundTint()
+    ns.StopAnimationSounds()
+    render.HideMaxCelebration()
     render.screenshotAt = nil
     if render.CancelHideTimer then render.CancelHideTimer() end
     render.CancelClosing()
@@ -3815,7 +4987,8 @@ function ns.ApplyColors()
 end
 ns.ApplyColors()
 
-local function UpdateStatLines(statChanges)
+local function UpdateStatLines(statChanges, skipAnimation, deferText)
+    statChanges = ns.FilterRelevantStats(statChanges)
     local pool = content.statLinePool
     local count = #statChanges
     local speed = Speed()
@@ -3823,19 +4996,37 @@ local function UpdateStatLines(statChanges)
     local staggerStep = BASE_STAT_STAGGER_STEP / speed
     local slideDuration = BASE_STAT_SLIDE_DURATION / speed
 
-    if count > 0 then UpdateStatTracking(statChanges) end
+    if count > 0 and not deferText then UpdateStatTracking(statChanges) end
 
     local function LayoutStatLine(i, statChange, plainText)
         local fs = GetStatLine(i)
         fs.gainFlash, fs.displayGain = 0, nil
         fs.statData = statChange
         fs.plainText = plainText
+        if deferText then
+            -- The hidden replacement page gets its final font/columns before
+            -- StartLineAnimation paints it. Avoid painting twice at the old size.
+            StopLineAnimation(fs)
+            fs.statTracking, fs.countFinishAt, fs.entranceEnd = 0, nil, 0
+            return
+        end
         ApplyStatLineText(fs)
         local dir = LineDirection(i)
         local y = -((i - 1) * STAT_LINE_HEIGHT)
         local delay = staggerBase + (i - 1) * staggerStep
         fs.entranceEnd = delay + slideDuration
-        StartLineAnimation(fs, content.statsContainer, dir * (ThemeContentInset() > 0 and 24 or STAT_SLIDE_DISTANCE_X), y, delay, slideDuration)
+        if skipAnimation then
+            StopLineAnimation(fs)
+            fs.countFinishAt, fs.entranceEnd = nil, 0
+            fs.displayGain = statChange and statChange.new - statChange.old or nil
+            fs.slideFrame:ClearAllPoints()
+            fs.slideFrame:SetPoint("TOP", content.statsContainer, "TOP", 0, y)
+            ApplyStatLineText(fs)
+            SetLineAlpha(fs, 1)
+            SetLineShown(fs, true)
+        else
+            StartLineAnimation(fs, content.statsContainer, dir * (ThemeContentInset() > 0 and 24 or STAT_SLIDE_DISTANCE_X), y, delay, slideDuration)
+        end
     end
 
     if count == 0 then
@@ -3851,8 +5042,94 @@ local function UpdateStatLines(statChanges)
         ReleaseStatLine(pool[i])
     end
 
-    content.statsContainer:SetHeight(count * STAT_LINE_HEIGHT)
+    content.statsContainer:SetHeight(math.max(count, content.statPageRowCount or 0) * STAT_LINE_HEIGHT)
     return count
+end
+
+-- Only the stat rows/header change pages; portrait, abilities and footer keep
+-- their original timeline. Reserve the taller page once to prevent frame jumps.
+function render.AdvanceStatPages(elapsed)
+    local page = render.statPages
+    if not page or render.closing or frame.closingInputSuppressed then return end
+    local previousAge = page.lastAge or 0
+    page.lastAge = effectAge
+    if page.paused and page.phase == "waiting" then return end
+    if page.phase == "waiting" then
+        page.holdAge = page.holdAge + math.max(0, effectAge - math.max(previousAge, entranceTimeline.finish))
+        if page.holdAge < page.halfDuration then return end
+        page.phase, page.age = "exiting", 0
+        for _, text in ipairs(content.statLinePool) do StopLineAnimation(text) end
+    end
+    page.age = page.age + elapsed
+    if page.phase == "exiting" then
+        local progress = math.min(1, page.age / (BASE_STAT_SLIDE_DURATION / Speed() * page.animationScale))
+        SetLineAlpha(content.statsHeader, (1 - progress)^2)
+        for index, text in ipairs(content.statLinePool) do
+            if text.statData or text.plainText then
+                local distance = ns.db.statSlideDirection == "none" and 0
+                    or LineDirection(index) * (ThemeContentInset() > 0 and 24 or STAT_SLIDE_DISTANCE_X)
+                text.slideFrame:SetPoint("TOP", content.statsContainer, "TOP", distance * progress^3, -(index-1)*STAT_LINE_HEIGHT)
+                SetLineAlpha(text, (1 - progress)^2)
+            end
+        end
+        if progress < 1 then return end
+        local perf = ns.PerfStart("stat_page_swap", effectAge)
+        content.statPage = "secondary"
+        content.currentStatChanges = content.secondaryStatChanges
+        ApplyToTextLayers(content.statsHeader, "SetText", ns.L("Secondary Stats"))
+        render.headingFitKey = nil
+        UpdateStatLines(content.currentStatChanges, true, true)
+        -- The second page can be wider than the first. Fit it to the existing
+        -- column instead of widening the live popup or drawing across its border.
+        FitStatFont(TEXT_WIDTH, true)
+        render.UpdateStatWordTargets()
+        -- Both page heights were reserved at popup creation; existing relative
+        -- anchors follow them. Only the changed heading needs to be fitted.
+        render.FitSectionHeadings()
+        entranceTimeline.statFlashStart, entranceTimeline.statFlashFinish = nil, nil
+        for index, text in ipairs(content.statLinePool) do
+            if text.statData then
+                local delay = (BASE_STAT_STAGGER_BASE+(index-1)*BASE_STAT_STAGGER_STEP)/Speed() * page.animationScale
+                local duration = BASE_STAT_SLIDE_DURATION/Speed() * page.animationScale
+                StartLineAnimation(text, content.statsContainer,
+                    LineDirection(index) * (ThemeContentInset() > 0 and 24 or STAT_SLIDE_DISTANCE_X),
+                    -(index-1)*STAT_LINE_HEIGHT, delay, duration, page.animationScale)
+                text.entranceMotion.clockOffset = effectAge
+                text.entranceEnd = effectAge + delay + duration
+                if text.countFinishAt then
+                    text.countFinishAt = effectAge + text.countFinishAt
+                    entranceTimeline.statFlashStart = math.min(entranceTimeline.statFlashStart or text.countFinishAt, text.countFinishAt)
+                    entranceTimeline.statFlashFinish = math.max(entranceTimeline.statFlashFinish or text.countFinishAt, text.countFinishAt)
+                end
+            end
+        end
+        entranceTimeline.statFlashDuration = entranceTimeline.statFlashStart
+            and entranceTimeline.statFlashFinish - entranceTimeline.statFlashStart + .4 or 0
+        entranceTimeline.statFlashPeriod = entranceTimeline.statFlashDuration + 3
+        render.statIdle, render.glowWake = nil, nil
+        page.phase, page.age = "entering", 0
+        ns.PerfEnd(perf)
+    end
+    if page.phase == "entering" then
+        SetLineAlpha(content.statsHeader, math.min(1, page.age / (.18 / Speed() * page.animationScale))^2)
+        if page.age >= (BASE_STAT_STAGGER_BASE + math.max(0,#content.currentStatChanges-1)*BASE_STAT_STAGGER_STEP + 1)/Speed() * page.animationScale then
+            render.statPages = nil
+        end
+    end
+end
+
+function render.ReflowStatsForFont()
+    UpdateStatLines(content.currentStatChanges or {}, true)
+end
+
+function ns.RefreshTextSizes()
+    ns.ApplyFont(ns.db.customFontPath)
+end
+
+function ns.RefreshRetailStatOptions()
+    if ns.GetCurrentFlavor() ~= "retail" or not frame:IsShown() then return end
+    UpdateStatLines(content.currentStatChanges or {}, true)
+    ns.RefreshPopupLayout()
 end
 
 local function BuildEntranceTimeline()
@@ -3867,11 +5144,11 @@ local function BuildEntranceTimeline()
     Add("portrait", ns.db and ns.db.portraitMode == "none" and 0.20 or BASE_CONTENT_FADE_DURATION)
     Add("statsHeader", 0.18)
     local statCount = 0
-    for _, fs in ipairs(content.statLinePool) do if fs:IsShown() then statCount = statCount + 1 end end
+    for _, fs in ipairs(content.statLinePool) do if fs.statData or fs.plainText then statCount = statCount + 1 end end
     local stats = Add("stats", BASE_STAT_SLIDE_DURATION + math.max(0, statCount - 1) * BASE_STAT_STAGGER_STEP)
     local index = 0
     for _, fs in ipairs(content.statLinePool) do
-        if fs:IsShown() then
+        if fs.statData or fs.plainText then
             local delay = stats.start + index * BASE_STAT_STAGGER_STEP / speed
             local duration = BASE_STAT_SLIDE_DURATION / speed
             fs.entranceEnd = delay + duration
@@ -3882,7 +5159,7 @@ local function BuildEntranceTimeline()
     end
     plan.statCountFinish = stats.finish
     for _, fs in ipairs(content.statLinePool) do
-        if fs:IsShown() and fs.countFinishAt then
+        if fs.statData and fs.countFinishAt then
             plan.statCountFinish = math.max(plan.statCountFinish, fs.countFinishAt)
             plan.statFlashStart = math.min(plan.statFlashStart or fs.countFinishAt, fs.countFinishAt)
             plan.statFlashFinish = math.max(plan.statFlashFinish or fs.countFinishAt, fs.countFinishAt)
@@ -3893,7 +5170,8 @@ local function BuildEntranceTimeline()
     plan.statsBottom = { start = stats.finish - 0.12 / speed, finish = stats.finish }
     if content.levelTimeText:IsShown() then Add("levelTime", 0.18) end
     local trainingStart = cursor
-    Add("abilitiesHeader", 0.18)
+    local showAbilities = ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0
+    if showAbilities then Add("abilitiesHeader", 0.18) end
     local function AddIcons(key, pool)
         local count, animatedCount = 0, 0
         for _, icon in ipairs(pool) do
@@ -3902,7 +5180,9 @@ local function BuildEntranceTimeline()
                 if not icon.skipEntrance then animatedCount = animatedCount + 1 end
             end
         end
-        local stage = Add(key, BASE_STAT_SLIDE_DURATION + math.max(0, animatedCount - 1) * BASE_STAT_STAGGER_STEP)
+        local duration = BASE_STAT_SLIDE_DURATION + math.max(0, animatedCount - 1) * BASE_STAT_STAGGER_STEP
+        if key == "abilities" and not showAbilities then duration = 0 end
+        local stage = Add(key, duration)
         stage.count = count
         stage.animatedCount = animatedCount
         stage.shimmerReady = count > 0 and stage.start
@@ -3931,7 +5211,7 @@ local function BuildEntranceTimeline()
     plan.finish = cursor
     if ns.db and ns.db.emphasizeStatGains then
         for _, fs in ipairs(content.statLinePool) do
-            if fs:IsShown() and fs.statData and fs.statData.new ~= fs.statData.old then
+            if fs.statData and fs.statData.new ~= fs.statData.old then
                 plan.finish = math.max(plan.finish, fs.entranceEnd + (1.0 - BASE_STAT_SLIDE_DURATION) / speed)
             end
         end
@@ -3960,48 +5240,55 @@ end
 
 -- Fit the frame to its content so empty sections do not leave excess space.
 local function LayoutFrame(statCount)
+    statCount = math.max(statCount, content.statPageRowCount or 0)
+    render.MeasureLevelTime()
     local borderInset = ThemeContentInset()
     local gap = SectionGap()
-    local h = SectionPadding() + PortraitRingSize() + 9
+    local h = SectionPadding() + PortraitRingSize() + render.PortraitLevelGap()
     h = h + TextHeight(content.levelText, 18)
     h = h + 22 + TextHeight(content.statsHeader, 18)
     h = h + gap + SECTION_DIVIDER_HEIGHT + gap
         + statCount * STAT_LINE_HEIGHT
     h = h + gap + SECTION_DIVIDER_HEIGHT + gap
     if content.levelTimeText:IsShown() then
-        h = h + 2 + TextHeight(content.levelTimeText, 18)
+        h = h + 2 + content.levelTimeText:GetHeight()
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
     end
-    h = h + TextHeight(content.spellsHeader, 16)
-    h = h + gap + SECTION_DIVIDER_HEIGHT + gap
-        + (content.abilityViewport:GetHeight() or ABILITY_ICON_SIZE)
+    if ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0 then
+        h = h + TextHeight(content.spellsHeader, 16)
+        h = h + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding()
+            + (content.abilityViewport:GetHeight() or ABILITY_ICON_SIZE)
+    end
     if content.petSpellsHeader:IsShown() then
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
         h = h + TextHeight(content.petSpellsHeader, 16)
-        h = h + gap + SECTION_DIVIDER_HEIGHT + gap
+        h = h + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding()
             + (content.petAbilityViewport:GetHeight() or ABILITY_ICON_SIZE)
     end
     if content.weaponSkillsText:IsShown() then
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
             + math.max(18, TextHeight(content.weaponSkillsText, 18))
     end
-    h = h + SectionPadding()
+    local abilitiesLast = not content.weaponSkillsText:IsShown()
+        and (content.abilityViewport:IsShown() or content.petAbilityViewport:IsShown())
+    h = h + (abilitiesLast and render.AbilitySectionPadding() or SectionPadding())
     content:ClearAllPoints()
     if IsHorizontalLayout() then
         local statsHeight = 24 + TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + statCount * STAT_LINE_HEIGHT
-        if content.levelTimeText:IsShown() then statsHeight = statsHeight + 2 + TextHeight(content.levelTimeText, 18) end
-        -- Reserve four full-size skill rows even when only one is populated.
-        -- Overflow changes the scroll range, never the icon or viewport scale.
+        if content.levelTimeText:IsShown() then statsHeight = statsHeight + 2 + content.levelTimeText:GetHeight() end
+        -- Keep the established frame budget. The visible grid has three rows;
+        -- additional skills scroll instead of squeezing a fourth row into it.
         content.portraitFit = 1
         local naturalHeight = math.max(statsHeight + 38, PortraitRingSize() * PortraitRingScale() + 50)
         for _, viewport in ipairs({content.abilityViewport, content.petAbilityViewport}) do
-            if viewport == content.abilityViewport or content.petSpellsHeader:IsShown() then
+            if (viewport == content.abilityViewport and content.spellsHeader:IsShown())
+                or (viewport == content.petAbilityViewport and content.petSpellsHeader:IsShown()) then
                 local header = viewport == content.abilityViewport and content.spellsHeader or content.petSpellsHeader
                 viewport.layoutScale = 1
                 viewport:SetScale(1)
                 if ns.WrapOptionsText then ns.WrapOptionsText(header, TrainingWidth(viewport), "CENTER"); SyncTextGeometry(header) end
-                local reserve = 24 + TextHeight(header, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + 26
-                naturalHeight = math.max(naturalHeight, reserve + 4 * (viewport.cellHeight or AbilityCellHeight(NEW_ABILITY_ICON_SIZE)))
+                local reserve = 24 + TextHeight(header, 18) + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding() * 2
+                naturalHeight = math.max(naturalHeight, reserve + 4 * (viewport.cellHeight or AbilityCellHeight(NewAbilityIconSize())))
             end
         end
         local maximum = math.max(1, math.min(350, UIParent:GetHeight() - 40)) / ns.GetPopupScale()
@@ -4027,6 +5314,34 @@ local function LayoutFrame(statCount)
         PositionSections()
         local main, pet = content.abilityViewport, content.petAbilityViewport
         local hasPet = content.petSpellsHeader:IsShown()
+        local bottomAbilityInset = ns.db and ns.db.backgroundMode == "MODERN" and 20 / fit or 0
+        local minimumAbilityPadding = ns.db and ns.db.backgroundMode == "MODERN"
+            and UI_METRICS.modernAbilityPadding or UI_METRICS.texturedAbilityPadding
+        local abilityPadding = math.max(render.AbilitySectionPadding(), minimumAbilityPadding / fit)
+        local topGap = UI_METRICS.abilityTopGap / fit
+        for _, viewport in ipairs({main, pet}) do
+            local count = viewport.abilityCount or 0
+            if count > 0 then
+                local header = viewport == main and content.spellsHeader or content.petSpellsHeader
+                local divider = viewport == main and content.abilitiesDivider or content.petHeaderDivider
+                local abilityTop = 24 + TextHeight(header,18) + gap + SECTION_DIVIDER_HEIGHT + topGap
+                local height = math.max(1, naturalHeight-bottomAbilityInset-abilityPadding-abilityTop)
+                viewport:ClearAllPoints();viewport:SetPoint("TOP",divider,"BOTTOM",0,-topGap)
+                viewport.abilityPadding = abilityPadding
+                if count <= 9 then
+                    viewport:SetHeight(height)
+                    -- The child fills the viewport; icons start at its top edge.
+                    viewport.row:SetHeight(height)
+                    viewport.row:ClearAllPoints()
+                    viewport.row:SetPoint("TOPLEFT", viewport, "TOPLEFT", 0, 0)
+                    viewport.scrollMaximum = 0
+                else
+                    local visibleHeight = math.min(viewport:GetHeight(), height)
+                    viewport:SetHeight(visibleHeight)
+                    viewport.scrollMaximum = math.max(0, (viewport.rowContentHeight or 0) - visibleHeight)
+                end
+            end
+        end
         main.sharedScroll = true
         main.sharedMaximum = math.max(main.scrollMaximum or 0, hasPet and pet.scrollMaximum or 0)
         main.scrollController = main.slider
@@ -4060,18 +5375,25 @@ local function LayoutFrame(statCount)
         content.portraitPulse:SetSize(PortraitRingSize() * 1.1, PortraitRingSize() * 1.1)
         content:SetScale(fit)
         content:SetSize(FRAME_WIDTH, naturalHeight)
-        content:SetPoint("CENTER", frame, "CENTER", 0, 0)
-        local inset = 22 / fit
-        local bottom = naturalHeight - inset
-        local top = statsTop + math.max(0, (bottom - statsTop - blockHeight) / 2)
+        local bottomClearance = ns.db and ns.db.backgroundMode ~= "MODERN" and content.isMaxLevel
+            and UI_METRICS.texturedHorizontalMaxBottomPadding or 0
+        -- Grow downward so portrait/level placement keeps its existing top margin.
+        content:SetPoint("CENTER", frame, "CENTER", 0, bottomClearance / 2)
+        local inset = 26 / fit
         content.statsContainer:ClearAllPoints()
-        content.statsContainer:SetPoint("TOP", content.statsHeaderDivider, "BOTTOM", 0,
-            -gap - (top - statsTop))
+        content.statsContainer:SetPoint("TOP", content.statsHeaderDivider, "BOTTOM", 0, -topGap)
         if hasTime then
-            AnchorBelow(content.levelTimeText, content.statsContainer, gap)
+            content.levelTimeText:ClearAllPoints()
+            content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOMLEFT",
+                24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2, inset)
         end
-        h = panelHeight
+        h = panelHeight + bottomClearance
     else
+        -- Reserve room below the last section before fitting textured content;
+        -- otherwise ability icons can sit on the bottom border artwork.
+        if ns.db and ns.db.backgroundMode ~= "MODERN" then
+            h = h + UI_METRICS.texturedVerticalBottomPadding
+        end
         content.portraitFit = 1
         content:SetScale(1)
         if borderInset > 0 then
@@ -4096,7 +5418,43 @@ local function LayoutFrame(statCount)
     closeButton:ClearAllPoints()
     closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
     frame:SetHeight(h)
+    render.PositionPaceRecord()
+    if IsHorizontalLayout() then
+        for _, entry in ipairs({{content.abilityViewport,content.abilityIconPool},{content.petAbilityViewport,content.petAbilityIconPool}}) do
+            local viewport,pool=entry[1],entry[2]
+            if (viewport.abilityCount or 0)>3 then
+                for i=1,viewport.abilityCount do
+                    local icon=pool[i]
+                    local row=i<=9 and (i-1)%3 or 3+math.floor((i-10)/3)
+                    local y=viewport.row:GetHeight()/2-icon:GetHeight()/2-row*viewport.cellHeight
+                    icon.animationY=y;icon:ClearAllPoints()
+                    icon:SetPoint("CENTER",viewport.row,"CENTER",icon.animationX,y-(activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
+                end
+            end
+        end
+    end
+    render.FitSparseAbilityIcons(content.abilityViewport, content.abilityIconPool)
+    render.FitSparseAbilityIcons(content.petAbilityViewport, content.petAbilityIconPool)
     LayoutBackground()
+end
+
+-- Grow only the timing row; keep the current animation timeline and icon state.
+function render.ResizeTimeRow()
+    if not render.timeRowOrigin then
+        render.timeRowOrigin = { height = frame:GetHeight(), point = { frame:GetPoint() } }
+    end
+    render.MeasureLevelTime()
+    PositionSections()
+    local count = math.max(1, math.floor(content.statsContainer:GetHeight() / STAT_LINE_HEIGHT + .5))
+    LayoutFrame(count)
+    -- Preserve the footer's bottom while the extra line grows upward.
+    local origin = render.timeRowOrigin
+    local point = origin.point
+    if point[1] and point[2] and point[3] and point[4] and point[5] then
+        local fraction = point[1]:find("TOP", 1, true) and 1 or point[1]:find("BOTTOM", 1, true) and 0 or .5
+        frame:ClearAllPoints()
+        frame:SetPoint(point[1], point[2], point[3], point[4], point[5] + (frame:GetHeight() - origin.height) * frame:GetScale() * fraction)
+    end
 end
 
 -- Refresh projection after layout without asynchronously reloading the unit.
@@ -4158,6 +5516,7 @@ bg:SetAlpha(0)
 content:SetAlpha(0)
 
 local bgAnim = bg:CreateAnimationGroup()
+bg.entranceGroup = bgAnim
 local bgFade = bgAnim:CreateAnimation("Alpha")
 bgFade:SetFromAlpha(0)
 bgFade:SetToAlpha(1)
@@ -4174,6 +5533,12 @@ fadeOut:SetDuration(0.5)
 fadeOut:SetSmoothing("IN")
 fadeOutGroup:SetScript("OnFinished", function() frame:Hide() end)
 frame.fadeOutGroup = fadeOutGroup
+
+function render.BeginFadeOut(multiplier)
+    ns.SetClosingClickThrough(true)
+    fadeOut:SetDuration(UI_METRICS.texturedCloseSeconds / Speed() / (multiplier or UI_METRICS.automaticCloseSpeed))
+    frame.fadeOutGroup:Play()
+end
 
 local hideToken = 0
 local previewSuspended = false
@@ -4213,10 +5578,10 @@ local function TryFadeOut(token)
         render.ArmHideTimer(0.15, token, function() TryFadeOut(token) end)
         return
     end
-    if ns.db and ns.db.backgroundAnimations ~= false and not ns.db.reducedMotion then
+    if ns.db and ns.db.backgroundMode == "MODERN" then
         render.BeginClosing()
     else
-        frame.fadeOutGroup:Play()
+        render.BeginFadeOut()
     end
 end
 
@@ -4228,13 +5593,8 @@ local function ScheduleFadeOut(delay)
     fadeDeadline = GetTime() + delay
     if ShouldSuspendPreview() then
         previewSuspended = true
+        if render.statPages then render.statPages.paused = true end
         remainingPreviewTime = delay
-        return
-    end
-    if ns.db and ns.db.reducedMotion then
-        render.ArmHideTimer(delay, token, function()
-            if token == hideToken and frame:IsShown() then frame:Hide() end
-        end)
         return
     end
     render.ArmHideTimer(delay, token, function() TryFadeOut(token) end)
@@ -4244,11 +5604,12 @@ ns.RescheduleFadeOut = ScheduleFadeOut
 -- Only pause the timeout for a manually requested preview. Real level-ups
 -- retain their usual timer, position, scale, animation, and layout.
 function ns.RefreshPreviewSuspension()
-    if not previewActive or not frame:IsShown() then return end
+    if not previewActive or not frame:IsShown() or frame.closingInputSuppressed then return end
     if ShouldSuspendPreview() then
         if previewSuspended then return end
         remainingPreviewTime = math.max(0, (fadeDeadline or GetTime()) - GetTime())
         previewSuspended = true
+        if render.statPages then render.statPages.paused = true end
         hideToken = hideToken + 1
         render.CancelHideTimer()
         if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
@@ -4258,8 +5619,25 @@ function ns.RefreshPreviewSuspension()
     elseif previewSuspended then
         local remaining = remainingPreviewTime or 0
         previewSuspended = false
+        if render.statPages then render.statPages.paused = false end
         remainingPreviewTime = nil
         ScheduleFadeOut(remaining)
+        UpdateVisualEffects()
+    end
+end
+
+function ns.DismissLevelUp()
+    if not frame:IsShown() or render.closing then return end
+    bgAnim:Stop()
+    bg:SetAlpha(1)
+    previewActive, previewSuspended = false, false
+    remainingPreviewTime = nil
+    hideToken = hideToken + 1
+    render.CancelHideTimer()
+    if ns.db and ns.db.backgroundMode == "MODERN" then
+        render.BeginClosing(UI_METRICS.manualCloseSpeed)
+    else
+        render.BeginFadeOut(UI_METRICS.manualCloseSpeed)
     end
 end
 
@@ -4280,19 +5658,11 @@ function ns.CloseLevelUp()
 end
 
 
-frame:SetScript("OnEnter", function()
-    if ns.db and ns.db.ignoreMouseoverDelay == true then return end
-    if frame.fadeOutGroup:IsPlaying() or render.closing then
-        frame.fadeOutGroup:Stop()
-        render.CancelClosing()
-        frame:SetAlpha(1)
-        UpdateVisualEffects()
-        ScheduleFadeOut(0.15) -- polls until the mouse leaves, then fades
-    end
-end)
+-- Once an exit starts, pointer movement must not restart the popup.
+frame:SetScript("OnEnter", nil)
 
 
-local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone)
+local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
     -- Prepare the content, play the animations, and show the panel.
     local db = ns.db or {}
     if db.enabled == false then return end
@@ -4306,25 +5676,29 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     content.portraitArtwork:Hide()
     if content.playerModel then content.playerModel:SetAlpha(0); content.playerModel:Hide() end
     content:SetAlpha(0)
-    content.currentWarlockPetAbilities = warlockPetAbilities or {}
+    content.currentTrainerAbilities = trainerAbilities or {}
+    content.currentWarlockPetAbilities = ns.GetCurrentFlavor() ~= "retail" and warlockPetAbilities or {}
     ApplyPopupWidth()
     frame:SetScale(ns.GetPopupScale())
     EnsureAllTextGlows()
     ns.RefreshClassIcon()
-    ApplyToTextLayers(content.levelText, "SetText", ns.L("Level %d", currentLevel))
+    content.currentReachedLevel = currentLevel
+    ApplyToTextLayers(content.levelText, "SetText", content.levelRangeStart
+        and ns.L("Level %d - %d", content.levelRangeStart, currentLevel) or ns.L("Level %d", currentLevel))
     render.RefreshMilestoneLevelText()
 
-    local statCount = UpdateStatLines(statChanges or {})
+    render.statPages = nil
+    content.statPage = "primary"
+    ApplyToTextLayers(content.statsHeader, "SetText", ns.L("Stats Gained"))
+    content.secondaryStatChanges = db.showSecondaryStats and secondaryStats or nil
+    content.statPageRowCount = content.secondaryStatChanges and math.max(#ns.FilterRelevantStats(statChanges or {}), #content.secondaryStatChanges) or nil
+    content.currentStatChanges = statChanges or {}
+    local statCount = UpdateStatLines(content.currentStatChanges)
     -- Current stats must be measured before the first visible frame.
     ApplyPopupWidth()
 
-    if db.showLevelTime and tonumber(timePlayedThisLevel) then
-        ApplyToTextLayers(content.levelTimeText, "SetText", FormatPlayedTime(timePlayedThisLevel))
-        ApplyToTextLayers(content.levelTimeText, "SetShown", true)
-    else
-        ApplyToTextLayers(content.levelTimeText, "SetText", "")
-        ApplyToTextLayers(content.levelTimeText, "SetShown", false)
-    end
+    content.currentLevelPlayedTime, content.previousFastestLevelTime = timePlayedThisLevel, previousFastest
+    render.UpdateLevelTime()
 
     content.currentWarlockPetAbilities = warlockPetAbilities or {}
     UpdateTrainerAbilityIcons(trainerAbilities or {})
@@ -4340,11 +5714,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     bgFade:SetDuration(BASE_BG_FADE_DURATION / speed)
 
     bgAnim:Stop()
-    if db.reducedMotion then
-        bg:SetAlpha(1)
-    else
-        bgAnim:Play()
-    end
+    bgAnim:Play()
 
     ns.PositionFrame(frame)
 
@@ -4354,7 +5724,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
     RefreshCloseButtonLabel()
     -- Reset the previous popup's effect clock and portrait alpha before Show.
-    local entranceDuration = db.reducedMotion and BASE_BG_FADE_DURATION / speed or entranceTimeline.finish
+    local entranceDuration = entranceTimeline.finish
     StartVisualEffects()
     if db.screenshotMilestones and content.isMilestone and not previewActive then
         render.screenshotAt = entranceDuration + .15
@@ -4365,6 +5735,14 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     -- Arm cleanup before optional effects or sound can fail.
     local lifetime = entranceDuration + (db.duration or 7)
     render.popupLifetime = lifetime
+    if content.secondaryStatChanges and #content.secondaryStatChanges > 0 then
+        local halfDuration = (db.duration or 7)/2
+        local animationLength = (BASE_STAT_SLIDE_DURATION + BASE_STAT_STAGGER_BASE
+            + math.max(0,#content.secondaryStatChanges-1)*BASE_STAT_STAGGER_STEP + 1)/Speed()
+        render.statPages = {phase = "waiting", holdAge = 0, halfDuration = halfDuration,
+            animationScale = math.min(1, halfDuration / animationLength),
+            lastAge = 0, paused = ShouldSuspendPreview()}
+    end
     ScheduleFadeOut(lifetime)
     UpdateVisualEffects()
 
@@ -4374,19 +5752,27 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats)
     ns.EnsureDatabase()
+    ns.SetClosingClickThrough(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
+    content.pacePreview = isPreview == true and pacePreview == true
     previewActive = isPreview == true
     previewSuspended = false
     remainingPreviewTime = nil
     local level = tonumber(currentLevel)
+    rangeStart = tonumber(rangeStart)
+    content.levelRangeStart = rangeStart and level and rangeStart >= 1 and rangeStart % 1 == 0 and rangeStart < level - 1 and rangeStart or nil
+    content.isMaxLevel = level ~= nil and level == ns.GetLevelCap() and (not isPreview or maxLevelPreview == true)
     -- Ordinary previews stay normal; /glu milestone opts into the celebration.
-    local milestone = (not isPreview or milestonePreview == true) and level and level > 0 and level % 10 == 0
-    local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone)
+    local milestone = (not isPreview or milestonePreview == true) and level and level > 0
+        and (level % 10 == 0 or content.levelRangeStart and math.floor(level / 10) > math.floor(content.levelRangeStart / 10))
+    local perf = ns.PerfStart("popup_prepare")
+    local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
+    ns.PerfEnd(perf)
     if not ok then
         print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err))
         print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up screen failed to display (see above). Please report this error."))

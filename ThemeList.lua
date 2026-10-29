@@ -18,8 +18,8 @@ local PORTRAIT_RING_TEXTURES = {
     NONE = { label = "No portrait ring", texture = nil, scale = 1.10, offsetX = 0, offsetY = 0 },
     ALLIANCE = { label = "Alliance ring", texture = Texture("Backgrounds/ally-circle-frame.tga"), scale = 1.10, offsetX = 0, offsetY = 0 },
     HORDE = { label = "Horde ring", texture = Texture("Backgrounds/horde-circle-frame.tga"), scale = 1.10, offsetX = 0, offsetY = 0 },
-    STEEL = { label = "Steel ring", texture = Texture("Backgrounds/circle-frame.tga"), scale = 1.10, offsetX = 0, offsetY = 0 },
-    COPPER = { label = "Copper ring", texture = Texture("Backgrounds/copper-circle-frame.tga"), scale = 1.10, offsetX = 0, offsetY = 0 },
+    STEEL = { label = "Steel ring", texture = Texture("Backgrounds/circle-frame.tga"), glintRadius = .43, scale = 1.10, offsetX = 0, offsetY = 0 },
+    COPPER = { label = "Copper ring", texture = Texture("Backgrounds/copper-circle-frame.tga"), glintRadius = .43, scale = 1.10, offsetX = 0, offsetY = 0 },
 }
 ns.PORTRAIT_RING_TEXTURES = PORTRAIT_RING_TEXTURES
 ns.PORTRAIT_RING_CHOICES = {
