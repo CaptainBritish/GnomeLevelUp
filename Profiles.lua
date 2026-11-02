@@ -26,11 +26,15 @@ local function NormalizeSettings(settings)
     for _, key in ipairs({ "portraitImpactSound", "starburstSound", "showLevelPace", "statTickerSounds", "newAbilitySparkles", "abilityRevealShine", "backgroundDepth", "milestoneAnticipation", "statImpactSparks", "milestoneColorTransition", "popupClosingAnimation" }) do
         if type(settings[key]) == "boolean" then settings[key] = nil end
     end
+    ns.RetireHordeBackground(settings)
+    ns.RetireDustyStoneBackground(settings)
+    ns.NormalizeTrellisSideTransforms(settings)
     if settings.horizontalMode then settings.compactMode = true end
     return settings
 end
 
 local function Snapshot()
+    ns.RememberThemeHues()
     local settings = {}
     for _, key in ipairs(keys) do settings[key] = ns.CopyValue(ns.db[key]) end
     return NormalizeSettings(settings)
@@ -334,7 +338,7 @@ local ranges = {
     portraitModelY = { -5, 5 }, portraitModelZ = { -5, 5 }, portraitModelScale = { 25, 300 },
     portraitModelMaskSize = { 25, 300 },
     portraitModelViewportSize = { 25, 300 },
-    scale = { 0.5, 2 }, horizontalScale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 },
+    scale = { 0.5, 2 }, horizontalScale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 }, backgroundHueOpacity = { 0, 1 },
     statTextScale = { .5, 2 }, headingTextScale = { .5, 2 }, timeTextScale = { .5, 2 },
     animSpeedMultiplier = { 0.25, 3 }, playerPortraitScale = { 0.1, 5 },
     portraitRingScale = { 0.1, 5 }, horizontalPortraitRingScale = { 0.1, 5 }, sectionPadding = { 0, 100 },
@@ -379,6 +383,25 @@ local function ValidColors(colors)
     return true
 end
 
+local function ValidThemeHues(preferences)
+    if type(preferences) ~= "table" then return false end
+    for kind, entries in pairs(preferences) do
+        if (kind ~= "background" and kind ~= "frame" and kind ~= "ring") or type(entries) ~= "table" then return false end
+        local count = 0
+        for choice, record in pairs(entries) do
+            count = count + 1
+            if count > 128 or type(choice) ~= "string" or #choice > 80 or choice:find("%c")
+                or type(record) ~= "table" or not ValidateLike(record.color, {1,1,1}, 0) then return false end
+            for key in pairs(record) do
+                if key ~= "color" and (key ~= "opacity" or kind ~= "background") then return false end
+            end
+            if record.opacity ~= nil and (type(record.opacity) ~= "number"
+                or record.opacity ~= record.opacity or record.opacity < 0 or record.opacity > 1) then return false end
+        end
+    end
+    return true
+end
+
 local function ValidSettings(settings)
     if type(settings) ~= "table" then return false end
     for key, value in pairs(settings) do
@@ -388,6 +411,8 @@ local function ValidSettings(settings)
             if key == "colors" then
                 for colorKey in pairs(ns.defaults.colors) do if not value[colorKey] then return false end end
             end
+        elseif key == "themeHuePreferences" then
+            if not ValidThemeHues(value) then return false end
         elseif key == "classColorOverrides" then
             if type(value) ~= "table" then return false end
             for token, colors in pairs(value) do

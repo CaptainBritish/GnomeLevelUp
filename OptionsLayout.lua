@@ -219,7 +219,8 @@ function ns.CreateOptionsLayout(parent)
             local cells = {}
             for _, cell in ipairs(self.rows[originalY]) do
                 if not cell.skip then
-                    local shown = (cell.kind == "header" or not (cell.section and cell.section.collapsed))
+                    local shown = (self.filterCell ~= nil or cell.kind == "header" or not (cell.section and cell.section.collapsed))
+                        and (not self.filterCell or self.filterCell(cell))
                         and (not cell.debugOnly or debugEnabled)
                         and (not cell.isVisible or cell.isVisible())
                     for _, widget in ipairs(cell.widgets) do widget:SetShown(shown) end

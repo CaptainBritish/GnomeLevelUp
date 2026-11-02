@@ -27,7 +27,12 @@ local LANGUAGE_NAMES = {
 -- Add new UI strings to all ten non-English dictionaries.
 -- English UI strings are the canonical keys. Never translate saved-variable
 -- keys, API identifiers, slash commands, spell IDs or asset paths.
-local locales = { enUS = {} }
+-- Keep canonical translation keys stable while using British English on screen.
+local locales = { enUS = {
+    ["Colors"] = "Colours",
+    ["Use class colors"] = "Use class colours",
+    ["Milestone color transition"] = "Milestone colour transition",
+} }
 local localeBuilders = {}
 
 -- Keep the constructors, not ten populated dictionaries. Switching language
@@ -4598,3 +4603,721 @@ RegisterLocaleBuilder("ruRU", function() return { ["Right-click: Preview Level-U
 RegisterLocaleBuilder("koKR", function() return { ["Right-click: Preview Level-Up"] = "오른쪽 클릭: 레벨 상승 미리 보기" } end)
 RegisterLocaleBuilder("zhCN", function() return { ["Right-click: Preview Level-Up"] = "右键点击：预览升级提示" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Right-click: Preview Level-Up"] = "右鍵點擊：預覽升級提示" } end)
+
+-- Version 1.5.2 timing and replay controls.
+RegisterLocaleBuilder("frFR", function() return {
+    ["Switch to secondary stats at"] = "Passer aux statistiques secondaires à",
+    ["Choose the percentage of display time spent on primary stats."] = "Choisissez la part du temps d’affichage consacrée aux statistiques principales.",
+    ["Replace primary stats with secondary stats during the popup."] = "Remplace les statistiques principales par les statistiques secondaires pendant l’alerte.",
+    ["Middle-click: Replay last level-up"] = "Clic du milieu : revoir le dernier gain de niveau",
+    ["No recorded level-up to replay yet."] = "Aucun gain de niveau enregistré à revoir.",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Switch to secondary stats at"] = "Cambiar a estadísticas secundarias al",
+    ["Choose the percentage of display time spent on primary stats."] = "Elige el porcentaje del tiempo de visualización dedicado a las estadísticas principales.",
+    ["Replace primary stats with secondary stats during the popup."] = "Sustituye las estadísticas principales por las secundarias durante el aviso.",
+    ["Middle-click: Replay last level-up"] = "Clic central: repetir la última subida de nivel",
+    ["No recorded level-up to replay yet."] = "Todavía no hay una subida de nivel registrada para repetir.",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Switch to secondary stats at"] = "Cambiar a estadísticas secundarias al",
+    ["Choose the percentage of display time spent on primary stats."] = "Elige el porcentaje del tiempo de visualización dedicado a las estadísticas principales.",
+    ["Replace primary stats with secondary stats during the popup."] = "Sustituye las estadísticas principales por las secundarias durante el aviso.",
+    ["Middle-click: Replay last level-up"] = "Clic central: repetir la última subida de nivel",
+    ["No recorded level-up to replay yet."] = "Todavía no hay una subida de nivel registrada para repetir.",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Switch to secondary stats at"] = "Zu Sekundärwerten wechseln bei",
+    ["Choose the percentage of display time spent on primary stats."] = "Wähle den Anteil der Anzeigedauer für die Hauptattribute.",
+    ["Replace primary stats with secondary stats during the popup."] = "Ersetzt die Hauptattribute während der Anzeige durch Sekundärwerte.",
+    ["Middle-click: Replay last level-up"] = "Mittelklick: letzten Stufenaufstieg erneut anzeigen",
+    ["No recorded level-up to replay yet."] = "Noch kein Stufenaufstieg zum erneuten Anzeigen gespeichert.",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Switch to secondary stats at"] = "Passa alle statistiche secondarie al",
+    ["Choose the percentage of display time spent on primary stats."] = "Scegli la percentuale del tempo di visualizzazione dedicata alle statistiche principali.",
+    ["Replace primary stats with secondary stats during the popup."] = "Sostituisce le statistiche principali con quelle secondarie durante l’avviso.",
+    ["Middle-click: Replay last level-up"] = "Clic centrale: ripeti l’ultimo passaggio di livello",
+    ["No recorded level-up to replay yet."] = "Nessun passaggio di livello registrato da ripetere.",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Switch to secondary stats at"] = "Mudar para atributos secundários em",
+    ["Choose the percentage of display time spent on primary stats."] = "Escolha a porcentagem do tempo de exibição dedicada aos atributos principais.",
+    ["Replace primary stats with secondary stats during the popup."] = "Substitui os atributos principais pelos secundários durante o aviso.",
+    ["Middle-click: Replay last level-up"] = "Botão do meio: repetir a última subida de nível",
+    ["No recorded level-up to replay yet."] = "Nenhuma subida de nível registrada para repetir.",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Switch to secondary stats at"] = "Перейти к вторичным характеристикам на",
+    ["Choose the percentage of display time spent on primary stats."] = "Выберите долю времени показа основных характеристик.",
+    ["Replace primary stats with secondary stats during the popup."] = "Заменяет основные характеристики вторичными во время показа окна.",
+    ["Middle-click: Replay last level-up"] = "Средняя кнопка мыши: повтор последнего повышения уровня",
+    ["No recorded level-up to replay yet."] = "Пока нет записанного повышения уровня для повтора.",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Switch to secondary stats at"] = "보조 능력치로 전환하는 시점",
+    ["Choose the percentage of display time spent on primary stats."] = "주요 능력치에 할당할 표시 시간의 비율을 선택합니다.",
+    ["Replace primary stats with secondary stats during the popup."] = "팝업 도중 주요 능력치를 보조 능력치로 교체합니다.",
+    ["Middle-click: Replay last level-up"] = "가운데 클릭: 마지막 레벨 상승 다시 보기",
+    ["No recorded level-up to replay yet."] = "다시 볼 레벨 상승 기록이 아직 없습니다.",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Switch to secondary stats at"] = "切换到次要属性的时间比例",
+    ["Choose the percentage of display time spent on primary stats."] = "选择主要属性占用的显示时间百分比。",
+    ["Replace primary stats with secondary stats during the popup."] = "在弹窗显示期间将主要属性替换为次要属性。",
+    ["Middle-click: Replay last level-up"] = "中键点击：重播上次升级",
+    ["No recorded level-up to replay yet."] = "尚无可重播的升级记录。",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Switch to secondary stats at"] = "切換至次要屬性的時間比例",
+    ["Choose the percentage of display time spent on primary stats."] = "選擇主要屬性佔用的顯示時間百分比。",
+    ["Replace primary stats with secondary stats during the popup."] = "在彈窗顯示期間將主要屬性替換為次要屬性。",
+    ["Middle-click: Replay last level-up"] = "中鍵點擊：重播上次升級",
+    ["No recorded level-up to replay yet."] = "尚無可重播的升級紀錄。",
+} end)
+
+-- Complete main-menu help and expanded animation descriptions.
+RegisterLocaleBuilder("frFR", function() return {
+    ["Adjust the space between popup sections."] = "Ajuste l’espace entre les sections de l’alerte.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Compare les services des maîtres au catalogue inclus et propose un rapport en cas de différence.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Ouvre les différences enregistrées et les instructions d’export du rapport.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Inclut les grimoires disponibles pour tous les démons du démoniste, pas seulement le familier actif.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Saisissez le chemin d’un fichier OGG relatif à l’addon pour le son personnalisé.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Choisissez un son personnalisé enregistré par cet addon ou SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Affiche les réglages avancés, commandes de test et compteurs de performances.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Affiche les durées mesurées dans la discussion. Activez le débogage pour les collecter.",
+    ["Clear performance counters before measuring another popup."] = "Efface les compteurs avant de mesurer une autre alerte.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Choisissez la détection automatique du client ou forcez les règles Retail ou Forever.",
+    ["Update the displayed trainer-cache information."] = "Actualise les informations affichées sur le cache des maîtres.",
+    ["Enter a name to create a profile or rename the current one."] = "Saisissez un nom pour créer un profil ou renommer le profil actuel.",
+    ["Save the current options as a new profile with the entered name."] = "Enregistre les options actuelles dans un nouveau profil portant le nom saisi.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Renomme le profil sélectionné. Le profil par défaut ne peut pas être renommé.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Supprime le profil sélectionné après confirmation. Le profil par défaut ne peut pas être supprimé.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Rétablit les options par défaut ; conserve les temps de niveau et rapports enregistrés.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Rapproche ou éloigne le portrait 3D de la caméra.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Déplace le portrait 3D à gauche ou à droite dans sa zone d’affichage.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Déplace le portrait 3D vers le haut ou le bas dans sa zone d’affichage.",
+    ["Turn the 3D portrait around its vertical axis."] = "Fait tourner le portrait 3D autour de son axe vertical.",
+    ["Change the size of the 3D character model."] = "Modifie la taille du modèle 3D du personnage.",
+    ["Change the circular mask that clips the 3D portrait."] = "Modifie le masque circulaire qui découpe le portrait 3D.",
+    ["Change the 3D rendering area around the portrait."] = "Modifie la zone de rendu 3D autour du portrait.",
+    ["Resize the ring artwork without resizing the portrait."] = "Redimensionne l’illustration de l’anneau sans redimensionner le portrait.",
+    ["Move the ring artwork left or right."] = "Déplace l’anneau à gauche ou à droite.",
+    ["Move the ring artwork up or down."] = "Déplace l’anneau vers le haut ou le bas.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Ajuste la marge vide entre les bordures texturées et le contenu de l’alerte.",
+    ["Mirror this frame piece horizontally."] = "Retourne ce morceau du cadre horizontalement.",
+    ["Mirror this frame piece vertically."] = "Retourne ce morceau du cadre verticalement.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Modifie la couleur de l’élément indiqué. Les couleurs de classe peuvent remplacer les couleurs d’accent.",
+    ["Tint this individual frame piece."] = "Teinte uniquement ce morceau du cadre.",
+    ["Rotate this individual frame piece."] = "Fait tourner uniquement ce morceau du cadre.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Définit le nombre de particules de cet effet. Zéro les masque.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Redimensionne les particules de cet effet en pourcentage de leur taille normale.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Définit l’opacité des particules de cet effet. Zéro les rend invisibles.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Définit l’opacité de l’animation indiquée. Zéro la rend invisible.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Joue un son au déclenchement de cette animation. Saisissez un identifiant de fichier sonore WoW ; 0 désactive ce son.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Célèbre chaque palier de dix niveaux avec une anticipation du portrait, des accents plus brillants et des effets de statistiques. Le mode classique désactive ces ornements.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "Au niveau maximum, ajoute des feux d’artifice courbes aux couleurs de classe, des étincelles sur l’anneau et davantage de particules de fond. Le mode classique les désactive.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Fait pulser l’anneau, puis révèle une étoile grandissante derrière le portrait. Les paliers et le niveau maximum ajoutent aussi un reflet répété sur le portrait.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Ajoute un reflet d’apparition, une lueur et des étincelles aux nouvelles capacités. Les améliorations de rang restent sans surbrillance.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Fait progresser les totaux depuis leurs anciennes valeurs, puis illumine les nombres modifiés. Aux paliers, ajoute aussi des étincelles à la fin du compteur.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Libère de petites lumières flottantes autour du portrait après l’étoile. Nécessite le pouls et l’étoile du portrait.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Affiche des particules montantes derrière l’alerte. Les paliers et le niveau maximum augmentent leur densité ; le niveau maximum les accélère aussi.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Fait passer une lueur déclinante sur les bordures texturées à l’ouverture. Indisponible avec le thème moderne.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Commence avec un portrait légèrement agrandi, puis revient doucement à sa taille normale. Les paliers ajoutent un bref éclat d’anticipation.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Étend les lignes de séparation à l’apparition de chaque section. Le mode classique garde les transitions du texte mais désactive ce décor.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Fait parcourir l’anneau par une étincelle brillante, terminant par un éclat plus grand qui s’estompe. Au niveau maximum, cet éclat grandit et scintille.",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Adjust the space between popup sections."] = "Ajusta el espacio entre las secciones del aviso.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Compara los servicios del instructor con el catálogo incluido y ofrece un informe si hay diferencias.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Abre las diferencias guardadas y las instrucciones para exportar un informe.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Incluye los grimorios disponibles para todos los demonios del brujo, no solo la mascota activa.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Introduce la ruta de un archivo OGG relativa al addon para el sonido personalizado.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Elige un sonido personalizado registrado por este addon o SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Muestra ajustes avanzados, comandos de prueba y contadores de rendimiento.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Imprime los tiempos medidos en el chat. Activa la depuración para recopilarlos.",
+    ["Clear performance counters before measuring another popup."] = "Borra los contadores antes de medir otro aviso.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Elige la detección automática del cliente o fuerza las reglas de Retail o Forever.",
+    ["Update the displayed trainer-cache information."] = "Actualiza la información mostrada sobre la caché de instructores.",
+    ["Enter a name to create a profile or rename the current one."] = "Introduce un nombre para crear un perfil o renombrar el actual.",
+    ["Save the current options as a new profile with the entered name."] = "Guarda los ajustes actuales en un perfil nuevo con el nombre introducido.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Renombra el perfil seleccionado. El perfil predeterminado no se puede renombrar.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Elimina el perfil seleccionado tras confirmar. El perfil predeterminado no se puede eliminar.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Restaura los ajustes predeterminados; conserva los tiempos de nivel y los informes guardados.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Acerca o aleja el retrato 3D de la cámara.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Mueve el retrato 3D a izquierda o derecha dentro de su área.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Mueve el retrato 3D arriba o abajo dentro de su área.",
+    ["Turn the 3D portrait around its vertical axis."] = "Gira el retrato 3D sobre su eje vertical.",
+    ["Change the size of the 3D character model."] = "Cambia el tamaño del modelo 3D del personaje.",
+    ["Change the circular mask that clips the 3D portrait."] = "Cambia la máscara circular que recorta el retrato 3D.",
+    ["Change the 3D rendering area around the portrait."] = "Cambia el área de renderizado 3D alrededor del retrato.",
+    ["Resize the ring artwork without resizing the portrait."] = "Cambia el tamaño del aro sin cambiar el del retrato.",
+    ["Move the ring artwork left or right."] = "Mueve el aro a izquierda o derecha.",
+    ["Move the ring artwork up or down."] = "Mueve el aro arriba o abajo.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Ajusta el margen vacío entre los bordes con textura y el contenido del aviso.",
+    ["Mirror this frame piece horizontally."] = "Refleja horizontalmente esta pieza del marco.",
+    ["Mirror this frame piece vertically."] = "Refleja verticalmente esta pieza del marco.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Cambia el color del elemento indicado. Los colores de clase pueden sustituir los colores de acento.",
+    ["Tint this individual frame piece."] = "Tiñe solo esta pieza del marco.",
+    ["Rotate this individual frame piece."] = "Gira solo esta pieza del marco.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Establece cuántas partículas tiene este efecto. Cero las oculta.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Cambia el tamaño de las partículas como porcentaje de su tamaño normal.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Establece la opacidad de las partículas. Cero las vuelve invisibles.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Establece la opacidad de la animación indicada. Cero la vuelve invisible.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Reproduce un sonido al activarse esta animación. Introduce un ID de archivo de sonido de WoW; 0 silencia este efecto.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra cada hito de diez niveles con anticipación del retrato, acentos más brillantes y efectos de estadísticas. El modo clásico desactiva estos adornos.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "Al nivel máximo, añade fuegos artificiales curvos con colores de clase, chispas en el aro y más partículas de fondo. El modo clásico desactiva estos efectos.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Hace pulsar el aro y revela un destello creciente detrás del retrato. Los hitos y el nivel máximo también añaden un brillo periódico al retrato.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Añade brillo de aparición, resplandor y chispas a las facultades recién aprendidas. Las mejoras de rango no se resaltan.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Anima los totales desde sus valores anteriores y después ilumina los números modificados. Los hitos también añaden chispas al terminar el contador.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Libera pequeñas luces flotantes alrededor del retrato después del destello. Requiere el pulso y destello del retrato.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Muestra partículas ascendentes detrás del aviso. Los hitos y el nivel máximo aumentan su densidad; el nivel máximo también las acelera.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Desplaza un resplandor que se desvanece por los bordes con textura al abrirse. No está disponible con Moderno.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Empieza con el retrato ligeramente ampliado y vuelve suavemente al tamaño normal. Los hitos añaden un breve destello de anticipación.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Extiende las líneas divisorias al entrar cada sección. El modo clásico conserva las transiciones de texto, pero desactiva este adorno.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Desplaza una chispa brillante por el aro y termina con un destello mayor que se desvanece. Al nivel máximo, el destello final aumenta y parpadea.",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Adjust the space between popup sections."] = "Passt den Abstand zwischen den Abschnitten an.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Vergleicht Lehrerangebote mit dem enthaltenen Katalog und bietet bei Abweichungen einen Bericht an.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Öffnet gespeicherte Abweichungen und Hinweise zum Exportieren eines Berichts.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Zeigt verfügbare Hexenmeistergrimoires für alle Dämonen statt nur für den aktiven Begleiter.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Gib einen zum Addon relativen OGG-Dateipfad für den eigenen Stufenaufstiegston ein.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Wähle einen von diesem Addon oder SharedMedia registrierten eigenen Klang.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Zeigt erweiterte Einstellungen, Testbefehle und Leistungszähler.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Gibt gemessene Laufzeiten im Chat aus. Zum Erfassen muss der Debugmodus aktiv sein.",
+    ["Clear performance counters before measuring another popup."] = "Löscht die Leistungszähler vor der nächsten Messung.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Wähle automatische Client-Erkennung oder erzwinge Retail- beziehungsweise Forever-Regeln.",
+    ["Update the displayed trainer-cache information."] = "Aktualisiert die angezeigten Informationen zum Lehrer-Cache.",
+    ["Enter a name to create a profile or rename the current one."] = "Gib einen Namen für ein neues Profil oder zum Umbenennen des aktuellen Profils ein.",
+    ["Save the current options as a new profile with the entered name."] = "Speichert die aktuellen Einstellungen unter dem eingegebenen Profilnamen.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Benennt das ausgewählte Profil um. Das Standardprofil kann nicht umbenannt werden.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Löscht das ausgewählte Profil nach Bestätigung. Das Standardprofil kann nicht gelöscht werden.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Setzt Optionen zurück; gespeicherte Stufenzeiten und Lehrerberichte bleiben erhalten.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Bewegt das 3D-Porträt zur Kamera hin oder von ihr weg.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Verschiebt das 3D-Porträt innerhalb seines Anzeigebereichs nach links oder rechts.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Verschiebt das 3D-Porträt innerhalb seines Anzeigebereichs nach oben oder unten.",
+    ["Turn the 3D portrait around its vertical axis."] = "Dreht das 3D-Porträt um seine senkrechte Achse.",
+    ["Change the size of the 3D character model."] = "Ändert die Größe des 3D-Charaktermodells.",
+    ["Change the circular mask that clips the 3D portrait."] = "Ändert die kreisförmige Maske, die das 3D-Porträt zuschneidet.",
+    ["Change the 3D rendering area around the portrait."] = "Ändert den 3D-Renderbereich um das Porträt.",
+    ["Resize the ring artwork without resizing the portrait."] = "Ändert die Ringgrafikgröße ohne das Porträt zu vergrößern.",
+    ["Move the ring artwork left or right."] = "Verschiebt die Ringgrafik nach links oder rechts.",
+    ["Move the ring artwork up or down."] = "Verschiebt die Ringgrafik nach oben oder unten.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Ändert den freien Innenabstand zwischen Texturrand und Inhalt.",
+    ["Mirror this frame piece horizontally."] = "Spiegelt dieses Rahmenteil waagerecht.",
+    ["Mirror this frame piece vertically."] = "Spiegelt dieses Rahmenteil senkrecht.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Ändert die Farbe des genannten Elements. Klassenfarben können Akzentfarben überschreiben.",
+    ["Tint this individual frame piece."] = "Färbt nur dieses einzelne Rahmenteil ein.",
+    ["Rotate this individual frame piece."] = "Dreht nur dieses einzelne Rahmenteil.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Legt die Partikelanzahl dieses Effekts fest. Null blendet sie aus.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Ändert die Partikelgröße als Prozentsatz ihrer normalen Größe.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Legt die Deckkraft der Partikel fest. Null macht sie unsichtbar.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Legt die Deckkraft der genannten Animation fest. Null macht sie unsichtbar.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Spielt beim Auslösen dieser Animation einen Klang. Gib eine WoW-Sounddatei-ID ein; 0 schaltet diesen Klang aus.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Feiert jeden Zehnerschritt mit einer Porträt-Voranimation, helleren Akzenten und zusätzlichen Werteffekten. Der klassische Modus schaltet diese Verzierungen aus.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "Fügt auf Maximalstufe gebogene Feuerwerke in Klassenfarben, Ringfunken und stärkere Hintergrundpartikel hinzu. Der klassische Modus deaktiviert diese Effekte.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Lässt den Ring pulsieren und einen wachsenden Stern hinter dem Porträt erscheinen. Meilensteine und Maximalstufe erhalten außerdem wiederkehrenden Porträtglanz.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Verleiht neu erlernten Fähigkeiten einen Einblendglanz, Leuchten und funkelnde Partikel. Rangaufwertungen bleiben unbetont.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Zählt Werte vom alten Stand hoch und lässt geänderte Zahlen aufleuchten. Bei Meilensteinen erscheinen nach dem Zählen außerdem Funken.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Lässt nach dem Stern kleine Lichter um das Porträt schweben. Benötigt Porträtpuls und Sterneneffekt.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Zeigt aufsteigende Partikel hinter dem Fenster. Meilensteine und Maximalstufe erhöhen die Dichte; auf Maximalstufe steigen sie auch schneller.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Lässt beim Öffnen ein abklingendes Leuchten über die Texturränder laufen. Für Modern nicht verfügbar.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Beginnt mit einem leicht vergrößerten Porträt und verkleinert es sanft auf Normalgröße. Meilensteine ergänzen einen kurzen Vorblitz.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Breitet die Trennlinien beim Einblenden jedes Abschnitts aus. Der klassische Modus behält Textübergänge bei, deaktiviert aber diese Verzierung.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Lässt einen hellen Funken um den Porträtring laufen und mit einem größeren, verblassenden Blitz enden. Auf Maximalstufe wird der Schlussfunke größer und flackert.",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Adjust the space between popup sections."] = "Regola lo spazio tra le sezioni dell’avviso.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Confronta i servizi degli istruttori con il catalogo incluso e propone un rapporto in caso di differenze.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Apre le differenze salvate e le istruzioni per esportare un rapporto.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Include i grimori disponibili per tutti i demoni dello stregone, non solo il famiglio attivo.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Inserisci il percorso di un file OGG relativo all’addon per il suono personalizzato.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Scegli un suono personalizzato registrato da questo addon o SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Mostra regolazioni avanzate, comandi di prova e contatori delle prestazioni.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Stampa i tempi misurati in chat. Attiva il debug per raccoglierli.",
+    ["Clear performance counters before measuring another popup."] = "Azzera i contatori prima di misurare un altro avviso.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Scegli il rilevamento automatico del client oppure forza le regole Retail o Forever.",
+    ["Update the displayed trainer-cache information."] = "Aggiorna le informazioni visualizzate sulla cache degli istruttori.",
+    ["Enter a name to create a profile or rename the current one."] = "Inserisci un nome per creare un profilo o rinominare quello attuale.",
+    ["Save the current options as a new profile with the entered name."] = "Salva le opzioni attuali in un nuovo profilo con il nome inserito.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Rinomina il profilo selezionato. Il profilo predefinito non può essere rinominato.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Elimina il profilo selezionato dopo conferma. Il profilo predefinito non può essere eliminato.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Ripristina le opzioni predefinite; conserva i tempi di livello e i rapporti salvati.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Avvicina o allontana il ritratto 3D dalla telecamera.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Sposta il ritratto 3D a sinistra o destra nella sua area.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Sposta il ritratto 3D in alto o in basso nella sua area.",
+    ["Turn the 3D portrait around its vertical axis."] = "Ruota il ritratto 3D intorno al suo asse verticale.",
+    ["Change the size of the 3D character model."] = "Cambia le dimensioni del modello 3D del personaggio.",
+    ["Change the circular mask that clips the 3D portrait."] = "Cambia la maschera circolare che ritaglia il ritratto 3D.",
+    ["Change the 3D rendering area around the portrait."] = "Cambia l’area di rendering 3D intorno al ritratto.",
+    ["Resize the ring artwork without resizing the portrait."] = "Ridimensiona la grafica dell’anello senza ridimensionare il ritratto.",
+    ["Move the ring artwork left or right."] = "Sposta l’anello a sinistra o destra.",
+    ["Move the ring artwork up or down."] = "Sposta l’anello in alto o in basso.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Regola il margine vuoto tra i bordi con texture e il contenuto dell’avviso.",
+    ["Mirror this frame piece horizontally."] = "Specchia orizzontalmente questa parte della cornice.",
+    ["Mirror this frame piece vertically."] = "Specchia verticalmente questa parte della cornice.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Cambia il colore dell’elemento indicato. I colori di classe possono sostituire i colori di risalto.",
+    ["Tint this individual frame piece."] = "Colora solo questa singola parte della cornice.",
+    ["Rotate this individual frame piece."] = "Ruota solo questa singola parte della cornice.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Imposta il numero di particelle dell’effetto. Zero le nasconde.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Ridimensiona le particelle come percentuale delle dimensioni normali.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Imposta l’opacità delle particelle. Zero le rende invisibili.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Imposta l’opacità dell’animazione indicata. Zero la rende invisibile.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Riproduce un suono quando parte l’animazione. Inserisci un ID di file audio WoW; 0 disattiva questo suono.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra ogni traguardo di dieci livelli con un’anticipazione del ritratto, dettagli più luminosi ed effetti sulle statistiche. La modalità classica disattiva questi ornamenti.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "Al livello massimo aggiunge fuochi curvi nei colori di classe, scintille sull’anello e più particelle sullo sfondo. La modalità classica disattiva questi effetti.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Fa pulsare l’anello e rivela una stella crescente dietro il ritratto. Traguardi e livello massimo aggiungono anche un riflesso periodico sul ritratto.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Aggiunge un riflesso iniziale, un bagliore e scintille alle abilità appena apprese. Gli aumenti di grado restano senza evidenziazione.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Anima i totali a partire dai vecchi valori, poi illumina i numeri modificati. I traguardi aggiungono scintille al termine del conteggio.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Rilascia piccole luci fluttuanti intorno al ritratto dopo la stella. Richiede il pulso e la stella del ritratto.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Mostra particelle che salgono dietro l’avviso. Traguardi e livello massimo ne aumentano la densità; al livello massimo sono anche più veloci.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Fa scorrere un bagliore che svanisce sui bordi con texture durante l’apertura. Non disponibile con Moderno.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Inizia con il ritratto leggermente ingrandito e lo riporta dolcemente alle dimensioni normali. I traguardi aggiungono un breve lampo anticipatorio.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Espande i divisori quando entra ogni sezione. La modalità classica mantiene le transizioni del testo, ma disattiva questo ornamento.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Fa scorrere una scintilla luminosa sull’anello, terminando con un bagliore più grande che svanisce. Al livello massimo la scintilla finale cresce e tremola.",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Adjust the space between popup sections."] = "Ajusta o espaço entre as seções do aviso.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Compara serviços dos treinadores com o catálogo incluído e oferece um relatório quando há diferenças.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Abre as diferenças salvas e as instruções de exportação do relatório.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Inclui grimórios disponíveis para todos os demônios do bruxo, não apenas o ajudante ativo.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Digite o caminho de um arquivo OGG relativo ao addon para o som personalizado.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Escolha um som personalizado registrado por este addon ou SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Mostra ajustes avançados, comandos de teste e contadores de desempenho.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Exibe os tempos medidos no bate-papo. Ative a depuração para coletá-los.",
+    ["Clear performance counters before measuring another popup."] = "Limpa os contadores antes de medir outro aviso.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Escolha detecção automática do cliente ou force as regras Retail ou Forever.",
+    ["Update the displayed trainer-cache information."] = "Atualiza as informações exibidas sobre o cache de treinadores.",
+    ["Enter a name to create a profile or rename the current one."] = "Digite um nome para criar um perfil ou renomear o atual.",
+    ["Save the current options as a new profile with the entered name."] = "Salva as opções atuais em um novo perfil com o nome informado.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Renomeia o perfil selecionado. O perfil padrão não pode ser renomeado.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Exclui o perfil selecionado após confirmação. O perfil padrão não pode ser excluído.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Restaura as opções padrão; mantém tempos de nível e relatórios salvos.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Aproxima ou afasta o retrato 3D da câmera.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Move o retrato 3D para a esquerda ou direita dentro da área.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Move o retrato 3D para cima ou para baixo dentro da área.",
+    ["Turn the 3D portrait around its vertical axis."] = "Gira o retrato 3D em torno do eixo vertical.",
+    ["Change the size of the 3D character model."] = "Altera o tamanho do modelo 3D do personagem.",
+    ["Change the circular mask that clips the 3D portrait."] = "Altera a máscara circular que recorta o retrato 3D.",
+    ["Change the 3D rendering area around the portrait."] = "Altera a área de renderização 3D ao redor do retrato.",
+    ["Resize the ring artwork without resizing the portrait."] = "Redimensiona a arte do aro sem redimensionar o retrato.",
+    ["Move the ring artwork left or right."] = "Move o aro para a esquerda ou direita.",
+    ["Move the ring artwork up or down."] = "Move o aro para cima ou para baixo.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Ajusta a margem vazia entre as bordas com textura e o conteúdo do aviso.",
+    ["Mirror this frame piece horizontally."] = "Espelha esta peça da moldura horizontalmente.",
+    ["Mirror this frame piece vertically."] = "Espelha esta peça da moldura verticalmente.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Altera a cor do elemento indicado. Cores de classe podem substituir as cores de destaque.",
+    ["Tint this individual frame piece."] = "Tinge apenas esta peça da moldura.",
+    ["Rotate this individual frame piece."] = "Gira apenas esta peça da moldura.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Define a quantidade de partículas deste efeito. Zero as oculta.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Redimensiona as partículas como porcentagem do tamanho normal.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Define a opacidade das partículas. Zero as torna invisíveis.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Define a opacidade da animação indicada. Zero a torna invisível.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Toca um som quando esta animação dispara. Digite um ID de arquivo sonoro do WoW; 0 silencia este som.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra cada marco de dez níveis com antecipação do retrato, detalhes mais brilhantes e efeitos de atributos. O modo clássico desativa esses enfeites.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "No nível máximo, adiciona fogos curvos nas cores de classe, faíscas no aro e mais partículas de fundo. O modo clássico desativa esses efeitos.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Faz o aro pulsar e revela uma estrela crescente atrás do retrato. Marcos e nível máximo também adicionam um brilho periódico no retrato.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Adiciona brilho de entrada, resplendor e faíscas às habilidades recém-aprendidas. Melhorias de grau não recebem destaque.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Anima os totais a partir dos valores anteriores e depois ilumina os números alterados. Marcos também adicionam faíscas ao terminar a contagem.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Libera pequenas luzes flutuantes ao redor do retrato após a estrela. Requer pulso e estrela do retrato.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Mostra partículas subindo atrás do aviso. Marcos e nível máximo aumentam sua densidade; o nível máximo também as acelera.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Move um brilho que desaparece pelas bordas com textura durante a abertura. Indisponível com Moderno.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Começa com o retrato um pouco ampliado e retorna suavemente ao tamanho normal. Marcos adicionam um breve clarão de antecipação.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Expande os divisores quando cada seção entra. O modo clássico mantém as transições de texto, mas desativa esse enfeite.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Move uma faísca brilhante pelo aro e termina com um clarão maior que desaparece. No nível máximo, a faísca final cresce e pisca.",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Adjust the space between popup sections."] = "Настраивает расстояние между разделами окна.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Сравнивает услуги учителей со встроенным каталогом и предлагает отчёт при расхождениях.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Открывает сохранённые расхождения и инструкции по экспорту отчёта.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Показывает доступные гримуары чернокнижника для всех демонов, а не только активного питомца.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Введите путь к файлу OGG относительно папки аддона для своего звука повышения уровня.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Выберите свой звук, зарегистрированный этим аддоном или SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Показывает расширенные настройки, тестовые команды и счётчики производительности.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Выводит измеренные длительности в чат. Для сбора измерений нужен режим отладки.",
+    ["Clear performance counters before measuring another popup."] = "Сбрасывает счётчики перед измерением следующего окна.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Выберите автоматическое определение клиента или принудительные правила Retail либо Forever.",
+    ["Update the displayed trainer-cache information."] = "Обновляет показанные сведения о кэше учителей.",
+    ["Enter a name to create a profile or rename the current one."] = "Введите имя для создания профиля или переименования текущего.",
+    ["Save the current options as a new profile with the entered name."] = "Сохраняет текущие настройки в новом профиле с указанным именем.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Переименовывает выбранный профиль. Стандартный профиль переименовать нельзя.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Удаляет выбранный профиль после подтверждения. Стандартный профиль удалить нельзя.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Восстанавливает стандартные настройки; сохраняет записанные времена уровней и отчёты.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Приближает 3D-портрет к камере или отдаляет от неё.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Сдвигает 3D-портрет влево или вправо внутри области отображения.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Сдвигает 3D-портрет вверх или вниз внутри области отображения.",
+    ["Turn the 3D portrait around its vertical axis."] = "Поворачивает 3D-портрет вокруг вертикальной оси.",
+    ["Change the size of the 3D character model."] = "Меняет размер 3D-модели персонажа.",
+    ["Change the circular mask that clips the 3D portrait."] = "Меняет круглую маску обрезки 3D-портрета.",
+    ["Change the 3D rendering area around the portrait."] = "Меняет область 3D-отрисовки вокруг портрета.",
+    ["Resize the ring artwork without resizing the portrait."] = "Меняет размер изображения кольца, не меняя портрет.",
+    ["Move the ring artwork left or right."] = "Сдвигает изображение кольца влево или вправо.",
+    ["Move the ring artwork up or down."] = "Сдвигает изображение кольца вверх или вниз.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Настраивает пустой отступ между текстурной рамкой и содержимым окна.",
+    ["Mirror this frame piece horizontally."] = "Отражает эту часть рамки по горизонтали.",
+    ["Mirror this frame piece vertically."] = "Отражает эту часть рамки по вертикали.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Меняет цвет указанного элемента. Цвета класса могут заменять цвета акцентов.",
+    ["Tint this individual frame piece."] = "Окрашивает только эту часть рамки.",
+    ["Rotate this individual frame piece."] = "Поворачивает только эту часть рамки.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Задаёт число частиц эффекта. Ноль скрывает их.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Меняет размер частиц в процентах от обычного размера.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Задаёт непрозрачность частиц. Ноль делает их невидимыми.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Задаёт непрозрачность указанной анимации. Ноль делает её невидимой.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Воспроизводит звук при запуске анимации. Введите ID звукового файла WoW; 0 отключает этот звук.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Отмечает каждый десятый уровень предварительной вспышкой портрета, яркими акцентами и эффектами характеристик. Классический режим отключает эти украшения.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "На максимальном уровне добавляет изогнутые фейерверки цвета класса, искры на кольце и усиленные фоновые частицы. Классический режим отключает эти эффекты.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Кольцо пульсирует, затем за портретом появляется растущая звезда. Вехи и максимальный уровень также добавляют повторяющийся блик на портрете.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Добавляет блик появления, свечение и искры к новым способностям. Улучшения ранга не выделяются.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Плавно увеличивает значения от старых к новым, затем подсвечивает изменённые числа. На вехах добавляет искры после завершения счёта.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Выпускает небольшие плавающие огоньки вокруг портрета после звезды. Требуется пульсация и звезда портрета.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Показывает поднимающиеся частицы за окном. Вехи и максимальный уровень увеличивают плотность; на максимальном уровне они также ускоряются.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "При открытии проводит затухающую подсветку по текстурным краям рамки. Недоступно для современной темы.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Портрет сначала немного увеличен, затем плавно возвращается к обычному размеру. На вехах добавляется короткая предварительная вспышка.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Разворачивает разделительные линии при появлении разделов. Классический режим сохраняет переходы текста, но отключает это украшение.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Проводит яркую искру по кольцу портрета, завершая большим затухающим бликом. На максимальном уровне конечная искра увеличивается и мерцает.",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Adjust the space between popup sections."] = "팝업 구역 사이의 간격을 조절합니다.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "상급자 서비스를 내장 목록과 비교하고 차이가 있으면 보고서를 제안합니다.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "저장된 차이와 보고서 내보내기 안내를 엽니다.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "현재 소환수뿐 아니라 모든 흑마법사 악마의 이용 가능한 마법서를 표시합니다.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "사용자 지정 레벨 상승 소리에 사용할 OGG 파일의 애드온 기준 경로를 입력합니다.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "이 애드온이나 SharedMedia에 등록된 사용자 지정 소리를 선택합니다.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "고급 조절 항목, 테스트 명령과 성능 카운터를 표시합니다.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "측정한 시간을 대화창에 출력합니다. 수집하려면 디버그 모드가 필요합니다.",
+    ["Clear performance counters before measuring another popup."] = "다른 팝업을 측정하기 전에 성능 카운터를 초기화합니다.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "클라이언트를 자동 감지하거나 Retail 또는 Forever 규칙을 강제합니다.",
+    ["Update the displayed trainer-cache information."] = "표시 중인 상급자 캐시 정보를 갱신합니다.",
+    ["Enter a name to create a profile or rename the current one."] = "프로필을 만들거나 현재 프로필의 이름을 바꿀 이름을 입력합니다.",
+    ["Save the current options as a new profile with the entered name."] = "입력한 이름의 새 프로필에 현재 설정을 저장합니다.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "선택한 프로필의 이름을 바꿉니다. 기본 프로필은 이름을 바꿀 수 없습니다.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "확인 후 선택한 프로필을 삭제합니다. 기본 프로필은 삭제할 수 없습니다.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "설정을 기본값으로 되돌립니다. 기록된 레벨 시간과 보고서는 유지됩니다.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "3D 초상화를 카메라 쪽으로 또는 반대쪽으로 움직입니다.",
+    ["Move the 3D portrait left or right inside its viewport."] = "표시 영역 안에서 3D 초상화를 좌우로 움직입니다.",
+    ["Move the 3D portrait up or down inside its viewport."] = "표시 영역 안에서 3D 초상화를 위아래로 움직입니다.",
+    ["Turn the 3D portrait around its vertical axis."] = "3D 초상화를 세로축을 중심으로 회전합니다.",
+    ["Change the size of the 3D character model."] = "캐릭터 3D 모델의 크기를 변경합니다.",
+    ["Change the circular mask that clips the 3D portrait."] = "3D 초상화를 자르는 원형 마스크를 변경합니다.",
+    ["Change the 3D rendering area around the portrait."] = "초상화 주변의 3D 렌더링 영역을 변경합니다.",
+    ["Resize the ring artwork without resizing the portrait."] = "초상화 크기는 유지하고 테두리 그림의 크기를 바꿉니다.",
+    ["Move the ring artwork left or right."] = "테두리 그림을 좌우로 움직입니다.",
+    ["Move the ring artwork up or down."] = "테두리 그림을 위아래로 움직입니다.",
+    ["Adjust the empty inset between textured borders and popup content."] = "텍스처 테두리와 팝업 내용 사이의 빈 여백을 조절합니다.",
+    ["Mirror this frame piece horizontally."] = "이 프레임 조각을 좌우로 뒤집습니다.",
+    ["Mirror this frame piece vertically."] = "이 프레임 조각을 상하로 뒤집습니다.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "해당 요소의 색을 바꿉니다. 직업 색상이 강조 색상을 덮어쓸 수 있습니다.",
+    ["Tint this individual frame piece."] = "이 프레임 조각만 색을 입힙니다.",
+    ["Rotate this individual frame piece."] = "이 프레임 조각만 회전합니다.",
+    ["Set the number of particles for this effect. Zero hides them."] = "효과의 입자 수를 설정합니다. 0이면 숨깁니다.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "효과 입자의 크기를 기본 크기에 대한 백분율로 설정합니다.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "효과 입자의 불투명도를 설정합니다. 0이면 보이지 않습니다.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "해당 애니메이션의 불투명도를 설정합니다. 0이면 보이지 않습니다.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "애니메이션이 시작될 때 소리를 재생합니다. WoW 소리 파일 ID를 입력하며, 0이면 이 소리를 끕니다.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "10레벨 단위마다 초상화 예고 효과, 더 밝은 강조와 추가 능력치 효과로 축하합니다. 클래식 모드에서는 이 장식을 끕니다.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "최고 레벨에서 직업 색상의 곡선 불꽃, 초상화 테두리의 불꽃과 강한 배경 입자를 추가합니다. 클래식 모드에서는 끕니다.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "초상화 테두리를 맥동시킨 뒤 뒤쪽에 커지는 별빛을 표시합니다. 이정표와 최고 레벨에서는 초상화에 반복되는 광택도 추가합니다.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "새로 배운 능력 아이콘에 등장 광택, 빛과 반짝이는 불꽃을 추가합니다. 등급 상승은 강조하지 않습니다.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "기존 값에서 새 값까지 능력치를 올려 표시한 뒤 바뀐 숫자를 빛냅니다. 이정표에서는 계산이 끝날 때 불꽃도 추가합니다.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "별빛 이후 초상화 주변에 작은 빛을 띄웁니다. 초상화 맥동 및 별빛 효과가 필요합니다.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "팝업 뒤쪽에 올라가는 입자를 표시합니다. 이정표와 최고 레벨에서는 밀도가 늘고, 최고 레벨에서는 속도도 빨라집니다.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "열릴 때 텍스처 테두리를 따라 사라지는 빛을 표시합니다. 모던 테마에서는 사용할 수 없습니다.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "초상화를 조금 크게 시작한 뒤 기본 크기로 부드럽게 줄입니다. 이정표에서는 짧은 예고 섬광도 추가합니다.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "각 구역이 등장할 때 구분선을 펼칩니다. 클래식 모드는 글자 전환을 유지하지만 이 장식 효과는 끕니다.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "밝은 불꽃이 초상화 테두리를 돌고 끝에서 크게 빛난 뒤 사라집니다. 최고 레벨에서는 마지막 불꽃이 더 커지고 깜박입니다.",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Adjust the space between popup sections."] = "调整弹窗各区域之间的间距。",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "将训练师服务与内置目录比较，发现差异时提供报告。",
+    ["Open saved trainer differences and instructions for exporting a report."] = "打开已保存的训练师差异及报告导出说明。",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "显示所有术士恶魔可用的魔典，而不只是当前宠物的魔典。",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "输入相对于插件目录的 OGG 文件路径，作为自定义升级音效。",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "选择由本插件或 SharedMedia 注册的自定义声音。",
+    ["Show advanced tuning controls, test commands and performance counters."] = "显示高级调整项、测试命令和性能计数器。",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "在聊天中输出测得的耗时。需要启用调试模式才能收集。",
+    ["Clear performance counters before measuring another popup."] = "清空性能计数器，以便测量下一个弹窗。",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "选择自动检测客户端，或强制使用 Retail 或 Forever 规则。",
+    ["Update the displayed trainer-cache information."] = "刷新显示的训练师缓存信息。",
+    ["Enter a name to create a profile or rename the current one."] = "输入名称以创建新配置或重命名当前配置。",
+    ["Save the current options as a new profile with the entered name."] = "使用输入的名称将当前选项保存为新配置。",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "重命名所选配置。默认配置无法重命名。",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "确认后删除所选配置。默认配置无法删除。",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "恢复默认选项；保留已记录的升级时间和训练师报告。",
+    ["Move the 3D portrait closer to or farther from the camera."] = "将3D头像拉近或远离摄像机。",
+    ["Move the 3D portrait left or right inside its viewport."] = "在显示区域内左右移动3D头像。",
+    ["Move the 3D portrait up or down inside its viewport."] = "在显示区域内上下移动3D头像。",
+    ["Turn the 3D portrait around its vertical axis."] = "绕竖直轴旋转3D头像。",
+    ["Change the size of the 3D character model."] = "调整角色3D模型的大小。",
+    ["Change the circular mask that clips the 3D portrait."] = "调整裁剪3D头像的圆形遮罩。",
+    ["Change the 3D rendering area around the portrait."] = "调整头像周围的3D渲染区域。",
+    ["Resize the ring artwork without resizing the portrait."] = "调整圆环图案大小，不改变头像大小。",
+    ["Move the ring artwork left or right."] = "左右移动圆环图案。",
+    ["Move the ring artwork up or down."] = "上下移动圆环图案。",
+    ["Adjust the empty inset between textured borders and popup content."] = "调整纹理边框与弹窗内容之间的空白内边距。",
+    ["Mirror this frame piece horizontally."] = "水平翻转这块边框。",
+    ["Mirror this frame piece vertically."] = "垂直翻转这块边框。",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "修改指定弹窗元素的颜色。职业颜色可能覆盖强调色。",
+    ["Tint this individual frame piece."] = "仅为这块边框染色。",
+    ["Rotate this individual frame piece."] = "仅旋转这块边框。",
+    ["Set the number of particles for this effect. Zero hides them."] = "设置此效果的粒子数量。0表示隐藏。",
+    ["Resize this effect's particles as a percentage of their normal size."] = "按正常大小的百分比调整此效果的粒子大小。",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "设置此效果粒子的不透明度。0表示不可见。",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "设置指定动画的不透明度。0表示不可见。",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "此动画触发时播放声音。输入 WoW 音效文件 ID；0表示关闭此声音。",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "每十级里程碑加入头像预告、亮色点缀和额外属性效果。经典模式会关闭这些装饰。",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "达到等级上限时，添加职业色曲线烟花、头像圆环火花和更浓的背景粒子。经典模式会关闭这些效果。",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "让头像圆环脉动，再在头像后显示逐渐扩大的星芒。里程碑和满级还会添加重复的头像闪光。",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "为新学会的技能图标添加出场闪光、辉光和闪烁火花。技能等级提升不会被高亮。",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "让属性总值从旧值逐步增加，再让变化的数字闪光。里程碑还会在计数结束时添加火花。",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "星芒出现后，在头像周围释放小光点。需要启用头像脉动与星芒。",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "在弹窗后方显示上升粒子。里程碑和满级会增加密度，满级还会加快速度。",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "打开时沿纹理边框扫过渐隐辉光。现代主题无法使用此效果。",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "头像开始时略微放大，再平滑恢复正常大小。里程碑还会添加短暂的预告闪光。",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "各区域进入时展开分隔线。经典模式保留文字过渡，但关闭此装饰效果。",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "亮火花绕头像圆环移动，最后变成更大并渐隐的闪光。满级时结束火花会更大并闪烁。",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Adjust the space between popup sections."] = "調整彈窗各區域之間的間距。",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "將訓練師服務與內建目錄比較，發現差異時提供報告。",
+    ["Open saved trainer differences and instructions for exporting a report."] = "開啟已儲存的訓練師差異及報告匯出說明。",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "顯示所有術士惡魔可用的魔典，而不只是目前寵物的魔典。",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "輸入相對於插件目錄的 OGG 檔案路徑，作為自訂升級音效。",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "選擇由本插件或 SharedMedia 註冊的自訂音效。",
+    ["Show advanced tuning controls, test commands and performance counters."] = "顯示進階調整項目、測試指令與效能計數器。",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "在聊天中輸出測得的耗時。必須啟用除錯模式才能收集。",
+    ["Clear performance counters before measuring another popup."] = "清空效能計數器，以便測量下一個彈窗。",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "選擇自動偵測客戶端，或強制使用 Retail 或 Forever 規則。",
+    ["Update the displayed trainer-cache information."] = "更新顯示的訓練師快取資訊。",
+    ["Enter a name to create a profile or rename the current one."] = "輸入名稱以建立新設定檔或重新命名目前設定檔。",
+    ["Save the current options as a new profile with the entered name."] = "使用輸入的名稱將目前選項儲存為新設定檔。",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "重新命名所選設定檔。預設設定檔無法重新命名。",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "確認後刪除所選設定檔。預設設定檔無法刪除。",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "還原預設選項；保留已記錄的升級時間與訓練師報告。",
+    ["Move the 3D portrait closer to or farther from the camera."] = "將3D頭像拉近或遠離攝影機。",
+    ["Move the 3D portrait left or right inside its viewport."] = "在顯示區域內左右移動3D頭像。",
+    ["Move the 3D portrait up or down inside its viewport."] = "在顯示區域內上下移動3D頭像。",
+    ["Turn the 3D portrait around its vertical axis."] = "繞垂直軸旋轉3D頭像。",
+    ["Change the size of the 3D character model."] = "調整角色3D模型的大小。",
+    ["Change the circular mask that clips the 3D portrait."] = "調整裁切3D頭像的圓形遮罩。",
+    ["Change the 3D rendering area around the portrait."] = "調整頭像周圍的3D繪製區域。",
+    ["Resize the ring artwork without resizing the portrait."] = "調整圓環圖案大小，不改變頭像大小。",
+    ["Move the ring artwork left or right."] = "左右移動圓環圖案。",
+    ["Move the ring artwork up or down."] = "上下移動圓環圖案。",
+    ["Adjust the empty inset between textured borders and popup content."] = "調整紋理邊框與彈窗內容之間的空白內距。",
+    ["Mirror this frame piece horizontally."] = "水平翻轉這塊邊框。",
+    ["Mirror this frame piece vertically."] = "垂直翻轉這塊邊框。",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "修改指定彈窗元素的顏色。職業顏色可能覆蓋強調色。",
+    ["Tint this individual frame piece."] = "僅為這塊邊框染色。",
+    ["Rotate this individual frame piece."] = "僅旋轉這塊邊框。",
+    ["Set the number of particles for this effect. Zero hides them."] = "設定此效果的粒子數量。0表示隱藏。",
+    ["Resize this effect's particles as a percentage of their normal size."] = "以正常大小的百分比調整此效果的粒子大小。",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "設定此效果粒子的不透明度。0表示不可見。",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "設定指定動畫的不透明度。0表示不可見。",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "此動畫觸發時播放音效。輸入 WoW 音效檔案 ID；0表示關閉此音效。",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "每十級里程碑加入頭像預告、明亮點綴與額外屬性效果。經典模式會關閉這些裝飾。",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "達到等級上限時，加入職業色曲線煙火、頭像圓環火花與更濃的背景粒子。經典模式會關閉這些效果。",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "讓頭像圓環脈動，再在頭像後顯示逐漸擴大的星芒。里程碑與滿級還會加入重複的頭像閃光。",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "為新學會的技能圖示加入出場閃光、輝光與閃爍火花。技能等級提升不會被高亮。",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "讓屬性總值從舊值逐步增加，再讓變動的數字閃光。里程碑還會在計數結束時加入火花。",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "星芒出現後，在頭像周圍釋放小光點。需要啟用頭像脈動與星芒。",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "在彈窗後方顯示上升粒子。里程碑與滿級會增加密度，滿級還會加快速度。",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "開啟時沿紋理邊框掃過漸隱輝光。現代主題無法使用此效果。",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "頭像開始時略微放大，再平滑恢復正常大小。里程碑還會加入短暫的預告閃光。",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "各區域進入時展開分隔線。經典模式保留文字過渡，但關閉此裝飾效果。",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "明亮火花繞頭像圓環移動，最後變成更大並漸隱的閃光。滿級時結尾火花會更大並閃爍。",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Adjust the space between popup sections."] = "Ajusta el espacio entre las secciones del aviso.",
+    ["Compare trainer services with the bundled catalogue and offer a report when they differ."] = "Compara los servicios del instructor con el catálogo incluido y ofrece un informe si hay diferencias.",
+    ["Open saved trainer differences and instructions for exporting a report."] = "Abre las diferencias guardadas y las instrucciones para exportar un informe.",
+    ["Include available Warlock grimoires for every demon instead of only the active pet."] = "Incluye los grimorios disponibles para todos los demonios del brujo, no solo la mascota activa.",
+    ["Enter an addon-relative OGG file path for the custom level-up sound."] = "Introduce la ruta de un archivo OGG relativa al addon para el sonido personalizado.",
+    ["Choose a custom sound registered by this addon or SharedMedia."] = "Elige un sonido personalizado registrado por este addon o SharedMedia.",
+    ["Show advanced tuning controls, test commands and performance counters."] = "Muestra ajustes avanzados, comandos de prueba y contadores de rendimiento.",
+    ["Print measured addon timings in chat. Debug mode must be enabled to collect them."] = "Imprime los tiempos medidos en el chat. Activa la depuración para recopilarlos.",
+    ["Clear performance counters before measuring another popup."] = "Borra los contadores antes de medir otro aviso.",
+    ["Choose automatic client detection or force Retail or Forever rules."] = "Elige la detección automática del cliente o fuerza las reglas de Retail o Forever.",
+    ["Update the displayed trainer-cache information."] = "Actualiza la información mostrada sobre la caché de instructores.",
+    ["Enter a name to create a profile or rename the current one."] = "Introduce un nombre para crear un perfil o renombrar el actual.",
+    ["Save the current options as a new profile with the entered name."] = "Guarda los ajustes actuales en un perfil nuevo con el nombre introducido.",
+    ["Rename the selected profile. The Default profile cannot be renamed."] = "Renombra el perfil seleccionado. El perfil predeterminado no se puede renombrar.",
+    ["Delete the selected profile after confirmation. The Default profile cannot be deleted."] = "Elimina el perfil seleccionado tras confirmar. El perfil predeterminado no se puede eliminar.",
+    ["Restore all options to their defaults; recorded level times and trainer reports remain."] = "Restaura los ajustes predeterminados; conserva los tiempos de nivel y los informes guardados.",
+    ["Move the 3D portrait closer to or farther from the camera."] = "Acerca o aleja el retrato 3D de la cámara.",
+    ["Move the 3D portrait left or right inside its viewport."] = "Mueve el retrato 3D a izquierda o derecha dentro de su área.",
+    ["Move the 3D portrait up or down inside its viewport."] = "Mueve el retrato 3D arriba o abajo dentro de su área.",
+    ["Turn the 3D portrait around its vertical axis."] = "Gira el retrato 3D sobre su eje vertical.",
+    ["Change the size of the 3D character model."] = "Cambia el tamaño del modelo 3D del personaje.",
+    ["Change the circular mask that clips the 3D portrait."] = "Cambia la máscara circular que recorta el retrato 3D.",
+    ["Change the 3D rendering area around the portrait."] = "Cambia el área de renderizado 3D alrededor del retrato.",
+    ["Resize the ring artwork without resizing the portrait."] = "Cambia el tamaño del aro sin cambiar el del retrato.",
+    ["Move the ring artwork left or right."] = "Mueve el aro a izquierda o derecha.",
+    ["Move the ring artwork up or down."] = "Mueve el aro arriba o abajo.",
+    ["Adjust the empty inset between textured borders and popup content."] = "Ajusta el margen vacío entre los bordes con textura y el contenido del aviso.",
+    ["Mirror this frame piece horizontally."] = "Refleja horizontalmente esta pieza del marco.",
+    ["Mirror this frame piece vertically."] = "Refleja verticalmente esta pieza del marco.",
+    ["Change the colour of the named popup element. Class colours may override accent colours."] = "Cambia el color del elemento indicado. Los colores de clase pueden sustituir los colores de acento.",
+    ["Tint this individual frame piece."] = "Tiñe solo esta pieza del marco.",
+    ["Rotate this individual frame piece."] = "Gira solo esta pieza del marco.",
+    ["Set the number of particles for this effect. Zero hides them."] = "Establece cuántas partículas tiene este efecto. Cero las oculta.",
+    ["Resize this effect's particles as a percentage of their normal size."] = "Cambia el tamaño de las partículas como porcentaje de su tamaño normal.",
+    ["Set how opaque this effect's particles appear. Zero makes them invisible."] = "Establece la opacidad de las partículas. Cero las vuelve invisibles.",
+    ["Set the opacity of the named animation. Zero makes it invisible."] = "Establece la opacidad de la animación indicada. Cero la vuelve invisible.",
+    ["Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."] = "Reproduce un sonido al activarse esta animación. Introduce un ID de archivo de sonido de WoW; 0 silencia este efecto.",
+    ["Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra cada hito de diez niveles con anticipación del retrato, acentos más brillantes y efectos de estadísticas. El modo clásico desactiva estos adornos.",
+    ["At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects."] = "Al nivel máximo, añade fuegos artificiales curvos con colores de clase, chispas en el aro y más partículas de fondo. El modo clásico desactiva estos efectos.",
+    ["Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine."] = "Hace pulsar el aro y revela un destello creciente detrás del retrato. Los hitos y el nivel máximo también añaden un brillo periódico al retrato.",
+    ["Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted."] = "Añade brillo de aparición, resplandor y chispas a las facultades recién aprendidas. Las mejoras de rango no se resaltan.",
+    ["Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes."] = "Anima los totales desde sus valores anteriores y después ilumina los números modificados. Los hitos también añaden chispas al terminar el contador.",
+    ["Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst."] = "Libera pequeñas luces flotantes alrededor del retrato después del destello. Requiere el pulso y destello del retrato.",
+    ["Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up."] = "Muestra partículas ascendentes detrás del aviso. Los hitos y el nivel máximo aumentan su densidad; el nivel máximo también las acelera.",
+    ["Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern."] = "Desplaza un resplandor que se desvanece por los bordes con textura al abrirse. No está disponible con Moderno.",
+    ["Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash."] = "Empieza con el retrato ligeramente ampliado y vuelve suavemente al tamaño normal. Los hitos añaden un breve destello de anticipación.",
+    ["Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal."] = "Extiende las líneas divisorias al entrar cada sección. El modo clásico conserva las transiciones de texto, pero desactiva este adorno.",
+    ["Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark."] = "Desplaza una chispa brillante por el aro y termina con un destello mayor que se desvanece. Al nivel máximo, el destello final aumenta y parpadea.",
+} end)
+
+-- Trellis theme and independent frame selector.
+RegisterLocaleBuilder("frFR", function() return { ["Trellis"] = "Treillis" } end)
+RegisterLocaleBuilder("esES", function() return { ["Trellis"] = "Celosía" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Trellis"] = "Celosía" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Trellis"] = "Rankgitter" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Trellis"] = "Graticcio" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Trellis"] = "Treliça" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Trellis"] = "Решётка" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Trellis"] = "격자" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Trellis"] = "格栅" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Trellis"] = "格柵" } end)
+
+-- Flat background selector.
+RegisterLocaleBuilder("frFR", function() return { ["Solid Colour"] = "Couleur unie" } end)
+RegisterLocaleBuilder("esES", function() return { ["Solid Colour"] = "Color sólido" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Solid Colour"] = "Color sólido" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Solid Colour"] = "Einfarbig" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Solid Colour"] = "Colore uniforme" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Solid Colour"] = "Cor sólida" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Solid Colour"] = "Сплошной цвет" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Solid Colour"] = "단색" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Solid Colour"] = "纯色" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Solid Colour"] = "純色" } end)
+
+-- Background colour/alpha picker help.
+RegisterLocaleBuilder("frFR", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Choisissez la couleur et la transparence du fond. Couleur unie utilise directement cette couleur." } end)
+RegisterLocaleBuilder("esES", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Elige el color y la transparencia del fondo. Color sólido usa este color directamente." } end)
+RegisterLocaleBuilder("esMX", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Elige el color y la transparencia del fondo. Color sólido usa este color directamente." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Wählt Hintergrundfarbe und Transparenz. Einfarbig verwendet diese Farbe direkt." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Scegli colore e trasparenza dello sfondo. Colore uniforme usa direttamente questo colore." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Escolha a cor e a transparência do fundo. Cor sólida usa essa cor diretamente." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "Выберите цвет и прозрачность фона. Сплошной цвет использует этот цвет напрямую." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "배경 색상과 투명도를 선택합니다. 단색은 이 색상을 그대로 사용합니다." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "选择背景颜色和透明度。纯色直接使用此颜色。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Choose the background colour and transparency. Solid Colour uses this colour directly."] = "選擇背景顏色和透明度。純色直接使用此顏色。" } end)
+
+-- Marine background selector.
+RegisterLocaleBuilder("frFR", function() return { ["Coral"] = "Corail" } end)
+RegisterLocaleBuilder("esES", function() return { ["Coral"] = "Coral" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Coral"] = "Coral" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Coral"] = "Koralle" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Coral"] = "Corallo" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Coral"] = "Coral" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Coral"] = "Коралл" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Coral"] = "산호" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Coral"] = "珊瑚" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Coral"] = "珊瑚" } end)
+
+-- Scratched stone background selector.
+RegisterLocaleBuilder("frFR", function() return { ["Scratched Stone"] = "Pierre rayée" } end)
+RegisterLocaleBuilder("esES", function() return { ["Scratched Stone"] = "Piedra rayada" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Scratched Stone"] = "Piedra rayada" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Scratched Stone"] = "Zerkratzter Stein" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Scratched Stone"] = "Pietra graffiata" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Scratched Stone"] = "Pedra riscada" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Scratched Stone"] = "Поцарапанный камень" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Scratched Stone"] = "긁힌 돌" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Scratched Stone"] = "刮痕石材" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Scratched Stone"] = "刮痕石材" } end)
+
+-- Independent asset hue preferences and selected-theme reset.
+RegisterLocaleBuilder("frFR", function() return { ["Reset Theme Hues"] = "Réinitialiser les teintes du thème", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Rétablit les teintes par défaut du fond, du cadre et du cercle de portrait sélectionnés. Les autres teintes enregistrées sont conservées." } end)
+RegisterLocaleBuilder("esES", function() return { ["Reset Theme Hues"] = "Restablecer tonos del tema", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Restaura los tonos predeterminados del fondo, marco y aro del retrato seleccionados. Conserva las demás preferencias guardadas." } end)
+RegisterLocaleBuilder("esMX", function() return { ["Reset Theme Hues"] = "Restablecer tonos del tema", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Restaura los tonos predeterminados del fondo, marco y aro del retrato seleccionados. Conserva las demás preferencias guardadas." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Reset Theme Hues"] = "Designfarben zurücksetzen", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Setzt die Farben von ausgewähltem Hintergrund, Rahmen und Porträtring zurück. Andere gespeicherte Farbeinstellungen bleiben erhalten." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Reset Theme Hues"] = "Ripristina tonalità del tema", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Ripristina le tonalità predefinite di sfondo, cornice e anello del ritratto selezionati. Conserva le altre preferenze salvate." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Reset Theme Hues"] = "Redefinir cores do tema", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Restaura as cores padrão do fundo, moldura e aro do retrato selecionados. Mantém as outras preferências salvas." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Reset Theme Hues"] = "Сбросить оттенки темы", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "Восстанавливает стандартные оттенки выбранных фона, рамки и кольца портрета. Остальные сохранённые настройки сохраняются." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Reset Theme Hues"] = "테마 색조 초기화", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "선택한 배경, 테두리, 초상화 고리의 기본 색조를 복원합니다. 다른 저장된 색조 설정은 유지합니다." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Reset Theme Hues"] = "重置主题色调", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "将所选背景、边框和头像环恢复为默认色调。保留其他已保存的色调偏好。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Reset Theme Hues"] = "重設主題色調", ["Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept."] = "將所選背景、邊框和頭像環恢復為預設色調。保留其他已儲存的色調偏好。" } end)
+
+-- Atlas background and fill mode label.
+RegisterLocaleBuilder("frFR", function() return { ["Background Fill Mode"] = "Mode de remplissage du fond" } end)
+RegisterLocaleBuilder("esES", function() return { ["Background Fill Mode"] = "Modo de relleno del fondo" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Background Fill Mode"] = "Modo de relleno del fondo" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Background Fill Mode"] = "Hintergrundfüllmodus" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Background Fill Mode"] = "Modalità riempimento sfondo" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Background Fill Mode"] = "Modo de preenchimento do fundo" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Background Fill Mode"] = "Режим заполнения фона" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Background Fill Mode"] = "배경 채우기 모드" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Background Fill Mode"] = "背景填充模式" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Background Fill Mode"] = "背景填滿模式" } end)
+
+-- Describe the distinct fill behaviours.
+RegisterLocaleBuilder("frFR", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Remplir conserve les proportions et rogne le surplus, Étirer adapte au cadre et Répéter répète le motif." } end)
+RegisterLocaleBuilder("esES", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Rellenar conserva las proporciones y recorta el exceso, Estirar adapta al marco y Mosaico repite la imagen." } end)
+RegisterLocaleBuilder("esMX", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Rellenar conserva las proporciones y recorta el exceso, Estirar adapta al marco y Mosaico repite la imagen." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Füllen erhält die Proportionen und beschneidet den Überstand, Strecken passt an den Rahmen an und Kacheln wiederholt das Bild." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Riempi mantiene le proporzioni e ritaglia gli eccessi, Allunga adatta alla cornice e Ripeti ripete il motivo." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Preencher preserva as proporções e corta o excesso, Esticar adapta à moldura e Repetir repete a imagem." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "Заполнение сохраняет пропорции и обрезает лишнее, растяжение подгоняет под рамку, а мозаика повторяет изображение." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "채우기는 비율을 유지하고 넘치는 부분을 자릅니다. 늘이기는 테두리에 맞추고 바둑판은 이미지를 반복합니다." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "填充保持比例并裁剪超出部分，拉伸将图片调整至边框大小，平铺则重复图片。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Choose Fill to preserve proportions and crop excess, Stretch to resize to the frame, or Tile to repeat the artwork."] = "填滿保持比例並裁切超出部分，延展將圖片調整至邊框大小，平鋪則重複圖片。" } end)
+
+-- Background-only names; faction theme/frame names remain unchanged.
+RegisterLocaleBuilder("frFR", function() return { ["Alliance Brick"] = "Briques de l’Alliance" } end)
+RegisterLocaleBuilder("esES", function() return { ["Alliance Brick"] = "Ladrillos de la Alianza" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Alliance Brick"] = "Ladrillos de la Alianza" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Alliance Brick"] = "Allianz-Ziegel" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Alliance Brick"] = "Mattoni dell’Alleanza" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Alliance Brick"] = "Tijolos da Aliança" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Alliance Brick"] = "Кирпич Альянса" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Alliance Brick"] = "얼라이언스 벽돌" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Alliance Brick"] = "联盟砖墙" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Alliance Brick"] = "聯盟磚牆" } end)
+
+-- Debug-only Options memory readout.
+RegisterLocaleBuilder("frFR", function() return { ["Memory: %s"] = "Mémoire : %s", ["Memory: unavailable"] = "Mémoire : indisponible" } end)
+RegisterLocaleBuilder("esES", function() return { ["Memory: %s"] = "Memoria: %s", ["Memory: unavailable"] = "Memoria: no disponible" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Memory: %s"] = "Memoria: %s", ["Memory: unavailable"] = "Memoria: no disponible" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Memory: %s"] = "Speicher: %s", ["Memory: unavailable"] = "Speicher: nicht verfügbar" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Memory: %s"] = "Memoria: %s", ["Memory: unavailable"] = "Memoria: non disponibile" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Memory: %s"] = "Memória: %s", ["Memory: unavailable"] = "Memória: indisponível" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Memory: %s"] = "Память: %s", ["Memory: unavailable"] = "Память: недоступно" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Memory: %s"] = "메모리: %s", ["Memory: unavailable"] = "메모리: 사용 불가" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Memory: %s"] = "内存：%s", ["Memory: unavailable"] = "内存：不可用" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Memory: %s"] = "記憶體：%s", ["Memory: unavailable"] = "記憶體：無法取得" } end)
+
+-- Profiling is independent of debug commands and disabled after reload.
+RegisterLocaleBuilder("frFR", function() return { ["Performance profiling enabled."] = "Profilage des performances activé.", ["Performance profiling disabled."] = "Profilage des performances désactivé.", ["Profiling is off. Use /glu perf on to record measurements."] = "Le profilage est désactivé. Utilisez /glu perf on pour enregistrer des mesures." } end)
+RegisterLocaleBuilder("esES", function() return { ["Performance profiling enabled."] = "Medición de rendimiento activada.", ["Performance profiling disabled."] = "Medición de rendimiento desactivada.", ["Profiling is off. Use /glu perf on to record measurements."] = "La medición está desactivada. Usa /glu perf on para registrar mediciones." } end)
+RegisterLocaleBuilder("esMX", function() return { ["Performance profiling enabled."] = "Medición de rendimiento activada.", ["Performance profiling disabled."] = "Medición de rendimiento desactivada.", ["Profiling is off. Use /glu perf on to record measurements."] = "La medición está desactivada. Usa /glu perf on para registrar mediciones." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Performance profiling enabled."] = "Leistungsprofilierung aktiviert.", ["Performance profiling disabled."] = "Leistungsprofilierung deaktiviert.", ["Profiling is off. Use /glu perf on to record measurements."] = "Profilierung ist aus. Mit /glu perf on werden Messungen aufgezeichnet." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Performance profiling enabled."] = "Profilazione prestazioni attivata.", ["Performance profiling disabled."] = "Profilazione prestazioni disattivata.", ["Profiling is off. Use /glu perf on to record measurements."] = "La profilazione è disattivata. Usa /glu perf on per registrare misurazioni." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Performance profiling enabled."] = "Medição de desempenho ativada.", ["Performance profiling disabled."] = "Medição de desempenho desativada.", ["Profiling is off. Use /glu perf on to record measurements."] = "A medição está desativada. Use /glu perf on para registrar medições." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Performance profiling enabled."] = "Профилирование производительности включено.", ["Performance profiling disabled."] = "Профилирование производительности выключено.", ["Profiling is off. Use /glu perf on to record measurements."] = "Профилирование выключено. Используйте /glu perf on для записи измерений." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Performance profiling enabled."] = "성능 측정이 활성화되었습니다.", ["Performance profiling disabled."] = "성능 측정이 비활성화되었습니다.", ["Profiling is off. Use /glu perf on to record measurements."] = "성능 측정이 꺼져 있습니다. /glu perf on으로 측정을 시작하세요." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Performance profiling enabled."] = "已启用性能分析。", ["Performance profiling disabled."] = "已禁用性能分析。", ["Profiling is off. Use /glu perf on to record measurements."] = "性能分析已关闭。使用 /glu perf on 记录测量数据。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Performance profiling enabled."] = "已啟用效能分析。", ["Performance profiling disabled."] = "已停用效能分析。", ["Profiling is off. Use /glu perf on to record measurements."] = "效能分析已關閉。使用 /glu perf on 記錄測量資料。" } end)
+
+-- Profiling command help retains literal slash commands.
+RegisterLocaleBuilder("frFR", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - démarrer/arrêter le profilage (arrêté après rechargement)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - afficher les diagnostics de performance enregistrés" } end)
+RegisterLocaleBuilder("esES", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - iniciar/detener la medición (desactivada al recargar)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - mostrar los diagnósticos de rendimiento registrados" } end)
+RegisterLocaleBuilder("esMX", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - iniciar/detener la medición (desactivada al recargar)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - mostrar los diagnósticos de rendimiento registrados" } end)
+RegisterLocaleBuilder("deDE", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - Profilierung starten/stoppen (nach Neuladen aus)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - aufgezeichnete Leistungsdiagnose anzeigen" } end)
+RegisterLocaleBuilder("itIT", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - avvia/arresta la profilazione (disattivata al ricaricamento)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - mostra la diagnostica prestazioni registrata" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - iniciar/parar a medição (desativada ao recarregar)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - mostrar os diagnósticos de desempenho registrados" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - запустить/остановить профилирование (выключено после перезагрузки)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - показать записанную диагностику производительности" } end)
+RegisterLocaleBuilder("koKR", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - 성능 측정 시작/중지 (재접속 시 꺼짐)", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - 기록된 성능 진단 출력" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - 启动/停止性能分析（重载后关闭）", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - 输出已记录的性能诊断" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["  /glu perf on|off   - start or stop performance profiling (off after reload)"] = "  /glu perf on|off   - 啟動/停止效能分析（重新載入後關閉）", ["  /glu perf          - print recorded performance diagnostics"] = "  /glu perf          - 輸出已記錄的效能診斷" } end)

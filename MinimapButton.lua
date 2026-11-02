@@ -18,6 +18,8 @@ end
 local function OnClick(_, mouseButton)
     if mouseButton == "RightButton" then
         ns.PreviewLevelUp()
+    elseif mouseButton == "MiddleButton" then
+        ns.ReplayLastLevelUp()
     elseif ns.ToggleOptions then
         ns.ToggleOptions()
     end
@@ -27,6 +29,7 @@ local function OnTooltipShow(tooltip)
     tooltip:AddLine("GnomeLevelUp")
     tooltip:AddLine(ns.L("Click to open options"), 1, 1, 1)
     tooltip:AddLine(ns.L("Right-click: Preview Level-Up"), 1, 1, 1)
+    tooltip:AddLine(ns.L("Middle-click: Replay last level-up"), 1, 1, 1)
     tooltip:AddLine(ns.L("Drag to move"), 1, 1, 1)
 end
 

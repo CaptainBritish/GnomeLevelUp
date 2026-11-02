@@ -395,7 +395,8 @@ end
 
 local function NumericOption(key)
     local setting = ns.OPTION_SETTINGS[key]
-    return { label = setting.label, get = function() return setting.format(setting.get()) end,
+    return { label = setting.label, isAvailable = setting.isAvailable,
+        get = function() return setting.format(setting.get()) end,
         activate = function(direction) ns.AdjustNumericOption(key, direction) end }
 end
 
@@ -457,16 +458,17 @@ local function BuildEntries(key)
                 function(v) ns.db.portraitMode = v; ns.RefreshClassIcon(); ns.RefreshPopupLayout() end, ns.PORTRAIT_CHOICES),
             CycleChoice("Portrait ring", function() return ns.db.portraitRingChoice or "NONE" end,
                 function(v)
-                    ns.db.portraitRingChoice = v
-                    ns.db.portraitRingTexture = ns.GetPortraitRingReference(v)
-                    ns.db.portraitRingEnabled = ns.db.portraitRingTexture ~= nil
-                    ns.RefreshPortraitRing()
+                    ns.ApplyPortraitRingChoice(v)
                 end, ns.PORTRAIT_RING_CHOICES),
             CycleChoice("Background", function() return ns.db.backgroundChoice or "NONE" end,
                 function(v) ns.ApplyBackgroundChoice(v) end, ns.BACKGROUND_TEXTURE_CHOICES or {}, nil, TexturedAppearanceAvailable),
             CycleChoice("Frame", function() return ns.db.frameChoice or "BLACK_METAL" end,
                 function(v) ns.ApplyFrameChoice(v) end, ns.FRAME_CHOICES or {}, nil, TexturedAppearanceAvailable),
-            CycleChoice("Background texture", function() return ns.db.backgroundFillMode == "tile" and "tile" or "stretch" end,
+            CycleChoice("Background Fill Mode", function()
+                    local style = ns.db.backgroundStyle
+                    if style == "fill" or style == "tile" or style == "stretch" then return style end
+                    return ns.db.backgroundFillMode == "tile" and "tile" or "stretch"
+                end,
                 function(v)
                     ns.db.backgroundStyle = v
                     ns.db.backgroundFillMode = v == "tile" and "tile" or "scale"
@@ -519,12 +521,13 @@ local function BuildEntries(key)
         if ns.GetCurrentFlavor() == "retail" then
             options[#options + 1] = Toggle("Shorten stat totals", "shortenRetailStatTotals")
         end
-        options[#options + 1] = Toggle("Show secondary stats", "showSecondaryStats")
         options[#options + 1] = Toggle("Equal-width stat text", "equalStatWidths")
         options[#options + 1] = Toggle("Abbreviate stat names", "abbreviateStatNames")
         if ns.GetCurrentFlavor() == "retail" then
             options[#options + 1] = Toggle("Relevant stats only", "relevantRetailStatsOnly")
         end
+        options[#options + 1] = Toggle("Show secondary stats", "showSecondaryStats")
+        options[#options + 1] = NumericOption("secondaryStatStartPercent")
         return options
     elseif key == "trainer" then
         if ns.GetCurrentFlavor() == "retail" then
@@ -596,6 +599,8 @@ local function BuildEntries(key)
         return entries
     elseif key == "colors" then
         return {
+            { label = "Reset Theme Hues", get = function() return "" end,
+                activate = function() ns.ResetThemeHues() end },
             Toggle("Use class colors", "useClassColors", function(v) ns.SetClassColorsEnabled(v) end),
             Toggle("Show text shadows", "showTextShadow", function(v) ns.ApplyTextShadow(v) end),
         }
@@ -681,18 +686,6 @@ local CONTROLLER_BACKDROP = {
     insets = { left = 11, right = 12, top = 12, bottom = 11 },
 }
 
-local function ControllerPieceColor(name)
-    local colors = ns.db and ns.db.backgroundTextureColors
-    local color = colors and colors[name]
-    local hue = ns.db and (name == "center" and ns.db.backgroundColor or ns.db.frameColor)
-    color = color or { 1, 1, 1 }
-    if name == "center" and hue and hue[1] == 0 and hue[2] == 0 and hue[3] == 0 then
-        return color[1], color[2], color[3]
-    end
-    hue = hue or { 1, 1, 1 }
-    return color[1] * hue[1], color[2] * hue[2], color[3] * hue[3]
-end
-
 local function MakeControllerSkin()
     if window.gluThemeSkin then return window.gluThemeSkin end
     local skin = { pieces = {}, backing = window:CreateTexture(nil, "BACKGROUND", nil, -8) }
@@ -730,31 +723,7 @@ local function MakeControllerSkin()
     return skin
 end
 
-local function SetControllerTexture(texture, name, path, alpha, tileH, tileV)
-    if not path or path == "" or type(path) ~= "string" then
-        texture:Hide()
-        return false
-    end
-    local ok = ns.SetTextureFile(texture, path, tileH, tileV)
-    if not ok then
-        texture:Hide()
-        return false
-    end
-    local transforms = ns.db and ns.db.backgroundTextureTransforms
-    local transform = transforms and transforms[name]
-    local rotation = transform and tonumber(transform.rotation) or 0
-    if texture.SetRotation then texture:SetRotation(math.rad(rotation)) end
-    if transform and transform.flipX then
-        texture:SetTexCoord(1, 0, transform.flipY and 1 or 0, transform.flipY and 0 or 1)
-    else
-        texture:SetTexCoord(0, 1, transform and transform.flipY and 1 or 0, transform and transform.flipY and 0 or 1)
-    end
-    if texture.SetBlendMode then texture:SetBlendMode("BLEND") end
-    local r, g, b = ControllerPieceColor(name)
-    texture:SetVertexColor(r, g, b, alpha)
-    texture:Show()
-    return true
-end
+local SetControllerTexture = ns.PaintThemePiece
 
 -- Reuse the same composite frame/background references as the level-up popup.
 -- The tab buttons intentionally remain plain so controller focus and text stay
@@ -789,45 +758,13 @@ local function SkinControllerWindow()
     end
 
     if window.SetBackdrop then window:SetBackdrop(nil) end
-    local width, height = window:GetWidth(), window:GetHeight()
-    local corner = math.max(1, math.min(tonumber(theme.cornerSize) or 48, width / 2, height / 2))
-    local edge = math.max(1, math.min(tonumber(theme.edgeSize) or corner, corner, width / 2, height / 2))
-    local inset = math.max(0, tonumber(theme.edgeMaskInset) or 5)
-    local edgeSpanWidth, edgeSpanHeight = math.max(1, width - inset * 2), math.max(1, height - inset * 2)
     local pieces = skin.pieces
-    local function Anchor(texture, point, relativePoint, x, y, w, h)
-        texture:ClearAllPoints()
-        texture:SetPoint(point, window, relativePoint, x or 0, y or 0)
-        texture:SetSize(math.max(1, w), math.max(1, h))
-    end
-
-    Anchor(pieces.topLeft, "TOPLEFT", "TOPLEFT", 0, 0, corner, corner)
-    Anchor(pieces.top, "TOPLEFT", "TOPLEFT", inset, 0, edgeSpanWidth, edge)
-    Anchor(pieces.topRight, "TOPRIGHT", "TOPRIGHT", 0, 0, corner, corner)
-    Anchor(pieces.left, "TOPLEFT", "TOPLEFT", 0, -inset, edge, edgeSpanHeight)
-    Anchor(pieces.right, "TOPRIGHT", "TOPRIGHT", 0, -inset, edge, edgeSpanHeight)
-    Anchor(pieces.bottomLeft, "BOTTOMLEFT", "BOTTOMLEFT", 0, 0, corner, corner)
-    Anchor(pieces.bottom, "BOTTOMLEFT", "BOTTOMLEFT", inset, 0, edgeSpanWidth, edge)
-    Anchor(pieces.bottomRight, "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0, corner, corner)
-
-    local style = ns.db and ns.db.backgroundStyle
-    local tiled = style == "tile"
-    -- Keep the backing across the full window. The authored frame pieces are
-    -- layered above it, so stretch fills the complete panel instead of leaving
-    -- a centered patch surrounded by the default backdrop.
-    Anchor(skin.backing, "TOPLEFT", "TOPLEFT", 0, 0, width, height)
-    if skin.backing.SetHorizTile then skin.backing:SetHorizTile(tiled) end
-    if skin.backing.SetVertTile then skin.backing:SetVertTile(tiled) end
-    SetControllerTexture(skin.backing, "center", theme.textures.center,
-        (ns.db and ns.db.bgOpacity) or 0.70, tiled, tiled)
+    ns.LayoutThemeFrame(theme, window, skin.pieces, skin.backing,
+        window:GetWidth(), window:GetHeight())
+    SetControllerTexture(skin.backing, "center", theme.textures.center, ns.GetBackgroundFillOpacity())
     for _, name in ipairs({ "topLeft", "top", "topRight", "left", "right", "bottomLeft", "bottom", "bottomRight" }) do
         local texture = pieces[name]
-        local tileH = name == "top" or name == "bottom"
-        local tileV = name == "left" or name == "right"
-        if texture.SetHorizTile then texture:SetHorizTile(tileH) end
-        if texture.SetVertTile then texture:SetVertTile(tileV) end
-        SetControllerTexture(texture, name, theme.textures[name],
-            (ns.db and ns.db.bgOpacity) or 0.70, tileH, tileV)
+        SetControllerTexture(texture, name, theme.textures[name], (ns.db and ns.db.bgOpacity) or 0.70)
     end
 end
 

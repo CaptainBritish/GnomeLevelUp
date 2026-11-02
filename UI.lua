@@ -447,7 +447,6 @@ end
 
 -- Clip the repeated edge bands a few pixels inside the outside frame edge.
 -- Their regions still run beneath the corner textures at both ends.
-local EDGE_MASK_INSET = 5
 local backgroundWidth, backgroundHeight, backgroundHorizontal, backgroundHasPet
 -- LayoutCustomBackground performs a large number of anchor and size updates.
 -- Keep a small invalidation counter so repeated popup/layout refreshes do not
@@ -582,137 +581,14 @@ local function ThemeContentInset()
     return ns.db and ns.db.backgroundMode ~= "MODERN" and ns.GetParticleValue(ns.FRAME_INSET_SETTING, "value") or 0
 end
 
-local function BackgroundPieceColor(name)
-    local colors = ns.db and ns.db.backgroundTextureColors
-    local color = colors and colors[name] or WHITE_COLOR
-    local hue = ns.db and (name == "center" and ns.db.backgroundColor or ns.db.frameColor)
-    -- The historical black background default means "no texture tint".
-    if name == "center" and hue and hue[1] == 0 and hue[2] == 0 and hue[3] == 0 then
-        return color
-    end
-    hue = hue or WHITE_COLOR
-    return { color[1] * hue[1], color[2] * hue[2], color[3] * hue[3] }
-end
-
-local function SetBackgroundPieceColor(texture, name, alpha)
-    local color = BackgroundPieceColor(name)
-    texture:SetVertexColor(color[1] or 1, color[2] or 1, color[3] or 1, alpha)
-end
-
-local function BackgroundStyle()
-    local style = ns.db and ns.db.backgroundStyle
-    if style == "fill" or style == "tile" or style == "stretch" then return style end
-    return ns.db and ns.db.backgroundFillMode == "tile" and "tile" or "stretch"
-end
-
-local function SetBackgroundPiece(texture, name, path, alpha, tileEdges)
-    if not path or (type(path) == "string" and path == "") then
-        texture:Hide()
-        return
-    end
-
-    -- Edge strips are repeatable bands. Their texture regions are bounded by
-    -- the outer-frame mask in LayoutCustomBackground, so the final tile is
-    -- clipped before the frame edge instead of poking outside it.
-    local style = BackgroundStyle()
-    local tiledCenter = name == "center" and style == "tile"
-    -- Edge strips are always tiled. The per-theme style applies only to the
-    -- center/background layer; tileEdges=false is used by its corner underlays.
-    local tiledEdges = tileEdges ~= false
-    local tileHorizontal = tiledCenter
-        or (tiledEdges and (name == "top" or name == "bottom"))
-    local tileVertical = tiledCenter
-        or (tiledEdges and (name == "left" or name == "right"))
-    local isAtlas = type(path) == "table" and type(path.atlas) == "string"
-    local applied, atlasLeft, atlasRight, atlasTop, atlasBottom =
-        ns.ApplyTextureReference(texture, path, tileHorizontal, tileVertical)
-    if not applied then
-        texture:Hide()
-        return
-    end
-    -- Make the TGA alpha channel explicit. This is especially important for
-    -- corner slices, whose transparent pixels are intended to reveal the
-    -- top/side edge pieces beneath them.
-    if texture.SetBlendMode then texture:SetBlendMode("BLEND") end
-
-    local transform = ns.db and ns.db.backgroundTextureTransforms
-        and ns.db.backgroundTextureTransforms[name]
-    local rotation = transform and tonumber(transform.rotation) or 0
-    if texture.SetRotation then texture:SetRotation(math.rad(rotation)) end
-    -- SetAtlas establishes the atlas region's coordinates internally. Do not
-    -- overwrite them with full-texture coordinates; direct paths retain the
-    -- older flip behavior used by the existing themes.
-    if isAtlas and atlasLeft then
-        local left = transform and transform.flipX and atlasRight or atlasLeft
-        local right = transform and transform.flipX and atlasLeft or atlasRight
-        local top = transform and transform.flipY and atlasBottom or atlasTop
-        local bottom = transform and transform.flipY and atlasTop or atlasBottom
-        texture:SetTexCoord(left, right, top, bottom)
-    elseif not isAtlas then
-        local left, right = transform and transform.flipX and 1 or 0, transform and transform.flipX and 0 or 1
-        local top, bottom = transform and transform.flipY and 1 or 0, transform and transform.flipY and 0 or 1
-        texture:SetTexCoord(left, right, top, bottom)
-    end
-    if texture.SetHorizTile then texture:SetHorizTile(tileHorizontal) end
-    if texture.SetVertTile then texture:SetVertTile(tileVertical) end
-    SetBackgroundPieceColor(texture, name, alpha)
-    texture:Show()
-end
+local BackgroundStyle = ns.GetBackgroundStyle
+local SetBackgroundPiece = ns.PaintThemePiece
 
 local function LayoutCustomBackground(theme)
-    local w, h = frame:GetWidth(), frame:GetHeight()
-    local corner = math.max(1, math.min(tonumber(theme.cornerSize) or 48, w / 2, h / 2))
-    -- Keep the authored border thickness independent from the remaining center
-    -- width. Compact panels can be narrower than two corner slices; reducing
-    -- the edge to that tiny center width makes the left/right textures vanish.
-    -- The edge only needs to fit within one half of the frame and its corner.
-    local edge = math.max(1, math.min(
-        tonumber(theme.edgeSize) or corner,
-        corner,
-        w / 2,
-        h / 2
-    ))
-    local innerWidth = math.max(1, w - corner * 2)
-    local innerHeight = math.max(1, h - corner * 2)
-    -- Edge strips run continuously behind the corner textures. The region
-    -- boundary is inset from the outside frame edge, so the final partial
-    -- tile is clipped there while the corners mask the strip at each join.
-    local edgeMask = math.max(0, tonumber(theme.edgeMaskInset) or EDGE_MASK_INSET)
-    local edgeSpanWidth = math.max(1, w - edgeMask * 2)
-    local edgeSpanHeight = math.max(1, h - edgeMask * 2)
-
-    local pieces = bg.customPieces
-    local backing = bg.customBackingPieces
-    local function Anchor(texture, point, relativePoint, x, y, width, height)
-        texture:ClearAllPoints()
-        texture:SetPoint(point, bg, relativePoint, x or 0, y or 0)
-        texture:SetSize(math.max(1, width), math.max(1, height))
-    end
-
-    Anchor(pieces.topLeft, "TOPLEFT", "TOPLEFT", 0, 0, corner, corner)
-    Anchor(pieces.top, "TOPLEFT", "TOPLEFT", edgeMask, 0, edgeSpanWidth, edge)
-    Anchor(pieces.topRight, "TOPRIGHT", "TOPRIGHT", 0, 0, corner, corner)
-    Anchor(pieces.left, "TOPLEFT", "TOPLEFT", 0, -edgeMask, edge, edgeSpanHeight)
-    Anchor(pieces.center, "TOPLEFT", "TOPLEFT", corner, -corner, innerWidth, innerHeight)
-    Anchor(pieces.right, "TOPRIGHT", "TOPRIGHT", 0, -edgeMask, edge, edgeSpanHeight)
-    Anchor(pieces.bottomLeft, "BOTTOMLEFT", "BOTTOMLEFT", 0, 0, corner, corner)
-    Anchor(pieces.bottom, "BOTTOMLEFT", "BOTTOMLEFT", edgeMask, 0, edgeSpanWidth, edge)
-    Anchor(pieces.bottomRight, "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0, corner, corner)
-
-    -- The center texture is the deepest backing layer and always covers the
-    -- full frame. The authored edge pieces sit above it, so stretch fills the
-    -- complete panel while tile can repeat beneath the entire nine-slice.
-    Anchor(backing.center, "TOPLEFT", "TOPLEFT", 0, 0, w, h)
-
-    -- The visible edge bands already run beneath the corners. Keep the old
-    -- corner underlay objects hidden so they cannot double-blend the same art.
-    for _, info in ipairs(CORNER_UNDERLAYS) do
-        backing[info.key]:Hide()
-    end
-
-    local tiled = BackgroundStyle() == "tile"
-    backing.center:SetHorizTile(tiled)
-    backing.center:SetVertTile(tiled)
+    ns.LayoutThemeFrame(theme, bg, bg.customPieces, bg.customBackingPieces.center,
+        frame:GetWidth(), frame:GetHeight())
+    -- Continuous edges already run beneath the corners; old underlays stay hidden.
+    for _, info in ipairs(CORNER_UNDERLAYS) do bg.customBackingPieces[info.key]:Hide() end
 end
 
 local function ModernBackdropWidth(width)
@@ -741,6 +617,12 @@ local function LayoutBackground()
     end
     local theme = GetBackgroundTheme()
     if theme then LayoutCustomBackground(theme) end
+    if custom and theme and BackgroundStyle() == "fill" then
+        -- Geometry can change without a colour/texture selection (for example
+        -- when the timing row expands). Recalculate the crop for those bounds.
+        SetBackgroundPiece(bg.customBackingPieces.center, "center", theme.textures.center,
+            bg.appliedOpacity or ns.GetBackgroundFillOpacity(), false)
+    end
     laidOutBackgroundVersion = backgroundLayoutVersion
 end
 LayoutBackground()
@@ -748,15 +630,18 @@ LayoutBackground()
 -- Keep background opacity separate from the content animation.
 function ns.ApplyBackgroundAppearance(opacityOverride)
     backgroundLayoutVersion = backgroundLayoutVersion + 1
+    -- Fill coordinates depend on the destination dimensions for this layout.
+    LayoutBackground()
     local theme = GetBackgroundTheme()
     local useCustom = ns.db and ns.db.backgroundMode == "CUSTOM" and theme ~= nil
     local themeTextures = theme and theme.textures or nil
     bg.modern:SetShown(not useCustom)
     local modernColor = ns.db and ns.db.backgroundColor or BLACK_COLOR
     local opacity = opacityOverride or (ns.db and ns.db.bgOpacity) or 0.70
-    bg.appliedOpacity = opacity
+    local fillOpacity = ns.GetBackgroundFillOpacity(opacity)
+    bg.appliedOpacity = fillOpacity
     bg.HideModernBackgroundFlash()
-    bg.modern:SetVertexColor(modernColor[1], modernColor[2], modernColor[3], opacity)
+    bg.modern:SetVertexColor(modernColor[1], modernColor[2], modernColor[3], fillOpacity)
     local accent = ns.db and ns.db.colors and ns.db.colors.animatedElements or WHITE_COLOR
     for _, line in ipairs(bg.modernAccents) do
         line:SetShown(not useCustom)
@@ -778,7 +663,7 @@ function ns.ApplyBackgroundAppearance(opacityOverride)
 
     -- Deep center backing: use the center texture across the whole frame so
     -- transparent corner pixels reveal theme artwork instead of the world.
-    local alpha = opacity
+    local alpha = fillOpacity
     if useCustom then
         local centerTexture = themeTextures and themeTextures.center
         SetBackgroundPiece(bg.customBackingPieces.center, "center", centerTexture, alpha, false)
@@ -1486,14 +1371,19 @@ local function CreateAbilityViewport()
         if viewport.verticalLayout then
             if viewport.sharedScroll then
                 for _, target in ipairs({content.abilityViewport, content.petAbilityViewport}) do
-                    target:SetVerticalScroll(math.min(value or 0, target.scrollMaximum or 0))
+                    local offset = math.min(value or 0, target.scrollMaximum or 0)
+                    target:SetVerticalScroll(offset)
+                    if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(target, offset) end
                 end
             else
                 viewport:SetVerticalScroll(value or 0)
+                if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
             end
         else
             viewport:SetHorizontalScroll(value or 0)
+            if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
         end
+        if ns.WakeAbilityEffects then ns.WakeAbilityEffects() end
     end)
     slider:SetObeyStepOnDrag(false)
     viewport:EnableMouseWheel(true)
@@ -1665,127 +1555,16 @@ local function AnchorBelow(frame, anchor, gap)
     frame:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
 end
 
-function render.FitSectionHeadings()
-    local scale = ns.GetTextScale("headingTextScale")
-    if scale == 1 then return end
-    local horizontal = IsHorizontalLayout()
-    local specs = {{content.statsHeader, TEXT_WIDTH}}
-    if ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0 then
-        specs[#specs + 1] = {content.spellsHeader, horizontal and TrainingWidth(content.abilityViewport) or TEXT_WIDTH}
-    end
-    if ns.GetCurrentFlavor() ~= "retail" and #(content.currentWarlockPetAbilities or {}) > 0 then
-        specs[#specs + 1] = {content.petSpellsHeader, horizontal and TrainingWidth(content.petAbilityViewport) or TEXT_WIDTH}
-    end
-    local parts = {tostring(scale)}
-    for _, spec in ipairs(specs) do
-        local path, _, flags = spec[1]:GetFont()
-        parts[#parts + 1] = table.concat({path or DEFAULT_FONT_PATH, flags or "", spec[1]:GetText(), tostring(spec[2])}, "\031")
-    end
-    local key = table.concat(parts, "\030")
-    if render.headingFitKey == key then return end
-    local fit = 1
-    for _, spec in ipairs(specs) do
-        local text, width = spec[1], spec[2]
-        local path, _, flags = text:GetFont()
-        local naturalWidth = render.MeasureTextWidth(path, text.gluFontBaseSize * scale, flags, text:GetText())
-        fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
-    end
-    -- One fit factor keeps all section headings the same size.
-    for _, text in ipairs({content.statsHeader, content.spellsHeader, content.petSpellsHeader}) do
-        local path, _, flags = text:GetFont()
-        ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, text.gluFontBaseSize * scale * fit), flags or "")
-        SyncTextGeometry(text)
-    end
-    render.headingFitKey = key
-end
+render.FitSectionHeadings = ns.CreatePopupHeadingFitter({render = render, content = content,
+    IsHorizontalLayout = IsHorizontalLayout, TrainingWidth = TrainingWidth,
+    ApplyToTextLayers = ApplyToTextLayers, DEFAULT_FONT_PATH = DEFAULT_FONT_PATH, SyncTextGeometry = SyncTextGeometry,
+    GetTextWidth = function() return TEXT_WIDTH end})
 
-local function PositionSections()
-    render.FitSectionHeadings()
-    local current = content.statsContainer
-    local gap = SectionGap()
-    content.statsHeader:ClearAllPoints()
-    if IsHorizontalLayout() then
-        local statsX = 24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2
-        content.statsHeader:SetPoint("TOP", content, "TOPLEFT", statsX, -24)
-    else
-        content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
-    end
-    AnchorBelow(content.statsHeaderDivider, content.statsHeader, gap)
-    local topGap = IsHorizontalLayout() and 8 / math.max(.001, content:GetScale()) or gap
-    AnchorBelow(content.statsContainer, content.statsHeaderDivider, topGap)
-    AnchorBelow(content.statsBottomDivider, current, gap)
-    content.statsBottomDivider:SetShown(not IsHorizontalLayout())
-    current = IsHorizontalLayout() and content.statsContainer or content.statsBottomDivider
-
-    if content.levelTimeText:IsShown() then
-        if IsHorizontalLayout() then
-            -- Section refreshes must preserve the footer anchor too.
-            content.levelTimeText:ClearAllPoints()
-            content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOMLEFT",
-                24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2, 26 / math.max(.001, content:GetScale()))
-        else
-            AnchorBelow(content.levelTimeText, current, gap + 2)
-        end
-        if IsHorizontalLayout() then
-            content.timeBottomDivider:Hide()
-            current = content.levelTimeText
-        else
-            AnchorBelow(content.timeBottomDivider, content.levelTimeText, gap)
-            content.timeBottomDivider:Show()
-            current = content.timeBottomDivider
-        end
-    else
-        content.levelTimeText:ClearAllPoints()
-        content.timeBottomDivider:Hide()
-    end
-
-    local showAbilities = ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0
-    ApplyToTextLayers(content.spellsHeader, "SetShown", showAbilities)
-    content.abilitiesDivider:SetShown(showAbilities)
-    content.abilityViewport:SetShown(showAbilities)
-    if showAbilities then
-        if IsHorizontalLayout() then
-            content.spellsHeader:ClearAllPoints()
-            content.spellsHeader:SetPoint("TOP", content, "TOPLEFT", 24 + PortraitColumnWidth() + 36 + TEXT_WIDTH + TrainingWidth(content.abilityViewport) / 2, -24)
-        else
-            AnchorBelow(content.spellsHeader, current, gap)
-        end
-        AnchorBelow(content.abilitiesDivider, content.spellsHeader, gap)
-        AnchorBelow(content.abilityViewport, content.abilitiesDivider, IsHorizontalLayout() and topGap or render.AbilitySectionPadding())
-        current = content.abilityViewport
-    end
-
-    if content.petSpellsHeader:IsShown() then
-        content.petDivider:Show()
-        content.petHeaderDivider:Show()
-        if IsHorizontalLayout() then
-            content.petDivider:Hide()
-            content.petSpellsHeader:ClearAllPoints()
-            content.petSpellsHeader:SetPoint("TOP", content, "TOPLEFT", 24 + PortraitColumnWidth() + 36 + TEXT_WIDTH + TrainingWidth(content.abilityViewport) + 28 + TrainingWidth(content.petAbilityViewport) / 2, -24)
-        else
-            AnchorBelow(content.petDivider, current, gap)
-            AnchorBelow(content.petSpellsHeader, content.petDivider, gap)
-        end
-        AnchorBelow(content.petHeaderDivider, content.petSpellsHeader, gap)
-        AnchorBelow(content.petAbilityViewport, content.petHeaderDivider, IsHorizontalLayout() and topGap or render.AbilitySectionPadding())
-        content.petAbilityViewport:Show()
-        if not IsHorizontalLayout() then current = content.petAbilityViewport end
-    else
-        content.petDivider:Hide()
-        content.petHeaderDivider:Hide()
-        content.petAbilityViewport:Hide()
-        content.petAbilityViewport:ClearAllPoints()
-    end
-
-    if content.weaponSkillsText:IsShown() then
-        content.weaponDivider:Show()
-        AnchorBelow(content.weaponDivider, current, gap)
-        AnchorBelow(content.weaponSkillsText, content.weaponDivider, gap)
-    else
-        content.weaponDivider:Hide()
-        content.weaponSkillsText:ClearAllPoints()
-    end
-end
+local PositionSections = ns.CreatePopupSectionPositioner({render = render, content = content,
+    IsHorizontalLayout = IsHorizontalLayout, TrainingWidth = TrainingWidth,
+    ApplyToTextLayers = ApplyToTextLayers, AnchorBelow = AnchorBelow,
+    SectionGap = SectionGap, PortraitColumnWidth = PortraitColumnWidth,
+    GetTextWidth = function() return TEXT_WIDTH end})
 
 -- Choose the direction used by each stat line animation.
 local function LineDirection(index)
@@ -1796,43 +1575,7 @@ local function LineDirection(index)
     return (index % 2 == 1) and -1 or 1
 end
 
-function render.Alpha(region, alpha)
-    if region:GetAlpha() ~= alpha then region:SetAlpha(alpha) end
-end
-
-function render.Shown(region, shown)
-    if region:IsShown() ~= shown then region:SetShown(shown) end
-end
-
-function render.Size(region, width, height)
-    if region:GetWidth() ~= width or region:GetHeight() ~= height then region:SetSize(width, height) end
-end
-
--- Animated particles keep one anchor. Rebuild it only when the target changes;
--- positions still update each frame, without clearing the native anchor first.
-function render.ParticlePoint(texture, relative, relativePoint, x, y)
-    if texture.gluPointTarget ~= relative or texture.gluPointName ~= relativePoint then
-        texture:ClearAllPoints()
-        texture.gluPointTarget, texture.gluPointName = relative, relativePoint
-        texture.gluPointX, texture.gluPointY = nil, nil
-    end
-    if texture.gluPointX ~= x or texture.gluPointY ~= y then
-        texture:SetPoint("CENTER", relative, relativePoint, x, y)
-        texture.gluPointX, texture.gluPointY = x, y
-    end
-end
-
--- Particle dimensions are owned by this renderer. Cache logical sizes in Lua
--- instead of querying two native dimensions for every moving texture/frame.
--- General layout regions keep render.Size, since other code can resize them.
-function render.ParticleSize(texture, width, height)
-    if texture.gluParticleWidth ~= width or texture.gluParticleHeight ~= height then
-        texture:SetSize(width, height)
-        texture.gluParticleWidth, texture.gluParticleHeight = width, height
-    end
-end
-
-
+ns.InstallPopupRenderHelpers(render)
 
 local ApplyStatLineText
 local activeLineAnims = {}
@@ -2228,6 +1971,7 @@ local function EmptyTrainerSkillsMessage()
 end
 
 local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText, skipAnimation)
+    row.viewport.effectPool = pool
     local newIconSize = NewAbilityIconSize()
     local count = #abilities
     row.viewport.abilityCount = count
@@ -2664,73 +2408,7 @@ local function GainCounterWidth(fs, target, stat)
     return fs.gainReservedWidth
 end
 
-function render.StatWordMetrics(fs, data)
-    local path, size, flags = fs:GetFont()
-    local counting = ns.db and ns.db.emphasizeStatGains == true
-    local threshold = ns.GetStatAbbreviationThreshold()
-    local label = ns.GetStatDisplayLabel(data)
-    local key = table.concat({tostring(path),tostring(size),tostring(flags),label,tostring(data.unit),tostring(data.old),tostring(data.new),tostring(counting),tostring(threshold),ns.GetLocale()}, "\031")
-    if fs.statWordMetricKey == key then return fs.statWordWidths, fs.statWordNatural end
-    local widths = {MeasureStatText(fs, label .. ":")+12, MeasureStatText(fs, ns.FormatStatTotal(data.old, data))+12,
-        MeasureStatText(fs, "->")+12, MeasureStatText(fs, ns.FormatStatTotal(data.new, data)) + 12}
-    if counting then
-        widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(data.old, data)) + 12)
-        local digits = math.max(#ns.FormatStatInteger(math.abs(data.old)), #ns.FormatStatInteger(math.abs(data.new)))
-        for digit = 0, 9 do
-            local value = tonumber(string.rep(tostring(digit), digits)) or 0
-            widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(value, data)) + 12)
-            if math.min(data.old,data.new) < 0 then widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(-value, data))+12) end
-        end
-        if threshold and math.min(data.old,data.new)<threshold and math.max(data.old,data.new)>=threshold then
-            widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(threshold-1, data))+12)
-        end
-        widths[5] = GainCounterWidth(fs, data.new-data.old, data)
-    end
-    if counting and threshold and math.max(math.abs(data.old),math.abs(data.new)) >= 1100000
-        and math.min(math.abs(data.old),math.abs(data.new)) < 1000000000 then
-        local millions = math.min(999, math.max(1, math.floor(math.max(math.abs(data.old),math.abs(data.new))/1000000)))
-        for digit=0,9 do
-            widths[4]=math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(millions*1000000+digit*111000, data))+12)
-        end
-    end
-    local space = MeasureStatText(fs," ")
-    local natural = space * (#widths-1)
-    for _, width in ipairs(widths) do natural = natural + width end
-    fs.statWordEndWidth = MeasureStatText(fs, counting and ns.FormatStatGain(data.new-data.old, data) or ns.FormatStatTotal(data.new, data))
-    fs.statWordMetricKey, fs.statWordWidths, fs.statWordNatural = key, widths, natural
-    fs.statWordSpace=space
-    return widths, natural
-end
-
-function render.UpdateStatWordTargets(changes)
-    local columns, space, endWidth = {}, 0, 0
-    local function Include(fs,data)
-        local widths=render.StatWordMetrics(fs,data)
-        for i,width in ipairs(widths) do columns[i]=math.max(columns[i] or 0,width) end
-        space=math.max(space,fs.statWordSpace or 0)
-        endWidth=math.max(endWidth,fs.statWordEndWidth or 0)
-    end
-    if changes then
-        for i,data in ipairs(changes) do
-            local fs = content.statLinePool[i] or GetStatLine(i)
-            Include(fs,data)
-        end
-    else
-        for _,fs in ipairs(content.statLinePool) do
-            if fs.statData then Include(fs,fs.statData) end
-        end
-    end
-    local target=space*math.max(0,#columns-1)
-    for _,width in ipairs(columns) do target=target+width end
-    local trailing=math.max(0,(columns[#columns] or 0)-endWidth)
-    local key=table.concat(columns,",")..":"..trailing
-    for i,fs in ipairs(content.statLinePool) do
-        if changes and i<=#changes or not changes and fs.statData then
-            fs.statWordTarget,fs.statWordColumns,fs.statWordColumnKey,fs.statWordTrailing=target,columns,key,trailing
-            fs.statTracking=0
-        end
-    end
-end
+ns.InstallPopupStatMetrics(render, content, GetStatLine, MeasureStatText, GainCounterWidth)
 
 local function StatGainColor(flash, data)
     local color = data and data.new < data.old and {1, .2, .2} or ColorOf("statNew")
@@ -3278,7 +2956,7 @@ function render.UpdateAmbientSparkles()
     for _, pool in ipairs(render.abilityPools) do
         for _, icon in ipairs(pool) do
             local texture = icon.ambientSparkle
-            if enabled and icon:IsShown() and icon.isNewAbility == true then
+            if enabled and icon:IsShown() and icon.effectVisible ~= false and icon.isNewAbility == true then
                 if not texture.sparkleStart then
                     texture.sparkleStart = render.AbilityReadyAt(icon) + SHIMMER_DELAY + 0.25 + math.random() * 0.60
                     texture.positioned = false
@@ -3437,7 +3115,7 @@ local function UpdateSmallEffects(cycleTime, moving)
         local burst = sparkleCount > 0 and (sparkleCount - 1) * 0.22 + 0.42 or 0
         for _, pool in ipairs(render.abilityPools) do
             for _, icon in ipairs(pool) do
-                local enabled = db.highlightNewAbilities and icon:IsShown() and icon.isNewAbility == true
+                local enabled = db.highlightNewAbilities and icon:IsShown() and icon.effectVisible ~= false and icon.isNewAbility == true
                 local sparkleTime, sparkleCycle = AbilityShimmerTime(icon)
                 for i, texture in ipairs(icon.cornerSparkles) do
                     local settings = render.particleSettings[4]
@@ -3988,231 +3666,11 @@ function render.TintTrialImpact(white)
     end
 end
 
-function render.UpdateTrialEffects()
-    local db, plan = ns.db or {}, entranceTimeline
-    local enabled = frame:IsShown() and not db.reducedMotion and db.backgroundAnimations ~= false
-    if not enabled or not plan then
-        render.HideTrialEffects();render.TintTrialImpact(0)
-        return false
-    end
-    local effects = content.trialEffects
-    if not effects then
-        effects = {glints={},depth={},impacts={}}
-        content.trialEffects = effects
-    end
-    local active, speed = false, Speed()
-    local perf = ns.PerfStart("ring_glint_frame", effectAge)
-    local color = ActiveColor("animatedElements")
-    local portrait = db.portraitMode ~= "none"
-    local milestone = content.isMilestone and db.milestoneAnimations ~= false
-    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
-    local glintAge = (effectAge-plan.portrait.finish-.08/speed)/(render.PortraitGlintDuration()/speed)
-    local willStarburst = db.portraitAnimation and IsPlayerPortrait()
-    local flareDuration = (milestone and .42 or .34) / speed
-    local flare = (effectAge-render.PortraitGlintFinish())/flareDuration
-    local holding = willStarburst and glintAge >= 1 and portraitStage ~= "starburst" and flare < 0
-    local flaring = flare >= 0 and flare < 1
-    -- A short attack creates a spark, followed by a shrinking, lightly flickering tail.
-    local spark = flaring and (flare < .22 and 1-(1-flare/.22)^3 or (1-(flare-.22)/.78)^2) or 0
-    local flicker = flaring and (maxLevel and .65+.35*math.cos(flare*math.pi*10) or .92+.08*math.cos(flare*math.pi*6)) or 1
-    if db.portraitRingGlint and portrait and (glintAge < 1.12 or holding or flaring) then
-        if not effects.glintLayer then
-            effects.glintLayer = CreateFrame("Frame", nil, content.portraitArtwork)
-            effects.glintLayer:SetAllPoints(content.portraitArtwork)
-        end
-        effects.glintLayer:SetFrameLevel(math.max(content.portraitArtwork:GetFrameLevel(),
-            content.playerModel and content.playerModel:GetFrameLevel() or 0)+3)
-        EnsureParticlePool(effects.glints, effects.glintLayer, 3)
-        local ring = db.portraitRingEnabled and content.classRingGraphic or content.classRing
-        for i, texture in ipairs(effects.glints) do
-            local t = glintAge-(i-1)*.04
-            local onPath = t>=0 and t<1
-            local visible = onPath or holding and i == 1 or flaring
-            render.Shown(texture, visible)
-            if visible then
-                local angle = onPath and math.pi/2-t*math.pi*2 or math.pi/2
-                local radius = ring:GetWidth() * (ring == content.classRingGraphic and render.portraitGlintRadius or .5)
-                texture:ClearAllPoints();texture:SetPoint("CENTER", ring, "CENTER", math.cos(angle)*radius,math.sin(angle)*radius)
-                local size = (22-(i-1)*6) * (flaring and .18+((maxLevel and 6.4 or milestone and 2.4 or 1.45)-.18)*spark or 1)
-                render.ParticleSize(texture,size,size)
-                texture:SetRotation(maxLevel and flaring and (flare-.22)*.6 or 0)
-                local alpha = flaring and spark^.45*flicker*(milestone and 1 or .9)
-                    or onPath and math.sin(math.pi*t)^.5 or .35
-                texture:SetAlpha(alpha*(.75^(i-1)))
-                local white = flaring and milestone and .8 or .45
-                texture:SetVertexColor(white+(1-white)*color[1],white+(1-white)*color[2],white+(1-white)*color[3])
-            end
-        end
-        active = true
-    else for _, texture in ipairs(effects.glints) do texture:Hide() end end
-
-    ns.PerfEnd(perf)
-    perf = ns.PerfStart("portrait_shimmer_frame", effectAge)
-    local shimmerAge = render.ringSurgeStartedAt and effectAge-render.ringSurgeStartedAt-.28/speed or -1
-    local shimmerDuration = .85/speed
-    local shimmerCycle = math.max(4, shimmerDuration+.5)
-    local shimmerTime = shimmerAge >= 0 and (shimmerAge % shimmerCycle)/shimmerDuration or -1
-    local shimmerVisible = (milestone or maxLevel) and db.portraitAnimation and IsPlayerPortrait()
-        and shimmerTime >= 0 and shimmerTime < 1
-    if shimmerVisible and not effects.portraitShimmer then
-        local clip = CreateFrame("Frame", nil, content.portraitArtwork)
-        clip:SetClipsChildren(true)
-        clip.texture = render.TrialSpark(clip)
-        clip.texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
-        clip.texture:SetRotation(-math.pi/4)
-        if clip.CreateMaskTexture then
-            clip.mask = clip:CreateMaskTexture()
-            clip.mask:SetAllPoints(clip)
-            clip.mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-            clip.texture:AddMaskTexture(clip.mask)
-        end
-        effects.portraitShimmer = clip
-    end
-    if effects.portraitShimmer then
-        local clip = effects.portraitShimmer
-        render.Shown(clip, shimmerVisible == true)
-        if shimmerVisible then
-            local target = db.portraitMode == "player3d" and content.modelBacking or content.classIcon
-            local width, height = target:GetWidth(), target:GetHeight()
-            clip:SetFrameLevel(math.max(content.portraitArtwork:GetFrameLevel(),
-                content.playerModel and content.playerModel:GetFrameLevel() or 0)+4)
-            clip:ClearAllPoints();clip:SetPoint("CENTER", target, "CENTER")
-            render.Size(clip,width,height);render.Alpha(clip,1)
-            local texture = clip.texture
-            texture:Show();render.ParticleSize(texture,width*1.8,18)
-            render.ParticlePoint(texture,clip,"CENTER",(-.8+1.6*shimmerTime)*width,(-.8+1.6*shimmerTime)*height)
-            texture:SetVertexColor(.6+.4*color[1],.6+.4*color[2],.6+.4*color[3])
-            texture:SetAlpha(.85*math.sin(math.pi*shimmerTime)^.5)
-            active = true
-        end
-    end
-
-    ns.PerfEnd(perf)
-    perf = ns.PerfStart("ability_shine_frame", effectAge)
-    if not effects.shinesFinished then
-    local pending=false
-    for _, pool in ipairs(render.abilityPools) do
-        for _, icon in ipairs(pool) do
-            local t = (effectAge-(icon.entranceEnd or 0)+.10/speed)/(.70/speed)
-            local visible = db.highlightNewAbilities and icon:IsShown() and icon.isNewAbility == true
-                and not icon.skipEntrance and t>=0 and t<1
-            if visible and not icon.revealShine then
-                local clip = CreateFrame("Frame", nil, icon)
-                clip:SetAllPoints(icon);clip:SetClipsChildren(true);clip:SetFrameLevel(icon:GetFrameLevel()+4)
-                clip.texture = render.TrialSpark(clip)
-                clip.texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
-                clip.texture:SetRotation(-math.pi/4)
-                icon.revealShine = clip
-            end
-            if icon.revealShine then
-                render.Shown(icon.revealShine, visible == true)
-                if visible then
-                    local texture,w,h = icon.revealShine.texture,icon:GetWidth(),icon:GetHeight()
-                    texture:Show();render.ParticleSize(texture,w*1.8,16)
-                    render.ParticlePoint(texture,icon,"CENTER",(-.8+1.6*t)*w,(-.8+1.6*t)*h)
-                    texture:SetAlpha(.95*math.sin(math.pi*t)^.5)
-                end
-            end
-            if db.highlightNewAbilities and icon:IsShown() and icon.isNewAbility == true and not icon.skipEntrance and t<1 then pending=true end
-        end
-    end
-
-    effects.shinesFinished=not pending
-    active=active or pending
-    end
-
-    ns.PerfEnd(perf)
-    perf = ns.PerfStart("stat_impacts_frame", effectAge)
-    if not effects.impactsFinished then
-    local enabled = milestone and db.emphasizeStatGains
-    local pending=false
-    for _, row in ipairs(content.statLinePool) do
-        local age = row.countFinishAt and effectAge-row.countFinishAt or -1
-        local visible = enabled and row:IsShown() and age>=0 and age<.65/speed
-        if visible and not effects.impacts[row] then
-            effects.impacts[row] = {}
-            for i=1,3 do effects.impacts[row][i]=render.TrialSpark(row.slideFrame) end
-        end
-        local pool = effects.impacts[row]
-        if pool then for i, texture in ipairs(pool) do
-            render.Shown(texture,visible == true)
-            if visible then
-                local t,angle = age/(.65/speed),(i-1)*math.pi*2/3
-                local distance=6+28*(1-(1-t)^2)
-                render.ParticlePoint(texture,row.gainCounter,"RIGHT",math.cos(angle)*distance,math.sin(angle)*distance)
-                render.ParticleSize(texture,15-i*2,15-i*2);texture:SetAlpha(math.sin(math.pi*t)^.5*(1-.45*t))
-            end
-        end end
-        if enabled and row:IsShown() and row.countFinishAt and age<.65/speed then pending=true end
-    end
-
-    effects.impactsFinished=not pending
-    active=active or pending
-    end
-
-    ns.PerfEnd(perf)
-    perf = ns.PerfStart("depth_particles_frame", effectAge)
-    local ambient = effectAge-fadeFinished-.50
-    local depth = db.backgroundEmbers and render.particleSettings[3].count>0
-    if depth then
-        local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
-        local depthCount = maxLevel and 60 or milestone and 36 or 24
-        EnsureParticlePool(effects.depth,content,depthCount,"BACKGROUND")
-        local settings = render.particleSettings[3]
-        local width,height = content:GetWidth(),content:GetHeight()
-        local span,rise = math.max(1,width-50),math.max(1,height-36)
-        local fade = math.min(1,ambient/.3)
-        for i,texture in ipairs(effects.depth) do
-            local far = i > depthCount / 2
-            if texture.depthFar ~= far then
-                texture:SetDrawLayer("BACKGROUND",far and -2 or -1)
-                texture.depthFar = far
-            end
-            render.Shown(texture,ambient>=0 and i<=depthCount)
-            if ambient>=0 and i<=depthCount then
-                if not texture.depthStart or texture.emberSpeedMultiplier ~= render.backgroundMoteSpeed or ambient-texture.depthStart>=texture.emberDuration then
-                    RollBackgroundEmber(texture,i)
-                    texture.emberDuration=texture.emberDuration*(far and 2.2 or 1.6)
-                    texture.depthStart=texture.depthStart and ambient or -((i*.9)%texture.emberDuration)
-                end
-                local t=math.max(0,math.min(1,(ambient-texture.depthStart)/texture.emberDuration))
-                local progress=(t-.15*t*t)/.85
-                local size=texture.moteSize*settings.size*(far and 1.4 or 2.5)
-                local limit=math.max(0,width/2-size)
-                local x=(((i*.61803398875)%1)-.5)*span+math.sin(texture.wanderPhase+progress*3)*12
-                render.ParticlePoint(texture,content,"BOTTOM",math.max(-limit,math.min(limit,x)),18+progress*rise)
-                local opacity = render.backgroundMoteOpacity
-                render.ParticleSize(texture,size,size);texture:SetAlpha((opacity > 0 and math.max(0, math.min(1, opacity + texture.opacityVariation)) or 0)*(far and .14 or .22)*math.sin(math.pi*t)^2*fade)
-            end
-        end
-        active=true
-    else for _,texture in ipairs(effects.depth) do texture:Hide() end end
-
-    ns.PerfEnd(perf)
-    perf = ns.PerfStart("portrait_anticipation_frame", effectAge)
-    local afterGlint = db.portraitRingGlint and portraitStage == "glint"
-    local pre = afterGlint and (effectAge-render.PortraitStarburstTime()+.18/speed)/(.18/speed)
-        or (effectAge-plan.portrait.finish)/(PORTRAIT_PULSE_GAP/speed)
-    if milestone and db.portraitRingSettle and db.portraitAnimation and IsPlayerPortrait() and pre>=0 and pre<1
-        and (afterGlint or not db.portraitRingGlint and portraitStage=="waiting") then
-        local size=PortraitIconSize()*2.2*render.milestoneStarburstScale*(.65-.47*pre)
-        content.portraitStarburst:Show();render.Size(content.portraitStarburst,size,size)
-        content.portraitStarburst:SetAlpha(render.starburstOpacity*(.45-.30*pre))
-        active=true
-    end
-    if milestone and db.portraitRingSettle and not db.portraitRingGlint and db.portraitAnimation and IsPlayerPortrait() and portraitStage=="pulse" then
-        local size=PortraitIconSize()*2.2*render.milestoneStarburstScale*.18
-        content.portraitStarburst:Show();render.Size(content.portraitStarburst,size,size)
-        content.portraitStarburst:SetAlpha(render.starburstOpacity*.15)
-        active=true
-    end
-    local impact = portraitStage == "starburst" and (effectAge-starburstStartedAt)/(1.2/speed) or -1
-    local white=milestone and portrait and db.portraitAnimation and impact>=0 and impact<1 and .95*(1-impact)^2 or 0
-    render.TintTrialImpact(white)
-    if milestone and portrait and db.portraitAnimation and impact<1 then active=true end
-    ns.PerfEnd(perf)
-    return active
-end
+render.UpdateTrialEffects = ns.CreatePopupDecorationUpdater({render = render, content = content, frame = frame,
+    Speed = Speed, ActiveColor = ActiveColor, IsPlayerPortrait = IsPlayerPortrait,
+    EnsureParticlePool = EnsureParticlePool, RollBackgroundEmber = RollBackgroundEmber,
+    PortraitIconSize = PortraitIconSize, PORTRAIT_PULSE_GAP = PORTRAIT_PULSE_GAP, CIRCLE_MASK = CIRCLE_MASK,
+    GetState = function() return entranceTimeline, effectAge, portraitStage, starburstStartedAt, fadeFinished end})
 
 function render.CancelClosing()
     local closing = render.closing
@@ -4501,7 +3959,9 @@ function render.UpdateLevelTime()
         effectAge, true))
     local maxLevel = content.isMaxLevel and ns.db.maxLevelCelebration ~= false
     if maxLevel and (ns.db.showLevelTime or content.pacePreview) then
-        local total = ns.GetTimeToMaxLevel()
+        local total
+        if content.replayRecord then total = content.replayRecord.timeToCap
+        else total = ns.GetTimeToMaxLevel() end
         if total then
             local duration = total >= 86400 and ns.L("%dd %02dh %02dm %02ds", math.floor(total / 86400),
                 math.floor(total % 86400 / 3600), math.floor(total % 3600 / 60), math.floor(total % 60))
@@ -4601,6 +4061,12 @@ function render.UpdateMaxBackgroundTint(force)
 end
 
 ns.RefreshMaxBackgroundTint = render.UpdateMaxBackgroundTint
+
+function ns.WakeAbilityEffects()
+    if frame:IsShown() and not render.closing and not frame.closingInputSuppressed then
+        effectDriver:SetScript("OnUpdate", RunVisualEffects)
+    end
+end
 
 UpdateVisualEffects = function()
     if render.closing then return end
@@ -4710,7 +4176,7 @@ UpdateVisualEffects = function()
         for _, pool in ipairs(render.abilityPools) do
             for _, icon in ipairs(pool) do
                 local phase = AbilityShimmerTime(icon) / 0.60
-                local shimmer = decorative and icon:IsShown() and db.highlightNewAbilities and icon.isNewAbility == true and moving
+                local shimmer = decorative and icon:IsShown() and icon.effectVisible ~= false and db.highlightNewAbilities and icon.isNewAbility == true and moving
                 render.Shown(icon.newAbilityGlow, shimmer and phase >= 0 and phase < 1 or false)
                 if shimmer and phase >= 0 and phase < 1 then
                     icon.newAbilityGlow:SetAlpha(math.sin(math.pi * phase) ^ 0.5)
@@ -4921,6 +4387,7 @@ function render.ReleasePopupData()
     content.currentLevelPlayedTime, content.previousFastestLevelTime, content.pacePreview, content.paceRowExtra = nil, nil, nil, nil
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     content.currentStatChanges = nil
+    content.replayRecord = nil
     content.levelRangeStart, content.currentReachedLevel = nil, nil
     content.currentTrainerAbilities = {}
     content.currentWarlockPetAbilities = {}
@@ -5435,6 +4902,8 @@ local function LayoutFrame(statCount)
     end
     render.FitSparseAbilityIcons(content.abilityViewport, content.abilityIconPool)
     render.FitSparseAbilityIcons(content.petAbilityViewport, content.petAbilityIconPool)
+    render.RefreshAbilityVisibility(content.abilityViewport)
+    render.RefreshAbilityVisibility(content.petAbilityViewport)
     LayoutBackground()
 end
 
@@ -5736,11 +5205,13 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     local lifetime = entranceDuration + (db.duration or 7)
     render.popupLifetime = lifetime
     if content.secondaryStatChanges and #content.secondaryStatChanges > 0 then
-        local halfDuration = (db.duration or 7)/2
+        local split = ns.GetSecondaryStatStartPercent() / 100
+        local halfDuration = (db.duration or 7) * split
+        local secondaryDuration = (db.duration or 7) * (1 - split)
         local animationLength = (BASE_STAT_SLIDE_DURATION + BASE_STAT_STAGGER_BASE
             + math.max(0,#content.secondaryStatChanges-1)*BASE_STAT_STAGGER_STEP + 1)/Speed()
         render.statPages = {phase = "waiting", holdAge = 0, halfDuration = halfDuration,
-            animationScale = math.min(1, halfDuration / animationLength),
+            animationScale = math.min(1, math.min(halfDuration, secondaryDuration) / animationLength),
             lastAge = 0, paused = ShouldSuspendPreview()}
     end
     ScheduleFadeOut(lifetime)
@@ -5752,13 +5223,14 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord)
     ns.EnsureDatabase()
     ns.SetClosingClickThrough(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
+    content.replayRecord = replayRecord
     content.pacePreview = isPreview == true and pacePreview == true
     previewActive = isPreview == true
     previewSuspended = false
@@ -5773,6 +5245,13 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     local perf = ns.PerfStart("popup_prepare")
     local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
     ns.PerfEnd(perf)
+    if ok and not isPreview then
+        ns.SaveLevelUpReplay({level = currentLevel, stats = statChanges, abilities = trainerAbilities,
+            weapons = unlearnedWeaponSkills, seconds = timePlayedThisLevel, pets = warlockPetAbilities,
+            previousFastest = previousFastest, rangeStart = rangeStart, secondary = secondaryStats,
+            milestone = milestone == true, maximum = content.isMaxLevel == true,
+            timeToCap = content.isMaxLevel and ns.GetTimeToMaxLevel() or nil})
+    end
     if not ok then
         print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err))
         print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up screen failed to display (see above). Please report this error."))

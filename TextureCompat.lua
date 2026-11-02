@@ -3,6 +3,12 @@ local ADDON_NAME, ns = ...
 -- Forever and Retail differ in atlas availability and SetTexture wrap support.
 function ns.SetTextureFile(texture, path, wrapH, wrapV)
     if wrapH ~= nil or wrapV ~= nil then
+        -- A pooled texture may still carry a repeat sampler for this same file.
+        -- Force a fresh binding when an axis changes from repeat to clamp.
+        if (texture.gluRepeatH and not wrapH) or (texture.gluRepeatV and not wrapV) then
+            pcall(texture.SetTexture, texture, nil)
+        end
+        texture.gluRepeatH, texture.gluRepeatV = wrapH == true, wrapV == true
         local ok = pcall(texture.SetTexture, texture, path,
             wrapH and "REPEAT" or "CLAMP", wrapV and "REPEAT" or "CLAMP")
         if ok then return true end
@@ -29,7 +35,7 @@ function ns.ApplyAtlasCandidates(texture, candidates, useAtlasSize, checkFileID)
                 local applied = ns.SetTextureFile(texture, info.file or info.filename)
                 if applied and (not checkFileID or HasTextureFile(texture)) then
                     return true, info.leftTexCoord, info.rightTexCoord,
-                        info.topTexCoord, info.bottomTexCoord
+                        info.topTexCoord, info.bottomTexCoord, info.width, info.height
                 end
             end
         end
@@ -47,7 +53,8 @@ function ns.ApplyTextureReference(texture, reference, wrapH, wrapV)
     if type(reference) == "table" and type(reference.atlas) == "string" then
         return ns.ApplyAtlasCandidates(texture, { reference.atlas }, reference.useAtlasSize)
     end
-    if type(reference) == "string" and reference ~= "" then
+    if (type(reference) == "string" and reference ~= "")
+        or (type(reference) == "number" and reference > 0 and reference == math.floor(reference)) then
         return ns.SetTextureFile(texture, reference, wrapH, wrapV)
     end
     return false
@@ -98,4 +105,29 @@ function ns.CreateMenuLogo(parent)
     logo:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\logo-nobot.tga", "CLAMP", "CLAMP")
     logo:SetTexCoord(0, 750 / 1024, 0, 202 / 256)
     return logo
+end
+
+-- Crop a centred source rectangle to cover the destination without distortion.
+-- Signed coordinate spans preserve horizontal/vertical flips and atlas bounds.
+function ns.SetBackgroundFillCoords(texture, sourceWidth, sourceHeight, left, right, top, bottom)
+    local width, height = texture:GetWidth(), texture:GetHeight()
+    if not sourceWidth or not sourceHeight or sourceWidth <= 0 or sourceHeight <= 0
+        or width <= 0 or height <= 0 then return false end
+    left, right, top, bottom = left or 0, right or 1, top or 0, bottom or 1
+    local sourceAspect, targetAspect = sourceWidth / sourceHeight, width / height
+    if targetAspect > sourceAspect then
+        local crop = (1 - sourceAspect / targetAspect) / 2
+        local span = bottom - top
+        top, bottom = top + span * crop, bottom - span * crop
+    else
+        local crop = (1 - targetAspect / sourceAspect) / 2
+        local span = right - left
+        left, right = left + span * crop, right - span * crop
+    end
+    -- Disable automatic tile-coordinate generation before assigning the final
+    -- four vertices. Fill always uses exactly one cropped image rectangle.
+    if texture.SetHorizTile then texture:SetHorizTile(false) end
+    if texture.SetVertTile then texture:SetVertTile(false) end
+    texture:SetTexCoord(left, top, left, bottom, right, top, right, bottom)
+    return true
 end

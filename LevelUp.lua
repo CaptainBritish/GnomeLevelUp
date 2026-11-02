@@ -124,16 +124,18 @@ function ns.RecordLevelPace(seconds)
 end
 
 function ns.RefreshBaseline()
-    baselineStats = ns.SnapshotStats()
+    baselineStats = ns.SnapshotStats(baselineStats)
+end
+
+local function RunBaselineRefresh()
+    baselineRefreshScheduled = false
+    if not levelUpPending then ns.RefreshBaseline() end
 end
 
 local function QueueBaselineRefresh()
     if baselineRefreshScheduled or levelUpPending then return end
     baselineRefreshScheduled = true
-    C_Timer.After(0.1, function()
-        baselineRefreshScheduled = false
-        if not levelUpPending then ns.RefreshBaseline() end
-    end)
+    C_Timer.After(0.1, RunBaselineRefresh)
 end
 
 local function ClearPendingBatch()

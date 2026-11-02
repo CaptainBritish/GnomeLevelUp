@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.5.2
+
+##### New Features
+
+
+
+* Added a percentage control for when secondary stats replace primary stats within the existing display duration.
+* Reorganized the main Options menu into tabs with fixed navigation.
+* Added hover help for every option, including detailed animation explanations and advanced tuning controls in all supported languages.
+
+
+
+##### Customization Options
+
+* Added Garden Trellis frame option.
+* Added Solid Colour, Coral, and Scratched Stone backgrounds.
+
+
+
+##### Bug Fixes and Optimization
+
+* Background, frame and portrait-ring hues are remembered separately for each selected asset, added a Reset Hues button to Colours.
+* Unified textured-frame rendering.
+* Relevant stats only now defaults to on in Retail.
+* Performance profiling is now separate from debug mode.
+* Fixed fill mode that I somehow broke last patch, don't ask me how I did that.
+* Background Hue transparency now affects only the background fill, independently of the frame.
+* Skip decorative ability effects for icons outside the scrolling viewport.
+* Split rendering helpers, stat measurements, heading layout and decorative effects into separate UI modules.
+* Fixed a moderate memory leak caused by repeated use of the test frame.
+
+
+
 ## 1.5
 
 ##### New Features
@@ -29,6 +62,9 @@
 * Closing popups immediately become click-through, including icons and scroll controls; hovering cannot restart the popup.
 * Gaining two or more levels at once now coalesces into one popup.
 * Added hover descriptors to options menu.
+* Moved Classic Mode to the top of Animation, separated from other toggles.
+* Right-clicking the minimap button now previews a level-up.
+* Tightened the portrait spark path to match the visible Steel and Copper rings.
 * Optimized particle animations by reusing anchors and cached sizes for a minor performance gain.
 
 

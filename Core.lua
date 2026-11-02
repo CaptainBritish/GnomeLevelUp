@@ -33,7 +33,7 @@ local defaults = {
     showOnlyCurrentLevelSkills = false,
     showOnlyNewSkills = false,
     shortenRetailStatTotals = false,
-    relevantRetailStatsOnly = false,
+    relevantRetailStatsOnly = true,
     showWarlockPetSkills = true,
     showHunterPetSkills = true,
     filterWarlockPetByActivePet = true,
@@ -43,6 +43,7 @@ local defaults = {
     horizontalMode = true,
     showLevelTime = true,
     showSecondaryStats = false,
+    secondaryStatStartPercent = 50,
     statTextScale = 1,
     headingTextScale = 1,
     timeTextScale = 1,
@@ -57,6 +58,8 @@ local defaults = {
     sectionPadding = 8,
     compactHorizontalPadding = 2,
     bgOpacity = 0.80,           -- background darkness at its peak (0-1)
+    themeHuePreferences = { background = {}, frame = {}, ring = {} },
+    backgroundHueOpacity = 1,   -- fill-only opacity multiplier from Background Hue
     backgroundColor = { 0.00, 0.00, 0.00 },
     frameColor = { 1.00, 1.00, 1.00 },
     portraitRingColor = { 1.00, 1.00, 1.00 },
@@ -224,12 +227,23 @@ function ns.SetTextScale(key, value)
     end
 end
 
+function ns.GetSecondaryStatStartPercent()
+    local value = tonumber(ns.db and ns.db.secondaryStatStartPercent) or 50
+    if value ~= value then value = 50 end
+    return math.max(25, math.min(75, value))
+end
+
 -- Shared controls keep mouse, controller and setup changes on the same path.
 ns.OPTION_SETTINGS = {
     duration = { label = "Display duration", minimum = 1, maximum = 60, step = 1,
         get = function() return tonumber(ns.db.duration) or 7 end,
         set = function(value) ns.db.duration = value end,
         format = function(value) return string.format("%ds", value) end },
+    secondaryStatStartPercent = { label = "Switch to secondary stats at", minimum = 25, maximum = 75, step = 5,
+        isAvailable = function() return ns.db.showSecondaryStats == true end,
+        get = function() return ns.GetSecondaryStatStartPercent() end,
+        set = function(value) ns.db.secondaryStatStartPercent = math.max(25, math.min(75, tonumber(value) or 50)) end,
+        format = function(value) return string.format("%.0f%%", value) end },
     popupScale = { label = "Popup scale", minimum = .5, maximum = 2, step = .1,
         get = function() return ns.GetPopupScale() end,
         set = function(value) ns.SetPopupScale(value); ns.RefreshPopupLayout() end,
@@ -280,12 +294,14 @@ SharedToggle("relevantRetailStatsOnly", "Relevant stats only", function() ns.Ref
 
 SharedToggle("showSecondaryStats", "Show secondary stats", function()
     if ns.RefreshBaseline then ns.RefreshBaseline() end
-end, "Replace primary stats with secondary stats halfway through the popup.")
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end, "Replace primary stats with secondary stats during the popup.")
 
 ns.OPTION_SETTINGS_BY_LABEL = {}
 for _, setting in pairs(ns.OPTION_SETTINGS) do ns.OPTION_SETTINGS_BY_LABEL[setting.label] = setting end
 function ns.AdjustNumericOption(key, direction)
     local setting = ns.OPTION_SETTINGS[key]
+    if setting.isAvailable and not setting.isAvailable() then return end
     local value = setting.get() + direction * setting.step
     setting.set(math.max(setting.minimum, math.min(setting.maximum, value)))
 end
@@ -311,7 +327,7 @@ ns.APPEARANCE_SETTING_KEYS = {
     "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
-    "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
+    "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding",
     "scale",
@@ -320,7 +336,8 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
-    "maxLevelCelebration", "showSecondaryStats",
+    "themeHuePreferences",
+    "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",
     "shortenRetailStatTotals", "relevantRetailStatsOnly",
     "portraitRingGlint",
     "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize",
@@ -331,7 +348,7 @@ ns.RESETTABLE_SETTING_KEYS = {
     "portraitRingSettle", "dividerReveal",
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
     "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
-    "bgOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
+    "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
@@ -454,8 +471,99 @@ local function SelectedCompositeTheme()
 end
 ns.GetSelectedCompositeTheme = SelectedCompositeTheme
 
+-- Replace the withdrawn atlas background without changing the frame selection.
+function ns.RetireDustyStoneBackground(settings)
+    if settings.backgroundChoice ~= "DUSTY_STONE" then return end
+    settings.backgroundChoice = "SCRATCHED_STONE"
+    settings.backgroundTheme = nil
+    settings.backgroundStyle, settings.backgroundFillMode = "fill", "scale"
+    local preferences = settings.themeHuePreferences
+    local saved = preferences and preferences.background and preferences.background.SCRATCHED_STONE
+    settings.backgroundColor = CopySetting(saved and saved.color or ns.GetBackgroundReference("SCRATCHED_STONE").defaultHue)
+    settings.backgroundHueOpacity = saved and saved.opacity or 1
+end
+
+-- Merge the duplicate Horde background into Wood Panel, keeping an existing
+-- Wood Panel preference when both assets have separately saved hues.
+function ns.RetireHordeBackground(settings)
+    local preferences = settings.themeHuePreferences
+    local backgrounds = preferences and preferences.background
+    if backgrounds and backgrounds.HORDE then
+        if not backgrounds.WOOD_PANEL then backgrounds.WOOD_PANEL = CopySetting(backgrounds.HORDE) end
+        backgrounds.HORDE = nil
+    end
+    if settings.backgroundChoice == "HORDE" then
+        settings.backgroundChoice = "WOOD_PANEL"
+        local saved = backgrounds and backgrounds.WOOD_PANEL
+        if saved then
+            settings.backgroundColor = CopySetting(saved.color)
+            settings.backgroundHueOpacity = saved.opacity or 1
+        end
+    end
+end
+
+local HUE_COMPONENTS = {
+    background = { color = "backgroundColor" },
+    frame = { color = "frameColor" },
+    ring = { color = "portraitRingColor" },
+}
+local function HueChoices()
+    return { background = ns.db.backgroundChoice or "NONE",
+        frame = ns.db.frameChoice or "BLACK_METAL", ring = ns.db.portraitRingChoice or "NONE" }
+end
+local function HuePreferences()
+    ns.db.themeHuePreferences = ns.db.themeHuePreferences or {}
+    for kind in pairs(HUE_COMPONENTS) do
+        ns.db.themeHuePreferences[kind] = ns.db.themeHuePreferences[kind] or {}
+    end
+    return ns.db.themeHuePreferences
+end
+function ns.RememberThemeHues()
+    local preferences = HuePreferences()
+    for kind, choice in pairs(HueChoices()) do
+        local spec = HUE_COMPONENTS[kind]
+        local record = { color = CopySetting(ns.db[spec.color] or defaults[spec.color]) }
+        if kind == "background" then record.opacity = ns.db.backgroundHueOpacity or 1 end
+        preferences[kind][choice] = record
+    end
+end
+local function LoadThemeHue(kind, choice, reset)
+    local spec = HUE_COMPONENTS[kind]
+    local preferences = HuePreferences()[kind]
+    if reset then preferences[choice] = nil end
+    local saved = preferences[choice]
+    local background = kind == "background" and ns.GetBackgroundReference(choice)
+    ns.db[spec.color] = CopySetting(saved and saved.color
+        or background and background.defaultHue or defaults[spec.color])
+    if kind == "background" then ns.db.backgroundHueOpacity = saved and saved.opacity or 1 end
+end
+local function LoadSelectedThemeHues(reset)
+    for kind, choice in pairs(HueChoices()) do LoadThemeHue(kind, choice, reset) end
+end
+function ns.ResetThemeHues()
+    EnsureDatabase()
+    ns.InvalidateColorPicker()
+    LoadSelectedThemeHues(true)
+    ns.RememberThemeHues()
+    RefreshAppearanceAfterThemeChange()
+end
+function ns.ApplyPortraitRingChoice(value)
+    EnsureDatabase()
+    ns.InvalidateColorPicker()
+    if not ns.PORTRAIT_RING_TEXTURES[value] then value = "NONE" end
+    ns.RememberThemeHues()
+    ns.db.portraitRingChoice = value
+    ns.db.portraitRingTexture = ns.GetPortraitRingReference(value)
+    ns.db.portraitRingEnabled = ns.db.portraitRingTexture ~= nil
+    LoadThemeHue("ring", value)
+    if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end
+
 function ns.RestoreModernAppearance()
     EnsureDatabase()
+    ns.InvalidateColorPicker()
+    ns.RememberThemeHues()
     -- Modern starts without a portrait ring. Keep portrait artwork, position
     -- and font choices when switching backgrounds.
     ns.db.backgroundMode = "MODERN"
@@ -465,19 +573,26 @@ function ns.RestoreModernAppearance()
     ns.db.portraitRingEnabled = false
     ns.db.portraitRingTexture = nil
     ns.db.portraitRingChoice = "NONE"
+    LoadSelectedThemeHues()
     RefreshAppearanceAfterThemeChange()
 end
 
-local function NormalizePortraitRingHue()
-    local color = ns.db and ns.db.portraitRingColor
-    if type(color) == "table" and color[1] == 1 and color[2] == 0.82 and color[3] == 0.20 then
-        ns.db.portraitRingColor = { 1, 1, 1 }
+local function BackgroundDefaultStyle(choice)
+    if choice == "GNOMEREGAN" then return ns.db.horizontalMode and "fill" or "stretch" end
+    local background = ns.GetBackgroundReference(choice)
+    return background and background.defaultStyle
+end
+local function ApplyBackgroundDefaultStyle(choice)
+    local style = BackgroundDefaultStyle(choice)
+    if style then
+        ns.db.backgroundStyle = style
+        ns.db.backgroundFillMode = style == "tile" and "tile" or "scale"
     end
 end
 
 function ns.ApplyBackgroundTheme(value)
     EnsureDatabase()
-    NormalizePortraitRingHue()
+    ns.InvalidateColorPicker()
     if value == "MODERN" then
         ns.RestoreModernAppearance()
         return true
@@ -488,6 +603,7 @@ function ns.ApplyBackgroundTheme(value)
         return false
     end
 
+    ns.RememberThemeHues()
     -- A locked location belongs to the player, not the selected theme.
     local locationLocked = ns.db.lockFramePosition == true
     local lockedPosition = locationLocked and CopySetting(ns.db.framePosition)
@@ -515,19 +631,22 @@ function ns.ApplyBackgroundTheme(value)
     ns.db.backgroundTheme = value
     ns.db.backgroundChoice = theme.backgroundName
     ns.db.frameChoice = theme.frameName or theme.backgroundName
+    LoadSelectedThemeHues()
+    ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
     RefreshAppearanceAfterThemeChange()
     return true
 end
 
 function ns.ApplyBackgroundPreset(value)
     EnsureDatabase()
-    NormalizePortraitRingHue()
+    ns.InvalidateColorPicker()
     local theme = ns.FindBackgroundTheme(value)
     if not theme or not theme.textures or not theme.textures.center then
         ns.RestoreModernAppearance()
         return false
     end
 
+    ns.RememberThemeHues()
     -- Background selection is independent from the portrait and frame
     -- settings. Only replace values owned by the selected background preset.
     ns.db.backgroundMode = "CUSTOM"
@@ -548,16 +667,30 @@ function ns.ApplyBackgroundPreset(value)
             ns.db.backgroundTextureTransforms = CopySetting(theme.appearance.backgroundTextureTransforms)
         end
     end
+    LoadThemeHue("background", ns.db.backgroundChoice)
+    LoadThemeHue("frame", ns.db.frameChoice)
+    ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
     RefreshAppearanceAfterThemeChange()
     return true
 end
 
+-- Keep the hue picker's fill alpha separate from the shared appearance opacity.
+function ns.GetBackgroundFillOpacity(opacity)
+    local alpha = tonumber(ns.db and ns.db.backgroundHueOpacity) or 1
+    return (opacity or (ns.db and ns.db.bgOpacity) or .8) * math.max(0, math.min(1, alpha))
+end
+
 function ns.ApplyBackgroundChoice(value)
     EnsureDatabase()
+    ns.InvalidateColorPicker()
     if value ~= "NONE" and ns.BACKGROUND_TEXTURES and not ns.BACKGROUND_TEXTURES[value] then
         value = "NONE"
     end
+    if value == "NONE" then return ns.RestoreModernAppearance() end
+    ns.RememberThemeHues()
     ns.db.backgroundChoice = value
+    LoadThemeHue("background", value)
+    ApplyBackgroundDefaultStyle(value)
     if value == "NONE" then
         return ns.RestoreModernAppearance()
     end
@@ -569,10 +702,23 @@ end
 
 function ns.ApplyFrameChoice(value)
     EnsureDatabase()
+    ns.InvalidateColorPicker()
     if ns.FRAME_TEXTURES and not ns.FRAME_TEXTURES[value] then
         value = "BLACK_METAL"
     end
+    ns.RememberThemeHues()
+    local previousFrame = ns.FRAME_TEXTURES and ns.FRAME_TEXTURES[ns.db.frameChoice]
+    local nextFrame = ns.FRAME_TEXTURES and ns.FRAME_TEXTURES[value]
+    if (previousFrame and previousFrame.transforms or nextFrame and nextFrame.transforms)
+        and ns.GetFrameTransforms then
+        local transforms = ns.GetFrameTransforms(value)
+        ns.db.backgroundTextureTransforms = ns.db.backgroundTextureTransforms or {}
+        for key, transform in pairs(transforms) do
+            if key ~= "center" then ns.db.backgroundTextureTransforms[key] = transform end
+        end
+    end
     ns.db.frameChoice = value
+    LoadThemeHue("frame", value)
     if ns.db.backgroundChoice and ns.db.backgroundChoice ~= "NONE" then
         ns.db.backgroundMode = "CUSTOM"
     end
@@ -593,6 +739,20 @@ function ns.GetDefaultControllerGlyphStyle()
         if ok and (style == "1" or style == "gamepad") then return "xbox" end
     end
     return "none"
+end
+
+-- Repair only the original rotated-strip defaults; preserve other custom tuning.
+-- Profiles load after InitDB, so both settings entry points use this repair.
+function ns.NormalizeTrellisSideTransforms(settings)
+    if settings.frameChoice ~= "TRELLIS" then return end
+    local transforms = settings.backgroundTextureTransforms
+    local left = transforms and transforms.left
+    local right = transforms and transforms.right
+    if left and right and left.rotation == 270 and right.rotation == 90
+        and not left.flipX and not left.flipY and not right.flipX and not right.flipY then
+        transforms.left = { rotation = 0, flipX = false, flipY = false }
+        transforms.right = { rotation = 0, flipX = true, flipY = false }
+    end
 end
 
 local function InitDB()
@@ -722,6 +882,9 @@ local function InitDB()
         and savedRingColor[1] == 1 and savedRingColor[2] == 0.82 and savedRingColor[3] == 0.20 then
         GnomeLevelUpDB.portraitRingColor = { 1, 1, 1 }
     end
+    -- Retire removed choices before validating them against the live registry.
+    ns.RetireDustyStoneBackground(GnomeLevelUpDB)
+    ns.RetireHordeBackground(GnomeLevelUpDB)
     if GnomeLevelUpDB.backgroundChoice ~= "NONE"
         and ns.BACKGROUND_TEXTURES
         and not ns.BACKGROUND_TEXTURES[GnomeLevelUpDB.backgroundChoice] then
@@ -802,6 +965,7 @@ local function InitDB()
         end
         GnomeLevelUpDB.backgroundThemeTextureVersion = themeTextureVersion
     end
+    ns.NormalizeTrellisSideTransforms(ns.db)
     if GnomeLevelUpDB.horizontalMode then GnomeLevelUpDB.compactMode = true end
     GnomeLevelUpDB.schemaVersion = DATABASE_SCHEMA_VERSION
 end
@@ -815,7 +979,10 @@ ns.EnsureDatabase = EnsureDatabase
 
 function ns.SetHorizontalMode(enabled)
     EnsureDatabase()
+    local wasDefault = ns.db.backgroundChoice == "GNOMEREGAN"
+        and ns.db.backgroundStyle == BackgroundDefaultStyle("GNOMEREGAN")
     ns.db.horizontalMode = enabled == true
+    if wasDefault then ApplyBackgroundDefaultStyle("GNOMEREGAN") end
     if ns.db.horizontalMode then ns.db.compactMode = true end
     if ns.PositionFrame and ns.levelUpFrame then ns.PositionFrame(ns.levelUpFrame) end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
@@ -945,20 +1112,49 @@ function ns.IsDebugEnabled()
     return ns.db and ns.db.debugEnabled == true
 end
 
--- Collect performance counters only in debug mode.
+-- On-demand sampling avoids periodic memory scans while configuring the addon.
+function ns.PrintMemoryUsage()
+    local text = ns.L("Memory: unavailable")
+    if type(GetAddOnMemoryUsage) == "function" then
+        if type(UpdateAddOnMemoryUsage) == "function" then pcall(UpdateAddOnMemoryUsage) end
+        local ok, kilobytes = pcall(GetAddOnMemoryUsage, ADDON_NAME)
+        if ok and type(kilobytes) == "number" and kilobytes >= 0 and kilobytes < math.huge then
+            local amount = kilobytes >= 1024 and string.format("%.2f MB", kilobytes / 1024)
+                or string.format("%.0f KB", kilobytes)
+            text = ns.L("Memory: %s", amount)
+        end
+    end
+    print("|cff3fe0ffGnomeLevelUp|r: " .. text)
+end
+
+-- Profiling is opt-in for this session, independently of debug commands.
 local performanceMetrics = {}
+local performanceProfiling = false
+
+function ns.SetPerformanceProfiling(enabled) performanceProfiling = enabled == true end
+function ns.IsPerformanceProfilingEnabled() return performanceProfiling end
+local freePerformanceTokens = {}
 local function PerformanceClock()
     if type(GetTimePreciseSec) == "function" then return GetTimePreciseSec() * 1000 end
     return (type(GetTime) == "function" and GetTime() or 0) * 1000
 end
 
 function ns.PerfStart(label, popupAge)
-    if not ns.IsDebugEnabled() then return nil end
-    return { label = label, started = PerformanceClock(), popupAge = popupAge }
+    if not performanceProfiling then return nil end
+    local count = #freePerformanceTokens
+    local token
+    if count > 0 then
+        token = freePerformanceTokens[count]
+        freePerformanceTokens[count] = nil
+    else
+        token = {}
+    end
+    token.label, token.started, token.popupAge = label, PerformanceClock(), popupAge
+    return token
 end
 
 function ns.PerfEnd(token)
-    if not token then return end
+    if not token or not token.label then return end
     local elapsed = math.max(0, PerformanceClock() - token.started)
     local record = performanceMetrics[token.label]
     if not record then
@@ -971,10 +1167,12 @@ function ns.PerfEnd(token)
         record.maximum, record.peakAge = elapsed, token.popupAge
     end
     record.last = elapsed
+    token.label, token.started, token.popupAge = nil, nil, nil
+    freePerformanceTokens[#freePerformanceTokens + 1] = token
 end
 
 function ns.PerfCount(label, amount)
-    if not ns.IsDebugEnabled() then return end
+    if not performanceProfiling then return end
     local record = performanceMetrics[label]
     if not record then
         record = { calls = 0, total = 0, maximum = 0, last = 0 }
@@ -988,9 +1186,8 @@ function ns.ResetPerformanceDiagnostics()
 end
 
 function ns.PrintPerformanceDiagnostics()
-    if not ns.IsDebugEnabled() then
-        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
-        return
+    if not performanceProfiling then
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Profiling is off. Use /glu perf on to record measurements."))
     end
     local labels = {}
     for label in pairs(performanceMetrics) do labels[#labels + 1] = label end
@@ -1925,6 +2122,12 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         end
         if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
         PrintSettingStatus("Enable debug commands", ns.db.debugEnabled)
+    elseif msg == "memory" then
+        ns.PrintMemoryUsage()
+    elseif msg == "perf on" or msg == "performance on" or msg == "perf off" or msg == "performance off" then
+        ns.SetPerformanceProfiling(msg:match(" on$") ~= nil)
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L(ns.IsPerformanceProfilingEnabled()
+            and "Performance profiling enabled." or "Performance profiling disabled."))
     elseif msg == "perf reset" or msg == "performance reset" then
         if ns.ResetPerformanceDiagnostics then ns.ResetPerformanceDiagnostics() end
         print("|cff3fe0ffGnomeLevelUp|r: performance counters reset")
@@ -1973,7 +2176,9 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu debugtime <new|slower|best> - preview level-time scenarios (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu resettimers - clear this character's recorded level timers and best times")
-        print("  /glu perf          - print debug performance diagnostics")
+        print("  /glu memory        - print current addon memory usage")
+        print(ns.L("  /glu perf on|off   - start or stop performance profiling (off after reload)"))
+        print(ns.L("  /glu perf          - print recorded performance diagnostics"))
         print("  /glu perf reset    - clear performance counters")
         print("  /glu combat        - toggle waiting for combat to end before showing")
     end

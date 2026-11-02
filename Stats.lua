@@ -136,9 +136,12 @@ end
 local function ReadSecondaryAPI(name, index, ...)
     local api = rawget(_G, name)
     if type(api) ~= "function" then return nil end
-    local results = {pcall(api, ...)}
-    if not results[1] then return nil end
-    local value = results[(index or 1) + 1]
+    local ok, first, second, third = pcall(api, ...)
+    if not ok then return nil end
+    local value
+    if not index or index == 1 then value = first
+    elseif index == 2 then value = second
+    elseif index == 3 then value = third end
     if type(issecretvalue) == "function" and issecretvalue(value) then return nil end
     if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge then return nil end
     return value
@@ -164,55 +167,63 @@ local function SecondaryMaximum(...)
     return best
 end
 
-function ns.SnapshotSecondaryStats()
-    local stats = {}
-    local function Add(key, label, value, percent, positiveOnly)
-        if value == nil or positiveOnly and value <= 0 then return end
-        stats[#stats + 1] = { key = key, name = ns.L(label),
-            value = math.floor(value * (percent and 100 or 1) + .5),
-            unit = percent and "percent" or nil, kind = "secondary" }
-    end
+-- Shared writers avoid new closures/upvalues on every idle baseline refresh.
+local function AddSecondaryStat(stats, count, key, label, value, percent, positiveOnly)
+    if value == nil or positiveOnly and value <= 0 then return count end
+    count = count + 1
+    local stat = stats[count] or {}
+    stat.key, stat.name = key, ns.L(label)
+    stat.value = math.floor(value * (percent and 100 or 1) + .5)
+    stat.unit, stat.kind = percent and "percent" or nil, "secondary"
+    stats[count] = stat
+    return count
+end
+
+local function SecondaryHit(name, rating)
+    local bonus = ReadSecondaryAPI("GetCombatRatingBonus", 1, rating)
+    local modifier = ReadSecondaryAPI(name)
+    return bonus and modifier and bonus + modifier or modifier or bonus
+end
+
+function ns.SnapshotSecondaryStats(reuse)
+    local stats, count = reuse or {}, 0
     local spellCrit
     for school = 2, 7 do spellCrit = SecondaryMaximum(spellCrit, ReadSecondaryAPI("GetSpellCritChance", 1, school)) end
-    Add("crit", "Crit. Strike", SecondaryMaximum(ReadSecondaryAPI("GetCritChance"),
+    count = AddSecondaryStat(stats, count, "crit", "Crit. Strike", SecondaryMaximum(ReadSecondaryAPI("GetCritChance"),
         ReadSecondaryAPI("GetRangedCritChance"), spellCrit), true)
     local rangedHaste = SecondarySum("GetRangedHaste", 2)
         or ReadSecondaryAPI("GetRangedHaste")
-    Add("haste", "Haste", SecondaryMaximum(ReadSecondaryAPI("GetHaste"), ReadSecondaryAPI("GetMeleeHaste"),
+    count = AddSecondaryStat(stats, count, "haste", "Haste", SecondaryMaximum(ReadSecondaryAPI("GetHaste"), ReadSecondaryAPI("GetMeleeHaste"),
         rangedHaste, ReadSecondaryAPI("UnitSpellHaste", 1, "player")), true)
     if ns.GetCurrentFlavor() == "retail" then
-        Add("mastery", "Mastery", ReadSecondaryAPI("GetMasteryEffect"), true)
+        count = AddSecondaryStat(stats, count, "mastery", "Mastery", ReadSecondaryAPI("GetMasteryEffect"), true)
         local rating = ReadSecondaryAPI("GetCombatRatingBonus", 1, rawget(_G, "CR_VERSATILITY_DAMAGE_DONE") or 29)
         local bonus = ReadSecondaryAPI("GetVersatilityBonus", 1, rawget(_G, "CR_VERSATILITY_DAMAGE_DONE") or 29)
-        Add("versatility", "Versatility", rating and bonus and rating + bonus or rating or bonus, true)
+        count = AddSecondaryStat(stats, count, "versatility", "Versatility", rating and bonus and rating + bonus or rating or bonus, true)
     else
-        local function Hit(name, rating)
-            local bonus = ReadSecondaryAPI("GetCombatRatingBonus", 1, rating)
-            local modifier = ReadSecondaryAPI(name)
-            return bonus and modifier and bonus + modifier or modifier or bonus
-        end
-        Add("hit", "Hit Chance", SecondaryMaximum(Hit("GetHitModifier", rawget(_G, "CR_HIT_MELEE") or 6),
-            Hit("GetRangedHitModifier", rawget(_G, "CR_HIT_RANGED") or 7), Hit("GetSpellHitModifier", rawget(_G, "CR_HIT_SPELL") or 8)), true)
-        Add("expertise", "Expertise", SecondaryMaximum(ReadSecondaryAPI("GetExpertise",1),
+        count = AddSecondaryStat(stats, count, "hit", "Hit Chance", SecondaryMaximum(SecondaryHit("GetHitModifier", rawget(_G, "CR_HIT_MELEE") or 6),
+            SecondaryHit("GetRangedHitModifier", rawget(_G, "CR_HIT_RANGED") or 7), SecondaryHit("GetSpellHitModifier", rawget(_G, "CR_HIT_SPELL") or 8)), true)
+        count = AddSecondaryStat(stats, count, "expertise", "Expertise", SecondaryMaximum(ReadSecondaryAPI("GetExpertise",1),
             ReadSecondaryAPI("GetExpertise",2), ReadSecondaryAPI("GetExpertise",3)), true)
-        Add("attackPower", "Attack Power", SecondarySum("UnitAttackPower", 3, "player"), false, true)
+        count = AddSecondaryStat(stats, count, "attackPower", "Attack Power", SecondarySum("UnitAttackPower", 3, "player"), false, true)
         local _, class = UnitClass("player")
-        if class == "HUNTER" then Add("rangedPower", "Ranged Attack Power", SecondarySum("UnitRangedAttackPower", 3, "player"), false, true) end
+        if class == "HUNTER" then count = AddSecondaryStat(stats, count, "rangedPower", "Ranged Attack Power", SecondarySum("UnitRangedAttackPower", 3, "player"), false, true) end
         local spellPower
         for school = 2, 7 do spellPower = SecondaryMaximum(spellPower, ReadSecondaryAPI("GetSpellBonusDamage",1,school)) end
-        Add("spellPower", "Spell Power", spellPower, false, true)
-        Add("healing", "Healing Power", ReadSecondaryAPI("GetSpellBonusHealing"), false, true)
-        Add("armor", "Armor", ReadSecondaryAPI("UnitArmor", 2, "player"))
-        Add("defense", "Defense", SecondarySum("UnitDefenseSkill", 2, "player"))
-        Add("dodge", "Dodge", ReadSecondaryAPI("GetDodgeChance"), true)
-        Add("parry", "Parry", ReadSecondaryAPI("GetParryChance"), true, true)
-        Add("block", "Block", ReadSecondaryAPI("GetBlockChance"), true, true)
-        Add("armorPen", "Armor Penetration", ReadSecondaryAPI("GetArmorPenetration"), false, true)
+        count = AddSecondaryStat(stats, count, "spellPower", "Spell Power", spellPower, false, true)
+        count = AddSecondaryStat(stats, count, "healing", "Healing Power", ReadSecondaryAPI("GetSpellBonusHealing"), false, true)
+        count = AddSecondaryStat(stats, count, "armor", "Armor", ReadSecondaryAPI("UnitArmor", 2, "player"))
+        count = AddSecondaryStat(stats, count, "defense", "Defense", SecondarySum("UnitDefenseSkill", 2, "player"))
+        count = AddSecondaryStat(stats, count, "dodge", "Dodge", ReadSecondaryAPI("GetDodgeChance"), true)
+        count = AddSecondaryStat(stats, count, "parry", "Parry", ReadSecondaryAPI("GetParryChance"), true, true)
+        count = AddSecondaryStat(stats, count, "block", "Block", ReadSecondaryAPI("GetBlockChance"), true, true)
+        count = AddSecondaryStat(stats, count, "armorPen", "Armor Penetration", ReadSecondaryAPI("GetArmorPenetration"), false, true)
         if ns.PlayerUsesMana() then
             local regen = ReadSecondaryAPI("GetManaRegen", 2)
-            Add("manaRegen", "Mana per 5 sec", regen and regen * 5, false, true)
+            count = AddSecondaryStat(stats, count, "manaRegen", "Mana per 5 sec", regen and regen * 5, false, true)
         end
     end
+    for index = #stats, count + 1, -1 do stats[index] = nil end
     return stats
 end
 
@@ -233,22 +244,20 @@ function ns.BuildSecondaryPreviewStats()
     return ns.DiffSecondaryStats(current, current)
 end
 
-function ns.SnapshotStats()
+function ns.SnapshotStats(reuse)
     -- Keep the snapshot simple; the values may be secret, so DiffStats filters them later.
     local _, powerToken = UnitPowerType("player")
     local powerLabel = "Power"
     if type(powerToken) == "string" and type(_G[powerToken]) == "string" then
         powerLabel = _G[powerToken]
     end
-    local snap = {
-        level = UnitLevel("player"),
-        health = UnitHealthMax("player"),
-        power = UnitPowerMax("player"),
-        powerToken = powerToken,
-        powerLabel = powerLabel,
-        stats = {},
-        secondary = ns.db and ns.db.showSecondaryStats and ns.SnapshotSecondaryStats() or nil,
-    }
+    local snap = reuse or {}
+    snap.level = UnitLevel("player")
+    snap.health = UnitHealthMax("player")
+    snap.power = UnitPowerMax("player")
+    snap.powerToken, snap.powerLabel = powerToken, powerLabel
+    snap.stats = snap.stats or {}
+    snap.secondary = ns.db and ns.db.showSecondaryStats and ns.SnapshotSecondaryStats(snap.secondary) or nil
     for i = 1, 5 do
         snap.stats[i] = UnitStat("player", i)
     end

@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.5**
+**Development version: 1.5.2**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -24,11 +24,17 @@ routing is supported on Forever; `/glu controlleroptions` can open the controlle
 menu manually in either flavour, outside combat. `/glu mode` shows the resolved
 flavour; use `/glu mode retail`, `/glu mode forever` or `/glu mode auto` to change it.
 
+## Highlights in 1.5.2
+
+- Adjustable primary/secondary stat timing within the existing popup duration.
+- Middle-click replay of the last real level-up.
+- Decorative effects skip ability icons outside the scrolling viewport.
+
 ## Highlights in 1.5
 
 - Retail new-ability support, resource filtering and optional stat shortening.
 - Shared stat columns, optional abbreviated names and independent text sizes.
-- Optional secondary-stat pages halfway through the popup.
+- Optional secondary-stat pages at the selected percentage of the display duration (25–75%, default 50%).
 - Recorded level times, new-best transitions and complete time-to-cap totals.
 - Milestone/max-level celebrations and Classic Mode.
 - Combined popups for rapid or combat-delayed multi-level gains.
@@ -39,7 +45,10 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history.
 ## Setup and options
 
 Open settings with `/glu options`, the minimap button or the game's AddOns
-settings. Right-click the minimap button to preview a level-up.
+settings. Right-click the minimap button to preview a level-up. Middle-click replays the
+last real level-up recorded for this character and flavour, including its stats,
+abilities and timing. Previews and replays do not replace that record or change
+level-time history. The record survives UI reloads.
 `/glu firsttime` reopens first-time setup. Setup supports the mouse,
 keyboard and controller navigation; completing it saves your choices. If login
 or setup is blocked by combat/loading, it waits until the client permits it.
@@ -47,9 +56,10 @@ or setup is blocked by combat/loading, it waits until the client permits it.
 Fresh settings use Modern, horizontal layout, a player portrait, class colours,
 equal-width stats, Time to Level and right-click closing. Horizontal layout
 also enables Compact Layout. Abbreviated names, secondary stats, Retail stat
-shortening and Retail relevant-stat filtering default to off. Existing saved
-choices are preserved. Controller glyphs default to None without a detected
-controller, or Xbox with one; saved manual glyph choices remain intact.
+shortening default to off. Relevant-stat filtering defaults to on in Retail;
+Forever is unaffected. Existing saved choices are preserved. Controller glyphs
+default to None without a detected controller, or Xbox with one; saved manual
+glyph choices remain intact.
 
 Setup includes Language, Classic Mode, theme, orientation, portrait, timing,
 secondary stats, compact layout and closing/mouseover preferences. Forever adds
@@ -64,10 +74,18 @@ Classic Mode and decorative effect switches. Language and profile management
 are in Profile; change Language there and reload the UI. Setup updates its
 language immediately. English is the fallback for unavailable translations.
 
+The main Options menu uses tabs: Appearance, Colours, Animation, Mode, Trainer
+Data (Abilities on Retail), Sound, Profile, Cache Status and Debug. Debug appears
+only while debug mode is enabled. The logo and tab strip stay visible while the
+selected page scrolls; tabs wrap in narrower windows and remember their scroll
+positions during the session. Every option has hover help, including colour,
+profile, texture and debug controls. Animation help explains each visible effect.
+
 Normal and controller Options build their controls only when opened. Setup and
 controller windows can be dragged. Modern menu backgrounds have a soft gradient;
 textured themes retain their artwork. Right-click closes these windows only
-when no option row is hovered. Up/Down moves selection, Left/Right adjusts,
+when no option row is hovered. In the controller menu, Up/Down moves selection,
+Left/Right adjusts,
 Enter selects, Tab/Shift+Tab changes tabs, and Escape closes. Focused text fields
 retain their normal keyboard input. Normal Options includes Debug; the
 controller menu does not. Its Profile page includes Clear Trainer Cache and
@@ -95,9 +113,11 @@ and gain—into shared columns. It does not spread individual letters. With
 `Mast`, `Haste`, `Versa`, with equal widths on or off. The full English critical
 label is **Crit. Strike**. Longer rows shrink to fit instead of crossing borders.
 
-**Show secondary stats** defaults off. After the initial entrance, primary rows
-begin their exit halfway through the configured display duration and secondary
-rows use the same fade/slide entrance. The portrait, abilities and timing retain
+**Show secondary stats** defaults off. The timing control sits beside it in the
+main options menu and is greyed out while disabled; its saved percentage is kept.
+ After the initial entrance, primary rows
+begin their exit at the selected percentage of the display duration (50% by
+default), and secondary rows use the same fade/slide entrance. The portrait, abilities and timing retain
 their timeline. The taller page is reserved once, avoiding frame resizing.
 Short display durations compress the swap so the second page can appear.
 
@@ -261,6 +281,7 @@ capture/report commands mainly apply to Forever; Retail uses spellbook unlocks.
 | `/glu controlleroptions` | Open the controller menu outside controller mode |
 | `/glu sound` | Toggle GLU playback for replacement/custom sounds; Blizzard's default selection remains native |
 | `/glu duration [seconds]` | Show the current duration, or set it to 1–60 seconds; default is 7 |
+| `/glu memory` | Print current addon memory usage in KB/MB |
 | `/glu mode [retail\|forever\|auto]` or `/glu flavor [retail\|forever\|auto]` | Show the current/resolved client mode, or choose a mode |
 | `/glu combat` | Toggle waiting for combat to end; enabled by default |
 | `/glu trainerreport` | Open trainer-report export and save instructions |
@@ -278,7 +299,7 @@ settings changed by commands are saved as usual.
 
 | Command | Action | Requires debug mode? |
 | --- | --- | --- |
-| `/glu debug [on\|off]` | Enable/disable debug controls and diagnostics; no argument toggles the setting; off by default | No |
+| `/glu debug [on\|off]` | Enable/disable debug controls and commands; no argument toggles the setting; off by default | No |
 | `/glu test [1-30]` | Preview the normal level-up screen with the chosen ability count; default three | No |
 | `/glu milestone [level] [1-30]` | Preview a milestone: level first (multiple of 10 from 10–1000), ability count second (default three); no arguments uses the current/next milestone | No |
 | `/glu maxlevel [1-30]` | Preview the max-level celebration and recorded time-to-cap (normal level time if history is incomplete), with the chosen ability count; default three | Yes |
@@ -290,7 +311,9 @@ settings changed by commands are saved as usual.
 | `/glu dumptraining` | Print cached trainer skills and learned state | Yes |
 | `/glu testtrainer` | Print the current unlearned trainer/ability list | Yes |
 | `/glu dumpskills` | Print Skills-tab, equipped and trainable weapon diagnostics | Yes |
-| `/glu perf` or `/glu performance` | Print measured performance counters | Yes |
+| `/glu perf on` or `/glu performance on` | Start performance profiling for this session; independent of debug mode | No |
+| `/glu perf off` or `/glu performance off` | Stop profiling and retain the recorded counters | No |
+| `/glu perf` or `/glu performance` | Print recorded performance counters and an off-state hint when stopped | No |
 | `/glu perf reset` or `/glu performance reset` | Clear performance counters | No |
 | `/glu bgtest <filename>` | Override settings/setup watermark artwork using a filename from `Textures/`, without a path; `.tga` is optional | No |
 | `/glu bgtest clear` | Restore the seasonal watermark selection | No |
@@ -301,17 +324,21 @@ Watermark examples: `/glu bgtest options-watermark`,
 
 ## Performance diagnostics
 
-Debug counters measure GLU callback CPU time, not FPS or full 3D/GPU rendering
-cost. They are disabled outside debug mode. For a repeatable manual check:
+Profiling measures GLU callback CPU time, not FPS or full 3D/GPU rendering
+cost. It is off after every UI reload and independent of debug mode. For a
+repeatable manual check:
 
 ```text
-/glu debug on
+/glu perf on
 /glu perf reset
 /glu test 3
 ```
 
-Wait for the popup to close, then run `/glu perf`. Repeat after resetting counters
-with `/glu milestone 80 9` or `/glu maxlevel 30`. Keep portrait/layout/effect settings
+Wait for the popup to close, then run `/glu perf`. Use `/glu perf off` to stop
+recording without clearing the results. `/glu perf reset` clears counters and
+does not start or stop profiling. Repeat after resetting counters
+with `/glu milestone 80 9` or `/glu maxlevel 30` (these two preview commands
+still require `/glu debug on`). Keep portrait/layout/effect settings
 and the game location consistent. Record whether 3D and secondary stats are on.
 The first popup may include cold setup work; compare repeated warm runs too.
 
@@ -356,3 +383,17 @@ from other assets.
 
 Development notes, the source map and checks are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Secondary-stat timing is in Mode in both Options menus: **Switch to secondary
+stats at** selects the percentage of the existing display duration spent on
+primary stats. It defaults to 50%; changing it does not extend the popup.
+
+Background choices include Solid Colour (set colour and transparency through Background Hue), Coral (tiled by default), and Scratched Stone (fill by default).
+
+Hues are remembered per background, frame and portrait ring within each profile. New selections use their default hues; returning selections restore saved hues and background transparency. Reset Theme Hues in Colours restores the currently selected items without clearing other saved hues. Scratched Stone defaults to #B0B0B0. Fill preserves image proportions and crops the excess to cover the frame; Stretch resizes the complete image. Gnomeregan defaults to Stretch vertically and Fill horizontally.
+
+`/glu memory` prints a fresh GLU memory usage sample in KB/MB. It works without debug mode and only samples when requested.
+
+Memory usage includes temporary Lua allocations awaiting garbage collection as well as retained data. Preview and options pools also allocate on first use. To compare retained usage while diagnosing growth, close the popup, run `/run collectgarbage("collect")` manually, then `/glu memory`; GLU does not force collection automatically.
+
+Textured popup, controller options and first-time setup chrome share `ThemeRenderer.lua`. It preserves authored corner proportions (including Trellis), background Fill/Stretch/Tile, tint and opacity behavior. Theme declarations are cached by frame/background pair and copied before applying mutable settings.

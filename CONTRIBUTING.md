@@ -1,12 +1,13 @@
 # Working on GnomeLevelUp
 
-The current development version is 1.5; the last public release is 1.3.8. WoW Forever is the primary test client. Retail compatibility needs separate in-game testing.
+The current development version is 1.5.2; the last public release is 1.3.8. WoW Forever is the primary test client. Retail compatibility needs separate in-game testing.
 
 ## Code map
 
 - `Core.lua`: defaults, saved settings, themes and addon events.
 - `UI.lua`: level-up display and ability rows.
 - `TextureCompat.lua`: shared texture assignment, atlas lookup and controller glyph fallbacks.
+- `ThemeRenderer.lua`: shared frame geometry, independent corner sizes, theme painting and fill transforms for the popup and both menu variants.
 - `Options.lua`, `OptionsLayout.lua`: Blizzard settings panel and text layout.
 - `ControllerOptions.lua`: controller menu, navigation and preview.
 - `Locals.lua`: UI translations and locale selection.
@@ -61,7 +62,8 @@ Package source archives with the `GnomeLevelUp/` folder at the root. Exclude Pyt
 Call required addon functions directly once their TOC dependencies have loaded.
 Retain checks for client APIs, optional libraries and the controller module, which
 returns early on Retail. Keep texture fallback rules in `TextureCompat.lua`;
-callers own sizing, visibility, text fallback and theme transforms.
+share textured-frame sizing and transforms through `ThemeRenderer.lua`. Callers
+own frame lifetime, Modern backgrounds, visibility and text fallback.
 
 The 19 October 2026 refactor log and rollback files are under `Tools/`.
 

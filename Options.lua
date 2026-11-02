@@ -183,6 +183,14 @@ local function BuildOptions()
 
     RefreshSeasonalWatermark()
 
+    local chrome = CreateFrame("Frame", nil, panel)
+    chrome:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -8)
+    chrome:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -28, -8)
+    -- Fixed navigation must win mouse hit testing over the scroll child.
+    chrome:SetFrameLevel(panel:GetFrameLevel() + 30)
+    chrome:EnableMouse(true)
+    panel.gluOptionsChrome = chrome
+
     local body, optionsScroll
     do
         local ok, scroll = pcall(CreateFrame, "ScrollFrame", "GnomeLevelUpOptionsScroll", panel, "UIPanelScrollFrameTemplate")
@@ -198,10 +206,10 @@ local function BuildOptions()
         end
     end
 
-    -- Create the launcher under its final scroll child. Reparenting it later can
+    -- Create the launcher under its final fixed header. Reparenting it later can
     -- leave it outside Forever's controller focus group.
     controllerOptionsButton = CreateFrame(
-        "Button", "GnomeLevelUpControllerOptionsLauncher", body, "UIPanelButtonTemplate")
+        "Button", "GnomeLevelUpControllerOptionsLauncher", chrome, "UIPanelButtonTemplate")
     controllerOptionsButton:SetSize(240, 26)
     controllerOptionsButton:SetPoint("TOPRIGHT", body, "TOPRIGHT", -8, -8)
     controllerOptionsButton:SetText(ns.L("Open Controller Options"))
@@ -247,6 +255,8 @@ local function BuildOptions()
     -- The original row identifiers preserve setting order; measured cells own
     -- positioning, wrapping, collapse visibility and debug-only visibility.
     local optionLayout = ns.CreateOptionsLayout(body)
+    local optionTabs = ns.CreateOptionsTabs(panel, chrome, optionsScroll, optionLayout)
+    function ns.SelectOptionsTab(key) return optionTabs:Select(key) end
     local function IsForeverMode() return ns.GetCurrentFlavor() ~= "retail" end
     local trainerOnlyControls = {
         ["Check trainer lists for catalogue changes"] = true,
@@ -352,27 +362,40 @@ local function BuildOptions()
         return btn
     end
 
-    local function OpenColorPicker(color, onChange)
+    local function OpenColorPicker(color, onChange, alpha)
         local r, g, b = color[1], color[2], color[3]
         local revision = ns.colorPaletteRevision
-        local function apply(nr, ng, nb)
-            if ns.colorPaletteRevision == revision then onChange(nr, ng, nb) end
+        local function apply(nr, ng, nb, na)
+            if ns.colorPaletteRevision == revision then onChange(nr, ng, nb, na) end
         end
         local function swatchFunc()
             local nr, ng, nb = ColorPickerFrame:GetColorRGB()
-            apply(nr, ng, nb)
+            local na = alpha
+            if alpha ~= nil then
+                if ColorPickerFrame.GetColorAlpha then
+                    na = ColorPickerFrame:GetColorAlpha()
+                else
+                    local opacitySlider = rawget(_G, "OpacitySliderFrame")
+                    if opacitySlider and type(opacitySlider.GetValue) == "function" then
+                        na = 1 - opacitySlider:GetValue()
+                    end
+                end
+            end
+            apply(nr, ng, nb, na)
         end
         local function cancelFunc()
-            apply(r, g, b)
+            apply(r, g, b, alpha)
         end
         if ColorPickerFrame.SetupColorPickerAndShow then
             ColorPickerFrame:SetupColorPickerAndShow({
-                r = r, g = g, b = b, hasOpacity = false,
+                r = r, g = g, b = b, hasOpacity = alpha ~= nil, opacity = alpha,
+                opacityFunc = alpha ~= nil and swatchFunc or nil,
                 swatchFunc = swatchFunc, cancelFunc = cancelFunc,
             })
         else
-            ColorPickerFrame.hasOpacity = false
-            ColorPickerFrame.opacityFunc = nil
+            ColorPickerFrame.hasOpacity = alpha ~= nil
+            ColorPickerFrame.opacity = alpha ~= nil and (1 - alpha) or nil
+            ColorPickerFrame.opacityFunc = alpha ~= nil and swatchFunc or nil
             ColorPickerFrame.func = swatchFunc
             ColorPickerFrame.cancelFunc = cancelFunc
             ColorPickerFrame.previousValues = { r = r, g = g, b = b }
@@ -382,7 +405,7 @@ local function BuildOptions()
         end
     end
 
-    local function AddStepper(labelText, formatValue, getValue, adjust, debugOnly, debugRowY, debugRowHeight, leftOverride, controlXOverride, rowYOverride)
+    local function AddStepper(labelText, formatValue, getValue, adjust, debugOnly, debugRowY, debugRowHeight, leftOverride, controlXOverride, rowYOverride, isAvailable)
         local rowY = rowYOverride or y
         local left = leftOverride or LEFT
         local controlX = controlXOverride or CONTROL_X
@@ -393,12 +416,23 @@ local function BuildOptions()
         valueText:SetWidth(60)
         valueText:SetJustifyH("CENTER")
         TrackElement(valueText, controlX + 30, rowY - 5, debugOnly)
-        local function refresh() valueText:SetText(formatValue(getValue())); ReflowSections() end
-        local minus = AddButton("-", 24, controlX, rowY, function()
+        local minus, plus
+        local function refresh()
+            valueText:SetText(formatValue(getValue()))
+            if isAvailable then
+                local enabled = isAvailable()
+                minus:SetEnabled(enabled); plus:SetEnabled(enabled)
+                local shade = enabled and 1 or .45
+                label:SetTextColor(shade, shade, shade)
+                valueText:SetTextColor(shade, shade, shade)
+            end
+            ReflowSections()
+        end
+        minus = AddButton("-", 24, controlX, rowY, function()
             adjust(-1)
             refresh()
         end, debugOnly, trackedRowY, debugRowHeight)
-        local plus = AddButton("+", 24, controlX + 96, rowY, function()
+        plus = AddButton("+", 24, controlX + 96, rowY, function()
             adjust(1)
             refresh()
         end, debugOnly, trackedRowY, debugRowHeight)
@@ -413,7 +447,7 @@ local function BuildOptions()
         local setting = ns.OPTION_SETTINGS[key]
         return AddStepper(setting.label, setting.format, setting.get,
             function(direction) ns.AdjustNumericOption(key, direction) end,
-            nil, nil, nil, left, controlX, rowY)
+            nil, nil, nil, left, controlX, rowY, setting.isAvailable)
     end
 
     local dropdownCount = 0
@@ -543,15 +577,15 @@ local function BuildOptions()
         end
     end
 
-    local menuLogo = ns.CreateMenuLogo(body)
+    local menuLogo = ns.CreateMenuLogo(chrome)
     panel.gluMenuLogo = menuLogo
-    menuLogo:SetPoint("TOP", body, "TOP", 0, -8)
-    local version = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    menuLogo:SetPoint("TOP", chrome, "TOP", 0, -8)
+    local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5")))
-    local byline = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.2"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.2")))
+    local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
     y = y - 132
@@ -581,11 +615,7 @@ local function BuildOptions()
                 return "NONE"
             end,
             function(value)
-                ns.db.portraitRingChoice = value
-                local reference = ns.GetPortraitRingReference(value)
-                ns.db.portraitRingTexture = reference
-                ns.db.portraitRingEnabled = reference ~= nil
-                ns.RefreshPortraitRing()
+                ns.ApplyPortraitRingChoice(value)
             end, appearanceRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT)
     end
     y = appearanceRow - 36
@@ -607,7 +637,7 @@ local function BuildOptions()
     y = appearanceThemeRow - 36
 
     local appearanceFrameRow = y
-    local refreshBackgroundTexture, backgroundTextureDropdown = AddDropdown("Background texture", ns.BACKGROUND_FILL_CHOICES,
+    local refreshBackgroundTexture, backgroundTextureDropdown = AddDropdown("Background Fill Mode", ns.BACKGROUND_FILL_CHOICES,
         function()
             if ns.db.backgroundStyle == "fill" or ns.db.backgroundStyle == "tile"
                 or ns.db.backgroundStyle == "stretch" then return ns.db.backgroundStyle end
@@ -645,6 +675,7 @@ local function BuildOptions()
     end
 
     local function AddColorPicker(labelText, getColor, setColor, xOverride, rowYOverride, debugOnly)
+        local backgroundHue = labelText == "Background hue"
         local rowY = rowYOverride or y
         local left = xOverride or LEFT
         local label = AddLabel(labelText, rowY, left, debugOnly, rowY, 34)
@@ -663,12 +694,16 @@ local function BuildOptions()
             fill:SetColorTexture(color[1], color[2], color[3], 1)
         end
         swatch:SetScript("OnClick", function()
-            OpenColorPicker(getColor(), function(r, g, b)
+            OpenColorPicker(getColor(), function(r, g, b, alpha)
                 ns.EnsureDatabase()
+                if backgroundHue and alpha ~= nil then ns.db.backgroundHueOpacity = math.max(0, math.min(1, alpha)) end
                 setColor({ r, g, b })
+                if backgroundHue or labelText == "Frame hue" or labelText == "Portrait ring hue" then
+                    ns.RememberThemeHues()
+                end
                 fill:SetColorTexture(r, g, b, 1)
                 ns.ApplyBackgroundOpacity(ns.db and ns.db.bgOpacity or 0.70)
-            end)
+            end, backgroundHue and (ns.db.backgroundHueOpacity or 1) or nil)
         end)
         refreshers[#refreshers + 1] = refresh
         refresh()
@@ -734,6 +769,9 @@ local function BuildOptions()
                 ns.SetOptionColor("portraitBorder", color)
             end, LEFT + 270, y)
         y = y - 38
+
+        AddButton("Reset Theme Hues", 170, LEFT, y, function() ns.ResetThemeHues() end)
+        y = y - 34
 
         AddSmallSectionLabel("Text")
         local colorToggleY = y
@@ -929,7 +967,7 @@ local function BuildOptions()
         return a.y > b.y
     end)
     optionLayout:ArrangeGroups(appearanceCells, {
-        { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background texture", "Frame" } },
+        { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background Fill Mode", "Frame" } },
         { columns = 3, positions = { 1, 3 }, labels = { "Frame strata", "Font" } },
         { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Stat text size", "Heading text size", "Time to Level text size" } },
     }, appearanceRow)
@@ -1056,7 +1094,10 @@ local function BuildOptions()
     AddSettingCheckbox("rightClickClose", LEFT + 270, y)
     y = y - 32
 
-    AddSettingCheckbox("showSecondaryStats")
+    local secondaryRow = y
+    AddSettingCheckbox("showSecondaryStats", LEFT, secondaryRow)
+    AddNumericOption("secondaryStatStartPercent", LEFT + 270, CONTROL_X + 270, secondaryRow)
+    y = secondaryRow - 34
     AddSettingCheckbox("showLevelTime", LEFT, y)
     AddCheckbox("Don't show until combat ends",
         function() return ns.db.waitForCombatEnd end,
@@ -1613,13 +1654,7 @@ local function BuildOptions()
         AddButton("Reload UI", 150, LEFT, y, function() ReloadUI() end)
         y = y - 40
         function ns.ScrollToProfileOptions()
-            ns.db.collapsedSections.profile = nil
-            ns.RefreshOptionsPanel()
-            if optionsScroll then
-                local _, _, _, _, offset = profileSection.header:GetPoint(1)
-                local maximum = math.max(0, body:GetHeight() - optionsScroll:GetHeight())
-                optionsScroll:SetVerticalScroll(math.min(maximum, math.max(0, -(offset or 0))))
-            end
+            ns.SelectOptionsTab("profile")
         end
     end
 
@@ -1671,6 +1706,7 @@ local function BuildOptions()
     y = y - 36
 
     optionLayout.topPadding = function(width)
+        chrome:SetFrameLevel(panel:GetFrameLevel() + 30)
         local logoWidth = math.min(240, math.max(80, width - 24))
         local logoHeight = logoWidth / ns.MENU_LOGO_ASPECT
         menuLogo:SetSize(logoWidth, logoHeight)
@@ -1682,8 +1718,16 @@ local function BuildOptions()
         local launcherHeight = caption and ns.WrapOptionsText(caption, launcherWidth - 20) + 12 or 26
         controllerOptionsButton:SetHeight(math.max(26, launcherHeight))
         controllerOptionsButton:ClearAllPoints()
-        controllerOptionsButton:SetPoint("TOP", body, "TOP", 0, -headerBottom)
-        return headerBottom + (controllerOptionsButton:IsShown() and math.max(26, launcherHeight) + 12 or 0)
+        controllerOptionsButton:SetPoint("TOP", chrome, "TOP", 0, -headerBottom)
+        local tabTop = headerBottom + (controllerOptionsButton:IsShown() and math.max(26, launcherHeight) + 12 or 0)
+        local headerHeight = optionTabs:Layout(width, tabTop) + 4
+        chrome:SetHeight(headerHeight)
+        if optionsScroll then
+            optionsScroll:ClearAllPoints()
+            optionsScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -(headerHeight + 8))
+            optionsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 8)
+        end
+        return 8
     end
     optionLayout.onReflow = function()
         if optionsScroll then
@@ -1754,6 +1798,10 @@ local function BuildOptions()
         if controllerPollElapsed < 0.20 then return end
         controllerPollElapsed = 0
         RefreshControllerOptionsButton()
+        if lastControllerActive ~= panel.gluChromeController then
+            panel.gluChromeController = lastControllerActive
+            ReflowSections()
+        end
     end)
 
     panel.OnCommit = function() end
