@@ -44,203 +44,75 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## Setup and options
 
-Open settings with `/glu options`, the minimap button or the game's AddOns
-settings. Right-click the minimap button to preview a level-up. Middle-click replays the
-last real level-up recorded for this character and flavour, including its stats,
-abilities and timing. Previews and replays do not replace that record or change
-level-time history. The record survives UI reloads.
-`/glu firsttime` reopens first-time setup. Setup supports the mouse,
-keyboard and controller navigation; completing it saves your choices. If login
-or setup is blocked by combat/loading, it waits until the client permits it.
+Open `/glu options` or click the minimap button for settings. Right-click the
+button to preview a level-up; middle-click replays your last recorded level-up.
+Use `/glu firsttime` to reopen setup, or `/glu controlleroptions` for the
+controller menu.
 
-Fresh settings use Modern, horizontal layout, a player portrait, class colours,
-equal-width stats, Time to Level and right-click closing. Horizontal layout
-also enables Compact Layout. Abbreviated names, secondary stats, Retail stat
-shortening default to off. Relevant-stat filtering defaults to on in Retail;
-Forever is unaffected. Existing saved choices are preserved. Controller glyphs
-default to None without a detected controller, or Xbox with one; saved manual
-glyph choices remain intact.
+Settings are grouped into tabs, with hover descriptions for every option:
 
-Setup includes Language, Classic Mode, theme, orientation, portrait, timing,
-secondary stats, compact layout and closing/mouseover preferences. Forever adds
-pet training/cost options; Retail adds its stat filters. Every controller entry
-has hover help, reused by matching normal-menu controls. Portrait help includes
-the red 3D-memory warning.
-
-Appearance contains Popup Scale, Display Duration, font and independent Stat,
-Heading and Time to Level sizes (50–200%). Mode contains shared stat columns,
-abbreviations, secondary stats and client-specific filters. Animation contains
-Classic Mode and decorative effect switches. Language and profile management
-are in Profile; change Language there and reload the UI. Setup updates its
-language immediately. English is the fallback for unavailable translations.
-
-The main Options menu uses tabs: Appearance, Colours, Animation, Mode, Trainer
-Data (Abilities on Retail), Sound, Profile, Cache Status and Debug. Debug appears
-only while debug mode is enabled. The logo and tab strip stay visible while the
-selected page scrolls; tabs wrap in narrower windows and remember their scroll
-positions during the session. Every option has hover help, including colour,
-profile, texture and debug controls. Animation help explains each visible effect.
-
-Normal and controller Options build their controls only when opened. Setup and
-controller windows can be dragged. Modern menu backgrounds have a soft gradient;
-textured themes retain their artwork. Right-click closes these windows only
-when no option row is hovered. In the controller menu, Up/Down moves selection,
-Left/Right adjusts,
-Enter selects, Tab/Shift+Tab changes tabs, and Escape closes. Focused text fields
-retain their normal keyboard input. Normal Options includes Debug; the
-controller menu does not. Its Profile page includes Clear Trainer Cache and
-Reset All Options.
+- **Appearance and Colours:** themes, portraits, backgrounds, fonts, popup size
+  and duration. Backgrounds support Tile, Fill (preserves proportions and crops)
+  and Stretch. Hues are remembered for each background, frame and portrait ring;
+  **Reset Theme Hues** restores the selected items.
+- **Mode:** layout, stat formatting, secondary stats and client-specific options.
+- **Animation:** decorative effects and **Classic Mode**, which keeps basic
+  transitions while disabling decorative animations.
+- **Sound:** the level-up sound and supported volume controls.
+- **Profile:** saved settings and language selection.
 
 ## Stats, layouts and abilities
 
-Live primary rows show increased stats. Mana is hidden for classes that do not
-use it; Retail also hides fixed non-Mana resources. Retail omits Spirit and
-excludes automatic ability-rank upgrades. Its empty ability section is removed.
-Forever uses the bundled 1,414-entry class-trainer catalogue, optional weapon
-training, and separate Hunter/Warlock pet rules. Scanned data does not replace
-the bundled class list. Trainer scanning/reporting and pet/cost controls are
-hidden on Retail. The experimental next-ability preview has been removed.
+Choose horizontal or vertical layout. **Equal-width stat text** aligns values
+into columns, and **Abbreviate stat names** uses shorter labels. Enable
+**Show secondary stats** to replace the primary stats partway through the popup;
+its timing control adjusts the split without extending the display duration.
 
-**Relevant stats only** applies to Retail. It keeps Health, Mana when used,
-Stamina and the active specialization's primary stat. **Shorten stat totals**
-is also Retail-only: horizontal totals shorten from 10,000 and vertical totals
-from 100,000. Million-scale values can show `1M 360k`. Gain counters remain exact.
+Retail shows new abilities without automatic rank upgrades. **Relevant stats
+only** filters primary stats for your specialization, and **Shorten stat totals**
+shortens large totals while keeping gain counters exact. Mana is hidden for
+classes that do not use it.
 
-**Equal-width stat text** aligns whole groups—label, old total, arrow, new total
-and gain—into shared columns. It does not spread individual letters. With
-**Abbreviate stat names**, primary labels become `STR`, `STA`, `INT`, `AGI`,
-`SPI`, `HP`, `MP` in equal-width mode. Secondary abbreviations are `Crit`,
-`Mast`, `Haste`, `Versa`, with equal widths on or off. The full English critical
-label is **Crit. Strike**. Longer rows shrink to fit instead of crossing borders.
-
-**Show secondary stats** defaults off. The timing control sits beside it in the
-main options menu and is greyed out while disabled; its saved percentage is kept.
- After the initial entrance, primary rows
-begin their exit at the selected percentage of the display duration (50% by
-default), and secondary rows use the same fade/slide entrance. The portrait, abilities and timing retain
-their timeline. The taller page is reserved once, avoiding frame resizing.
-Short display durations compress the swap so the second page can appear.
-
-Retail secondary stats are Crit. Strike, Haste, Mastery and Versatility.
-Forever instead uses combined crit/hit, haste, expertise, attack/spell/healing
-power, armor, defense and avoidance, plus supported armor penetration and mana
-regeneration. Hunters can show ranged attack power. Unavailable/protected
-values are skipped. Percentages retain two decimals and can decrease.
-
-Horizontal mode top-aligns stats and abilities 8px below their matching-size
-headers. The ability viewport uses a 3×3 grid before scrolling. One ability is
-raised around the middle of its column; two or more start at the top. Sections
-with one to three abilities can grow icons by up to 50%, within existing space.
-They do not enlarge the popup. Vertical player portraits/rings are 1.25× their
-previous size, with the level label below the visible ring.
-
-Textured vertical layouts reserve 24px more bottom clearance. Textured
-horizontal max-level events add 8px below their existing content. Modern vertical
-uses a fixed 20px fade tail and lower line 8px below the content budget; it no
-longer extends downward by 12% of the frame height. Grimoire/cost viewports retain
-their own space. Portraits, rings and layout positions retain independent
-horizontal/vertical tuning where provided.
-
-**Show Hunter pet abilities** is enabled by default for Hunters on Forever.
-Training appears at its unlock level, with pre-level 10 records first shown at
-10. Warlock grimoires have their own section and active-pet filter. Learning
-costs are optional and use base catalogue prices before discounts. Horizontal
-layout hides weapon training while retaining the saved vertical preference.
+Forever includes trainer abilities, optional Hunter pet training, Warlock
+grimoires and learning costs. Its secondary stats follow Forever's rules;
+Retail shows Crit. Strike, Haste, Mastery and Versatility.
 
 ## Timing and celebrations
 
-**Show time played this level** controls both Time to Level and new-best
-celebrations. First records, slower levels and ties show only the ordinary time.
-A new best transitions the previous time from green to red as it fades out,
-slides the new time in, and shows **New Best Time!**. The extra row is reserved
-only for that transition. Records are per character/flavour, outside profiles;
-previews do not change them.
+**Show time played this level** displays Time to Level and celebrates new best
+level times. At max level, GLU shows total time to the cap only when it has
+recorded every level interval; otherwise it shows the normal level time.
+Previews and replays leave these records unchanged. `/glu resettimers` clears
+this character's timing history.
 
-At max level, **Time to max level** appears only if GLU recorded every interval
-from level 1 to the cap. Missing intervals fall back to normal time-to-level;
-WoW's total played time is not substituted. Retail uses the client-reported cap,
-Forever uses 60. `/glu resettimers` clears this character's GLU timing history.
+Milestone and max-level celebrations have separate toggles. Rapid or
+combat-delayed level gains combine into one popup. Right-click or use the X to
+close early; **Classic Mode** retains simple opening and closing transitions.
 
-Rapid or combat-delayed gains combine into one popup with `Level X - Y`, total
-stat increases and consolidated abilities from the gained range. Known combined
-time is labelled for the number of levels; missing intervals are never invented.
-Crossing a milestone celebrates once. A normal preview on a capped character
-remains normal; `/glu maxlevel` explicitly previews the finale.
+## Portraits and sound
 
-Milestone Animations add accents at ten-level milestones. Max Level Celebration
-adds varied class-coloured curved fireworks, denser/faster background motes,
-post-starburst sparks and randomly placed electrical ring spikes. Only the
-background mote layer receives the max-level opacity boost. Portrait shine
-repeats on milestone/max-level popups. The max-level background fades from the
-class colour to black. Optional milestone screenshots run after a real entrance;
-previews do not take them.
+Choose a class icon, player portrait, animated 3D portrait or no portrait.
+3D portraits may use more memory. New or replaced texture files may require a
+client restart.
 
-**Classic Mode** disables decorative animations, including milestone/max-level
-flair, pulse/starburst and ring effects, while preserving staged text fades and
-slides, Modern opening/closing and textured fades. Saved effect choices return
-when Classic Mode is disabled. 3D portrait idle animation still runs in Classic
-Mode; disabling Background Animations pauses it.
-
-All closing stages start together. Automatic closing is slower than the earlier
-release; right-click/X remains fast. Closing immediately becomes click-through,
-so hovering cannot revive a nearly hidden popup. **Suspend Preview** pauses the
-preview timeout only while Options is visibly open. It does not pause previews
-launched outside Options or ordinary level-ups.
-
-## Portraits and artwork
-
-Portrait choices include class icon, player portrait, live player 3D portrait
-and None. None removes its portrait effects and header space. Selecting Modern
-clears the decorative ring selection. Frame/background artwork choices are for
-textured themes; their controls are unavailable in Modern.
-
-The 3D portrait is created lazily. Its circular depth masking is adapted from
-Animated Default Portraits by dvd, without an additional addon dependency.
-Debug fields tune rotation, depth, position, scale, mask and viewport sizes.
-Race/sex presets are separate from per-character calibration overrides; unknown
-races use fallback settings. Gnome female defaults are rotation -6, depth -0.04,
-horizontal 0.12 and vertical -0.07. Reset All Options clears this character's model
-overrides. The calibration worksheet remains in development Tools.
-
-Custom textures must be compatible with the WoW client. New/replaced texture
-files may require restarting the client, even when Lua changes need only
-`/reload`. Reset Appearance or reselect the theme if artwork is missing.
-
-## Sound
-
-**Level Up (default)** leaves Blizzard's normal level-up sound unchanged. GLU
-plays no replacement ding and disables its play/mute checkboxes while this
-selection is active. Their saved choices return with a replacement sound.
-
-Animation sounds default to silent. Debug retains per-animation sound-ID fields;
-0 disables a cue. Closing/replacing popups stops GLU animation sounds, and
-Classic Mode suppresses them. The experimental ticker clicks were removed.
-
-Sound volume applies where the client supports per-sound volume, including
-supported Retail sound-kit choices. Default audio, files/custom OGG and Forever
-playback use game volume; the disabled slider says **Uses game volume**. GLU
-does not change global volume settings. SharedMedia sounds/fonts registered by
-other addons are available when supported.
-
-For a custom sound, put an `.ogg` file in `GnomeLevelUp/Sounds/`, choose Custom
-Sound and enter its addon-relative path, such as
-`Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg`. You can also add a named
-entry to `Sounds/SoundList.lua` using an existing entry as a template.
+**Level Up (default)** leaves Blizzard's level-up sound unchanged and adds no
+replacement ding. Other choices include bundled and supported SharedMedia sounds.
+For a custom sound, place an `.ogg` file in `GnomeLevelUp/Sounds/`, select
+**Custom Sound** and enter its path, such as
+`Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg`. Volume uses game settings
+when per-sound control is unavailable.
 
 ## Profiles and languages
 
-Profiles support selection, creation, rename/delete and import/export. Changes
-save automatically. Save per Character keeps that character's profile selection
-separate from the account selection; turning it off returns to the account
-profile. Imported/reset settings do not overwrite trainer reports, learned
-history or level-time records. Reset Appearance affects appearance settings;
-Reset All Options restores the full options set and character model calibration.
+Profiles save automatically and support creation, selection, rename/delete and
+import/export. **Save per Character** gives each character its own profile
+selection. Appearance resets and profile changes preserve level-time history
+and trainer reports.
 
-Supported languages: English, French, Spanish (Spain/Latin America), German,
-Italian, Brazilian Portuguese, Russian, Korean, Simplified/Traditional Chinese.
-Auto Detect follows the client. Spell names and native game tooltips remain in
-the client language; custom fonts need glyphs for the selected language. See
-[LOCALIZATION.md](LOCALIZATION.md) for development translation notes.
+Choose a language in Profile, then reload the UI. GLU supports English, French,
+Spanish (Spain/Latin America), German, Italian, Brazilian Portuguese, Russian,
+Korean and Simplified/Traditional Chinese. **Auto Detect** follows the client;
+spell names and native tooltips remain in the client's language.
 
 ## Trainer reports
 
@@ -383,17 +255,3 @@ from other assets.
 
 Development notes, the source map and checks are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Secondary-stat timing is in Mode in both Options menus: **Switch to secondary
-stats at** selects the percentage of the existing display duration spent on
-primary stats. It defaults to 50%; changing it does not extend the popup.
-
-Background choices include Solid Colour (set colour and transparency through Background Hue), Coral (tiled by default), and Scratched Stone (fill by default).
-
-Hues are remembered per background, frame and portrait ring within each profile. New selections use their default hues; returning selections restore saved hues and background transparency. Reset Theme Hues in Colours restores the currently selected items without clearing other saved hues. Scratched Stone defaults to #B0B0B0. Fill preserves image proportions and crops the excess to cover the frame; Stretch resizes the complete image. Gnomeregan defaults to Stretch vertically and Fill horizontally.
-
-`/glu memory` prints a fresh GLU memory usage sample in KB/MB. It works without debug mode and only samples when requested.
-
-Memory usage includes temporary Lua allocations awaiting garbage collection as well as retained data. Preview and options pools also allocate on first use. To compare retained usage while diagnosing growth, close the popup, run `/run collectgarbage("collect")` manually, then `/glu memory`; GLU does not force collection automatically.
-
-Textured popup, controller options and first-time setup chrome share `ThemeRenderer.lua`. It preserves authored corner proportions (including Trellis), background Fill/Stretch/Tile, tint and opacity behavior. Theme declarations are cached by frame/background pair and copied before applying mutable settings.
