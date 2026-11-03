@@ -346,6 +346,7 @@ local ranges = {
 local anchors = { CENTER = true, TOP = true, BOTTOM = true, LEFT = true, RIGHT = true,
     TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
 local enums = {
+    milestoneInterval = { [5] = true, [10] = true, [20] = true },
     frameStrata = { BACKGROUND = true, LOW = true, MEDIUM = true, HIGH = true,
         DIALOG = true, FULLSCREEN = true, FULLSCREEN_DIALOG = true, TOOLTIP = true },
     controllerMenuFrameStrata = { AUTO = true, BACKGROUND = true, LOW = true, MEDIUM = true,

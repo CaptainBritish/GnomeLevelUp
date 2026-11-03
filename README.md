@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.5.2**
+**Development version: 1.5.4**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -82,10 +82,14 @@ Retail shows Crit. Strike, Haste, Mastery and Versatility.
 **Show time played this level** displays Time to Level and celebrates new best
 level times. At max level, GLU shows total time to the cap only when it has
 recorded every level interval; otherwise it shows the normal level time.
-Previews and replays leave these records unchanged. `/glu resettimers` clears
-this character's timing history.
+Previews and replays leave these records unchanged. The **Level History** tab
+shows recorded times and personal bests across your characters, with an optional
+account-wide comparison for new level times. Characters with recorded times appear after you
+log into them; Retail and Forever records stay separate. Reset this character's
+times there or use `/glu resettimers`.
 
-Milestone and max-level celebrations have separate toggles. Rapid or
+Milestone celebrations can run every 5, 10 or 20 levels. Max level has its own
+toggle. Horizontal and vertical layouts remember separate popup positions. Rapid or
 combat-delayed level gains combine into one popup. Right-click or use the X to
 close early; **Classic Mode** retains simple opening and closing transitions.
 
@@ -96,7 +100,8 @@ Choose a class icon, player portrait, animated 3D portrait or no portrait.
 client restart.
 
 **Level Up (default)** leaves Blizzard's level-up sound unchanged and adds no
-replacement ding. Other choices include bundled and supported SharedMedia sounds.
+replacement ding. `/glu test` also plays Blizzard's ding when it is unmuted.
+Other choices include bundled and supported SharedMedia sounds.
 For a custom sound, place an `.ogg` file in `GnomeLevelUp/Sounds/`, select
 **Custom Sound** and enter its path, such as
 `Interface/AddOns/GnomeLevelUp/Sounds/yourfile.ogg`. Volume uses game settings
@@ -173,7 +178,7 @@ settings changed by commands are saved as usual.
 | --- | --- | --- |
 | `/glu debug [on\|off]` | Enable/disable debug controls and commands; no argument toggles the setting; off by default | No |
 | `/glu test [1-30]` | Preview the normal level-up screen with the chosen ability count; default three | No |
-| `/glu milestone [level] [1-30]` | Preview a milestone: level first (multiple of 10 from 10–1000), ability count second (default three); no arguments uses the current/next milestone | No |
+| `/glu milestone [level] [1-30]` | Preview a milestone: level first (a multiple of the selected milestone interval, up to 1000), ability count second (default three); no arguments uses the current/next milestone | No |
 | `/glu maxlevel [1-30]` | Preview the max-level celebration and recorded time-to-cap (normal level time if history is incomplete), with the chosen ability count; default three | Yes |
 | `/glu testlevels <from> <to> [1-30]` | Preview a combined gain of at least two levels (for example `20 23`), optionally choosing the ability count; leaves real histories untouched | Yes |
 | `/glu debugskills` | Preview an expanded skill list; Forever includes pet-training examples and Retail shows new abilities | No |

@@ -2,12 +2,25 @@ local ADDON_NAME, ns = ...
 
 -- Tabs filter the existing measured cells; controls and their saved values are
 -- never rebuilt when switching pages. The strip wraps for narrow/localized UI.
+local function CommitFocusedInputs(layout)
+    for _, row in pairs(layout.rows) do
+        for _, cell in ipairs(row) do
+            if not cell.skip then
+                for _, widget in ipairs(cell.widgets) do
+                    if widget.HasFocus and widget:HasFocus() and widget.ClearFocus then widget:ClearFocus() end
+                end
+            end
+        end
+    end
+end
+
 function ns.CreateOptionsTabs(panel, chrome, scroll, layout)
     local tabs = { selected = "appearance", scrollPositions = {}, buttons = {} }
     local definitions = {
         {"appearance", "Appearance"}, {"colors", "Colors"}, {"animation", "Animation"},
         {"mode", "Mode"}, {"trainer_data", "Trainer Data"}, {"sound", "Sound"},
         {"profile", "Profile"}, {"cache_status", "Cache Status"}, {"debug", "Debug"},
+        {"level_history", "Level History"},
     }
     panel.gluOptionsTabs = tabs
     layout.filterCell = function(cell)
@@ -23,16 +36,13 @@ function ns.CreateOptionsTabs(panel, chrome, scroll, layout)
         local changed = self.selected ~= key
         if changed then
             if scroll then self.scrollPositions[self.selected] = scroll:GetVerticalScroll() end
-            -- Hidden edit fields should commit and relinquish keyboard focus.
-            for _, row in pairs(layout.rows) do for _, cell in ipairs(row) do
-                if not cell.skip then for _, widget in ipairs(cell.widgets) do
-                    if widget.HasFocus and widget:HasFocus() and widget.ClearFocus then widget:ClearFocus() end
-                end end
-            end end
+            -- Commit text edits before their controls become hidden.
+            CommitFocusedInputs(layout)
             if GameTooltip then GameTooltip:Hide() end
             if type(CloseDropDownMenus) == "function" then CloseDropDownMenus() end
             self.selected = key
         end
+        if key == "level_history" and ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
         layout:Reflow()
         if scroll and changed then
             local maximum = math.max(0, layout.parent:GetHeight() - scroll:GetHeight())
@@ -81,7 +91,8 @@ function ns.CreateOptionsTabs(panel, chrome, scroll, layout)
                 local button = visible[first + column]
                 if button then
                     button:SetSize(cellWidth, height);button:ClearAllPoints()
-                    button:SetPoint("TOPLEFT", chrome, "TOPLEFT", 16 + column * (cellWidth + 6), -cursor)
+                    local slot = button.gluTabKey == "level_history" and columns - 1 or column
+                    button:SetPoint("TOPLEFT", chrome, "TOPLEFT", 16 + slot * (cellWidth + 6), -cursor)
                     button:GetFontString():SetTextColor(button.gluTabKey == self.selected and 1 or .8,
                         button.gluTabKey == self.selected and .82 or .8, button.gluTabKey == self.selected and .2 or .8)
                     button.gluSelectionLine:SetShown(button.gluTabKey == self.selected)

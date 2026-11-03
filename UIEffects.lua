@@ -11,7 +11,7 @@ function ns.CreatePopupDecorationUpdater(context)
     return function()
         local entranceTimeline, effectAge, portraitStage, starburstStartedAt, fadeFinished = context.GetState()
         local db, plan = ns.db or {}, entranceTimeline
-        local enabled = frame:IsShown() and not db.reducedMotion and db.backgroundAnimations ~= false
+        local enabled = frame:IsShown() and ns.DecorativeAnimationsEnabled()
         if not enabled or not plan then
             render.HideTrialEffects();render.TintTrialImpact(0)
             return false

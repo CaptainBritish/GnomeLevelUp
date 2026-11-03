@@ -1,6 +1,5 @@
 local ADDON_NAME, ns = ...
 
--- Native mutation helpers shared by layout and effects.
 function ns.InstallPopupRenderHelpers(render)
     function render.Alpha(region, alpha)
         if region:GetAlpha() ~= alpha then region:SetAlpha(alpha) end
@@ -14,8 +13,8 @@ function ns.InstallPopupRenderHelpers(render)
         if region:GetWidth() ~= width or region:GetHeight() ~= height then region:SetSize(width, height) end
     end
 
-    -- Animated particles keep one anchor. Rebuild it only when the target changes;
-    -- positions still update each frame, without clearing the native anchor first.
+    -- ClearAllPoints is expensive in particle loops; change anchors only when
+    -- the target changes, and update offsets on subsequent frames.
     function render.ParticlePoint(texture, relative, relativePoint, x, y)
         if texture.gluPointTarget ~= relative or texture.gluPointName ~= relativePoint then
             texture:ClearAllPoints()

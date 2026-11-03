@@ -1,6 +1,5 @@
 local ADDON_NAME, ns = ...
 
--- Keep the panel readable at different animation speeds and resolutions.
 local BASE_BG_FADE_DURATION = 0.25
 local BASE_CONTENT_FADE_DURATION = 0.30
 local BASE_STAT_STAGGER_BASE = 0.30
@@ -163,7 +162,7 @@ local function PortraitColumnWidth()
 end
 
 local function HorizontalColumnCount()
-    if ns.GetCurrentFlavor() == "retail" and content and #(content.currentTrainerAbilities or {}) == 0 then return 1 end
+    if content and not ns.AbilitySectionVisible(content.currentTrainerAbilities) then return 1 end
     return content and #(content.currentWarlockPetAbilities or {}) > 0 and 3 or 2
 end
 
@@ -475,7 +474,19 @@ function bg.HideModernBackgroundFlash()
     bg.modern:SetAlpha(1)
 end
 
-function bg.ShowModernBackgroundFlash(color, hue, strength, opacity, coverage)
+local function PaintModernFlash(texture, direction, startR, startG, startB, endR, endG, endB, opacity)
+    texture:SetVertexColor(1, 1, 1, 1)
+    if texture.SetGradient and type(CreateColor) == "function" then
+        texture:SetGradient(direction, CreateColor(startR, startG, startB, opacity), CreateColor(endR, endG, endB, opacity))
+    else
+        -- Forever retains the gradient API removed from current Retail definitions.
+        ---@cast texture { SetGradientAlpha: fun(self: Texture, orientation: string, ...: number) }
+        texture.SetGradientAlpha(texture, direction, startR, startG, startB, opacity, endR, endG, endB, opacity)
+    end
+end
+
+function bg.ShowModernBackgroundFlash(color, hue, strength, opacity, coverage, fromTop)
+    if fromTop then coverage = .30 end
     if not bg.modernFlashLeft then
         for _, side in ipairs({"Left", "Right"}) do
             local texture = bg:CreateTexture(nil, "BACKGROUND", nil, -8)
@@ -485,26 +496,34 @@ function bg.ShowModernBackgroundFlash(color, hue, strength, opacity, coverage)
         end
     end
     local left, right = bg.modernFlashLeft, bg.modernFlashRight
-    local width = bg.modern:GetWidth()
-    left:SetTexCoord(0, coverage, 0, 1)
-    right:SetTexCoord(coverage, 1, 0, 1)
     left:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", 0, 0)
-    left:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", -width * (1 - coverage), 0)
-    right:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", width * coverage, 0)
+    if fromTop then
+        local height = bg.modern:GetHeight()
+        left:SetTexCoord(0, 1, 0, coverage)
+        right:SetTexCoord(0, 1, coverage, 1)
+        left:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", 0, height * (1 - coverage))
+        right:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", 0, -height * coverage)
+    else
+        local width = bg.modern:GetWidth()
+        left:SetTexCoord(0, coverage, 0, 1)
+        right:SetTexCoord(coverage, 1, 0, 1)
+        left:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", -width * (1 - coverage), 0)
+        right:SetPoint("TOPLEFT", bg.modern, "TOPLEFT", width * coverage, 0)
+    end
     right:SetPoint("BOTTOMRIGHT", bg.modern, "BOTTOMRIGHT", 0, 0)
     local r, g, b = hue[1] + (color[1] - hue[1]) * strength,
         hue[2] + (color[2] - hue[2]) * strength, hue[3] + (color[3] - hue[3]) * strength
-    left:SetVertexColor(1, 1, 1, 1)
-    if left.SetGradient and type(CreateColor) == "function" then
-        left:SetGradient("HORIZONTAL", CreateColor(r, g, b, opacity), CreateColor(hue[1], hue[2], hue[3], opacity))
-    else
-        -- Forever retains the gradient API removed from current Retail definitions.
-        ---@cast left { SetGradientAlpha: fun(self: Texture, orientation: string, ...: number) }
-        left.SetGradientAlpha(bg.modernFlashLeft, "HORIZONTAL", r, g, b, opacity, hue[1], hue[2], hue[3], opacity)
-    end
-    right:SetVertexColor(hue[1], hue[2], hue[3], opacity)
-    -- Replacing both halves keeps the veil's original opacity and mask. The
-    -- gradient covers the celebration's chosen width; the remainder retains its hue.
+    local startR, startG, startB, endR, endG, endB = r, g, b, hue[1], hue[2], hue[3]
+    -- Vertical gradients run from bottom to top, so the class colour is last.
+    if fromTop then startR, startG, startB, endR, endG, endB = hue[1], hue[2], hue[3], r, g, b end
+    local direction = fromTop and "VERTICAL" or "HORIZONTAL"
+    local gradient, solid = fromTop and right or left, fromTop and left or right
+    PaintModernFlash(gradient, direction, startR, startG, startB, endR, endG, endB, opacity)
+    -- Reset the pooled region's gradient too when its role changes on rotation.
+    if fromTop then PaintModernFlash(solid, direction, r, g, b, r, g, b, opacity)
+    else PaintModernFlash(solid, direction, hue[1], hue[2], hue[3], hue[1], hue[2], hue[3], opacity) end
+    -- Vertical max-level flashes hold their colour over the top 30%, then fade
+    -- to the background hue at the bottom. Horizontal flashes keep their split.
     bg.modern:SetAlpha(0)
     bg.modernFlashLeft:Show()
     right:Show()
@@ -1330,9 +1349,17 @@ function render.FormatPaceTime(seconds)
     return ns.L("%ds", remaining)
 end
 
+local function TrainerCostsVisible()
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview then return content.screenshotPreview.costs == true end
+    --@end-do-not-package@
+    return ns.TrainerCostsEnabled()
+end
+
 local function AbilityCellHeight(iconSize)
     iconSize = iconSize or ABILITY_ICON_SIZE
-    if ns.db and ns.db.showTrainerCosts then
+    if TrainerCostsVisible() then
         if IsHorizontalLayout() then return iconSize + ABILITY_COST_GAP + ABILITY_COST_HEIGHT end
         return iconSize + ABILITY_COST_GAP + ABILITY_COST_HEIGHT + ABILITY_COST_TOP_PADDING
     end
@@ -2041,7 +2068,8 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         icon.newAbilityGlow:SetSize(iconSize * 1.85, iconSize * 1.85)
         cellWidth = math.max(cellWidth, iconSize)
         rowIconSize = math.max(rowIconSize, iconSize)
-        local formattedCost = ns.GetCurrentFlavor() ~= "retail" and ns.db and ns.db.showTrainerCosts and FormatTrainerCost(spell.cost)
+        ---@type string|boolean|nil
+        local formattedCost = TrainerCostsVisible() and FormatTrainerCost(spell.cost)
         if formattedCost ~= icon.formattedCost then
             icon.costText:SetText(formattedCost or "")
             icon.formattedCost = formattedCost
@@ -2262,7 +2290,6 @@ function render.FitSparseAbilityIcons(viewport, pool)
     Measure(math.max(.1, math.floor(low * 100) / 100), true)
 end
 
--- Fill the main ability row with the current unlearned skills.
 local function UpdateTrainerAbilityIcons(trainerAbilities, skipAnimation)
     content.currentTrainerAbilities = trainerAbilities or {}
     UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, content.noAbilitiesText, trainerAbilities, true, skipAnimation)
@@ -2273,7 +2300,12 @@ local function UpdateTrainerAbilityIcons(trainerAbilities, skipAnimation)
 end
 
 local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
-    if ns.GetCurrentFlavor() == "retail" then petAbilities = {} end
+    local hideRetailPets = not ns.SupportsTrainerData()
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview and content.screenshotPreview.grimoires then hideRetailPets = false end
+    --@end-do-not-package@
+    if hideRetailPets then petAbilities = {} end
     content.currentWarlockPetAbilities = petAbilities or {}
     local hasAbilities = type(petAbilities) == "table" and #petAbilities > 0
     if not hasAbilities then
@@ -2289,9 +2321,18 @@ local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
 end
 
 local function UpdateWeaponSkillText(unlearnedWeaponSkills)
-    if ns.GetCurrentFlavor() == "retail" then unlearnedWeaponSkills = {} end
+    local hideRetailWeapons = not ns.SupportsTrainerData()
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview and content.screenshotPreview.weapons then hideRetailWeapons = false end
+    --@end-do-not-package@
+    if hideRetailWeapons then unlearnedWeaponSkills = {} end
     content.currentWeaponSkills = unlearnedWeaponSkills or {}
-    local enabled = ns.db and ns.db.showWeaponSkills ~= false and not IsHorizontalLayout()
+    local enabled = ns.WeaponTrainingAvailable() and ns.db.showWeaponSkills ~= false
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview and content.screenshotPreview.weapons then enabled = true end
+    --@end-do-not-package@
     if not enabled or type(unlearnedWeaponSkills) ~= "table" or #unlearnedWeaponSkills == 0 then
         ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
         ApplyToTextLayers(content.weaponSkillsText, "SetText", "")
@@ -2832,8 +2873,8 @@ for i = 1, #ns.PARTICLE_SETTINGS do render.particleSettings[i] = {} end
 
 function render.RefreshParticleSettings()
     local db = ns.db or {}
-    local milestone = content.isMilestone and db.milestoneAnimations ~= false and not db.reducedMotion and db.backgroundAnimations ~= false
-    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false and not db.reducedMotion and db.backgroundAnimations ~= false
+    local milestone = content.isMilestone and db.milestoneAnimations ~= false and ns.DecorativeAnimationsEnabled()
+    local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false and ns.DecorativeAnimationsEnabled()
     render.backgroundMoteSpeed = maxLevel and 2 or 1
     render.milestoneScale = milestone and 1.25 or 1
     render.milestonePortraitScale = milestone and 1.10 or 1
@@ -3239,7 +3280,7 @@ end
 
 function render.RefreshMilestoneAccents()
     local db = ns.db or {}
-    if not content.isMilestone or db.milestoneAnimations == false or db.reducedMotion or db.backgroundAnimations == false then
+    if not content.isMilestone or db.milestoneAnimations == false or not ns.DecorativeAnimationsEnabled() then
         render.HideMilestoneAccents()
         return
     end
@@ -3283,7 +3324,7 @@ end
 
 function render.UpdateMilestoneAccents()
     local db, plan, accents = ns.db or {}, entranceTimeline, content.milestoneAccents
-    if not content.isMilestone or db.milestoneAnimations == false or db.reducedMotion or db.backgroundAnimations == false
+    if not content.isMilestone or db.milestoneAnimations == false or not ns.DecorativeAnimationsEnabled()
         or not plan or not accents or not frame:IsShown() then
         render.HideMilestoneAccents()
         return false
@@ -3390,7 +3431,7 @@ end
 function render.PortraitGlintFinish()
     local db = ns.db or {}
     if not entranceTimeline or not db.portraitRingGlint or db.portraitMode == "none"
-        or db.reducedMotion or db.backgroundAnimations == false then return 0 end
+        or not ns.DecorativeAnimationsEnabled() then return 0 end
     return entranceTimeline.portrait.finish + (.08 + render.PortraitGlintDuration() * 1.08) / Speed()
 end
 
@@ -3750,7 +3791,7 @@ end
 -- Optional cues follow visible stages and share the existing effect driver.
 function render.UpdateAnimationSounds()
     local db, plan = ns.db or {}, entranceTimeline
-    if not render.hasOptionalSounds or not plan or not frame:IsShown() or db.reducedMotion or db.backgroundAnimations == false then return end
+    if not render.hasOptionalSounds or not plan or not frame:IsShown() or not ns.DecorativeAnimationsEnabled() then return end
     local seen = render.animationCueSeen
     if not seen then return end
     local function Once(cue, visible)
@@ -3845,7 +3886,15 @@ function render.BeginClosing(multiplier)
     end)
 end
 
-local previewActive = false
+-- Only this module changes preview lifetime; menus request suspension through
+-- IsPreviewSuspensionRequested rather than changing the timer or page state.
+local previewState = { active = false, suspended = false }
+local function ResetPreviewState(active)
+    previewState.active = active == true
+    previewState.suspended = false
+    previewState.remainingTime = nil
+    previewState.deadline = nil
+end
 
 function render.StylePaceRecord()
     local record = content.levelTimeRecord
@@ -3972,7 +4021,7 @@ function render.UpdateLevelTime()
             return
         end
     end
-    local compare = not maxLevel and (ns.db.showLevelTime or content.pacePreview) and (not previewActive or content.pacePreview)
+    local compare = not maxLevel and (ns.db.showLevelTime or content.pacePreview) and (not previewState.active or content.pacePreview)
         and seconds and previous and seconds >= 1 and previous >= 1
     local faster = compare and seconds < previous
     local visible = seconds and (ns.db.showLevelTime or content.pacePreview)
@@ -4018,7 +4067,7 @@ end
 
 function render.ResetMaxBackgroundTint()
     if not render.maxBackgroundTinted then return end
-    render.maxBackgroundTinted, render.maxBackgroundProgress, render.maxBackgroundFlash = nil, nil, nil
+    render.maxBackgroundTinted, render.maxBackgroundFlash = nil, nil
     ns.ApplyBackgroundAppearance()
 end
 
@@ -4028,7 +4077,7 @@ function render.UpdateMaxBackgroundTint(force)
     local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
     local milestone = not content.isMaxLevel and content.isMilestone and db.milestoneAnimations ~= false
     if db.backgroundMode ~= "MODERN" or not (maxLevel or milestone)
-        or db.backgroundAnimations == false or db.reducedMotion or not frame:IsShown() then
+        or not ns.DecorativeAnimationsEnabled() or not frame:IsShown() then
         render.ResetMaxBackgroundTint()
         return false
     end
@@ -4054,7 +4103,7 @@ function render.UpdateMaxBackgroundTint(force)
     if force or render.maxBackgroundFlash ~= strength then
         local _, class = UnitClass("player")
         bg.ShowModernBackgroundFlash(ns.CLASS_COLORS[class] or WHITE_COLOR, db.backgroundColor or BLACK_COLOR,
-            strength, bg.appliedOpacity or db.bgOpacity or .8, maxLevel and .6 or .4)
+            strength, bg.appliedOpacity or db.bgOpacity or .8, maxLevel and .6 or .4, maxLevel and not IsHorizontalLayout())
         render.maxBackgroundTinted, render.maxBackgroundFlash = true, strength
     end
     return true
@@ -4076,14 +4125,14 @@ UpdateVisualEffects = function()
     local sectionPerf = ns.PerfStart("section_entrance_frame", effectAge)
     local active = UpdateSectionEntrance(effectAge, moving)
     ns.PerfEnd(sectionPerf)
-    if render.statPages and (not render.statPages.paused or render.statPages.phase ~= "waiting") then active = true end
+    if render.statPages then active = true end
     if render.UpdatePaceTransition(effectAge, moving) then active = true end
     if render.reducedFade then
         local t = math.max(0, math.min(1, effectAge / render.reducedFade))
         render.Alpha(frame, 1 - (1 - t) ^ 2)
         if t < 1 then active = true else render.reducedFade = nil end
     end
-    local decorative = db.backgroundAnimations ~= false and not db.reducedMotion
+    local decorative = ns.DecorativeAnimationsEnabled()
     local portraitPerf = ns.PerfStart("portrait_effects_frame", effectAge)
     local portraitEnabled = decorative and not db.reducedMotion and db.portraitAnimation and db.portraitMode ~= "none" and frame:IsShown()
     -- Keep the portrait hidden until setup and its entrance delay are complete.
@@ -4218,7 +4267,7 @@ UpdateVisualEffects = function()
         if effectAge >= render.screenshotAt then
             render.screenshotAt = nil
             -- Capture real milestones once, after every entrance has settled.
-            if db.screenshotMilestones and content.isMilestone and not previewActive
+            if db.screenshotMilestones and content.isMilestone and not previewState.active
                 and frame:IsShown() and type(Screenshot) == "function" then
                 Screenshot()
             end
@@ -4260,7 +4309,7 @@ function ns.RefreshVisualEffects()
     RefreshAbilityEffectSchedule()
     -- Keep disabled effects empty until they are actually used. Once created,
     -- their textures stay pooled for later popups and live settings changes.
-    if (frame:IsShown() or portraitPreparing) and not db.reducedMotion and db.backgroundAnimations ~= false then
+    if (frame:IsShown() or portraitPreparing) and ns.DecorativeAnimationsEnabled() then
         local portraitMotes = db.portraitSparks and db.portraitAnimation and IsPlayerPortrait()
         for i, pool in ipairs(render.particlePools) do
             if (i < 3 and portraitMotes) or (i == 3 and db.backgroundEmbers) then
@@ -4317,7 +4366,6 @@ function ns.RefreshVisualEffects()
 end
 
 local function StartVisualEffects()
-    render.maxBackgroundProgress = nil
     ns.StopAnimationSounds()
     render.animationCueSeen, render.animationCueVisible = {}, {}
     render.RefreshAnimationSoundSettings()
@@ -4388,6 +4436,10 @@ function render.ReleasePopupData()
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     content.currentStatChanges = nil
     content.replayRecord = nil
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    content.screenshotPreview = nil
+    --@end-do-not-package@
     content.levelRangeStart, content.currentReachedLevel = nil, nil
     content.currentTrainerAbilities = {}
     content.currentWarlockPetAbilities = {}
@@ -4403,6 +4455,8 @@ function render.ReleasePopupData()
 end
 
 frame:HookScript("OnHide", function()
+    ns.StopPreviewSound()
+    ResetPreviewState(false)
     ns.SetClosingClickThrough(false)
     render.ResetMaxBackgroundTint()
     ns.StopAnimationSounds()
@@ -4520,7 +4574,6 @@ function render.AdvanceStatPages(elapsed)
     if not page or render.closing or frame.closingInputSuppressed then return end
     local previousAge = page.lastAge or 0
     page.lastAge = effectAge
-    if page.paused and page.phase == "waiting" then return end
     if page.phase == "waiting" then
         page.holdAge = page.holdAge + math.max(0, effectAge - math.max(previousAge, entranceTimeline.finish))
         if page.holdAge < page.halfDuration then return end
@@ -4637,7 +4690,7 @@ local function BuildEntranceTimeline()
     plan.statsBottom = { start = stats.finish - 0.12 / speed, finish = stats.finish }
     if content.levelTimeText:IsShown() then Add("levelTime", 0.18) end
     local trainingStart = cursor
-    local showAbilities = ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0
+    local showAbilities = ns.AbilitySectionVisible(content.currentTrainerAbilities)
     if showAbilities then Add("abilitiesHeader", 0.18) end
     local function AddIcons(key, pool)
         local count, animatedCount = 0, 0
@@ -4721,7 +4774,7 @@ local function LayoutFrame(statCount)
         h = h + 2 + content.levelTimeText:GetHeight()
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
     end
-    if ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0 then
+    if ns.AbilitySectionVisible(content.currentTrainerAbilities) then
         h = h + TextHeight(content.spellsHeader, 16)
         h = h + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding()
             + (content.abilityViewport:GetHeight() or ABILITY_ICON_SIZE)
@@ -4741,6 +4794,17 @@ local function LayoutFrame(statCount)
     h = h + (abilitiesLast and render.AbilitySectionPadding() or SectionPadding())
     content:ClearAllPoints()
     if IsHorizontalLayout() then
+        --@do-not-package@
+        -- SSTEST: keep weapon names below the ability columns, clear of the timer.
+        if content.screenshotPreview and content.weaponSkillsText:IsShown() then
+            local width = TrainingWidth(content.abilityViewport)
+            if content.petSpellsHeader:IsShown() then width = width + 28 + TrainingWidth(content.petAbilityViewport) end
+            ApplyToTextLayers(content.weaponSkillsText, "SetWidth", width)
+            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", 0)
+            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", TextHeight(content.weaponSkillsText, 18))
+            SyncTextGeometry(content.weaponSkillsText)
+        end
+        --@end-do-not-package@
         local statsHeight = 24 + TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + statCount * STAT_LINE_HEIGHT
         if content.levelTimeText:IsShown() then statsHeight = statsHeight + 2 + content.levelTimeText:GetHeight() end
         -- Keep the established frame budget. The visible grid has three rows;
@@ -4785,6 +4849,12 @@ local function LayoutFrame(statCount)
         local minimumAbilityPadding = ns.db and ns.db.backgroundMode == "MODERN"
             and UI_METRICS.modernAbilityPadding or UI_METRICS.texturedAbilityPadding
         local abilityPadding = math.max(render.AbilitySectionPadding(), minimumAbilityPadding / fit)
+        --@do-not-package@
+        -- SSTEST: local screenshot presentation only.
+        if content.screenshotPreview and content.weaponSkillsText:IsShown() then
+            abilityPadding = abilityPadding + TextHeight(content.weaponSkillsText, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
+        end
+        --@end-do-not-package@
         local topGap = UI_METRICS.abilityTopGap / fit
         for _, viewport in ipairs({main, pet}) do
             local count = viewport.abilityCount or 0
@@ -4885,6 +4955,18 @@ local function LayoutFrame(statCount)
     closeButton:ClearAllPoints()
     closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
     frame:SetHeight(h)
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview and content.weaponSkillsText:IsShown() and IsHorizontalLayout() then
+        local first = content.abilityViewport
+        local last = content.petSpellsHeader:IsShown() and content.petAbilityViewport or first
+        content.weaponDivider:ClearAllPoints()
+        content.weaponDivider:SetPoint("TOPLEFT", first, "BOTTOMLEFT", 0, -gap)
+        content.weaponDivider:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", 0, -gap)
+        content.weaponSkillsText:ClearAllPoints()
+        content.weaponSkillsText:SetPoint("TOP", content.weaponDivider, "BOTTOM", 0, -gap)
+    end
+    --@end-do-not-package@
     render.PositionPaceRecord()
     if IsHorizontalLayout() then
         for _, entry in ipairs({{content.abilityViewport,content.abilityIconPool},{content.petAbilityViewport,content.petAbilityIconPool}}) do
@@ -5010,9 +5092,6 @@ function render.BeginFadeOut(multiplier)
 end
 
 local hideToken = 0
-local previewSuspended = false
-local fadeDeadline
-local remainingPreviewTime
 
 function render.CancelHideTimer()
     if render.hideTimer then render.hideTimer:Cancel(); render.hideTimer = nil end
@@ -5033,7 +5112,7 @@ function render.ArmHideTimer(delay, token, callback)
 end
 
 local function ShouldSuspendPreview()
-    return previewActive and ns.IsPreviewSuspensionRequested() == true
+    return previewState.active and ns.IsPreviewSuspensionRequested() == true
 end
 
 local function IsHovered()
@@ -5059,37 +5138,35 @@ local function ScheduleFadeOut(delay)
     hideToken = hideToken + 1
     local token = hideToken
     delay = math.max(0, delay or 0)
-    fadeDeadline = GetTime() + delay
+    previewState.deadline = GetTime() + delay
     if ShouldSuspendPreview() then
-        previewSuspended = true
-        if render.statPages then render.statPages.paused = true end
-        remainingPreviewTime = delay
+        previewState.suspended = true
+        previewState.remainingTime = delay
         return
     end
     render.ArmHideTimer(delay, token, function() TryFadeOut(token) end)
 end
 ns.RescheduleFadeOut = ScheduleFadeOut
 
--- Only pause the timeout for a manually requested preview. Real level-ups
+-- Only pause the timeout; stat pages continue so both can be inspected in Options.
+-- Suspension applies to manually requested previews. Real level-ups
 -- retain their usual timer, position, scale, animation, and layout.
 function ns.RefreshPreviewSuspension()
-    if not previewActive or not frame:IsShown() or frame.closingInputSuppressed then return end
+    if not previewState.active or not frame:IsShown() or frame.closingInputSuppressed then return end
     if ShouldSuspendPreview() then
-        if previewSuspended then return end
-        remainingPreviewTime = math.max(0, (fadeDeadline or GetTime()) - GetTime())
-        previewSuspended = true
-        if render.statPages then render.statPages.paused = true end
+        if previewState.suspended then return end
+        previewState.remainingTime = math.max(0, (previewState.deadline or GetTime()) - GetTime())
+        previewState.suspended = true
         hideToken = hideToken + 1
         render.CancelHideTimer()
         if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
         render.CancelClosing()
         UpdateVisualEffects()
         frame:SetAlpha(1)
-    elseif previewSuspended then
-        local remaining = remainingPreviewTime or 0
-        previewSuspended = false
-        if render.statPages then render.statPages.paused = false end
-        remainingPreviewTime = nil
+    elseif previewState.suspended then
+        local remaining = previewState.remainingTime or 0
+        previewState.suspended = false
+        previewState.remainingTime = nil
         ScheduleFadeOut(remaining)
         UpdateVisualEffects()
     end
@@ -5099,8 +5176,7 @@ function ns.DismissLevelUp()
     if not frame:IsShown() or render.closing then return end
     bgAnim:Stop()
     bg:SetAlpha(1)
-    previewActive, previewSuspended = false, false
-    remainingPreviewTime = nil
+    ResetPreviewState(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
     if ns.db and ns.db.backgroundMode == "MODERN" then
@@ -5111,9 +5187,7 @@ function ns.DismissLevelUp()
 end
 
 function ns.CloseLevelUp()
-    previewActive = false
-    previewSuspended = false
-    remainingPreviewTime = nil
+    ResetPreviewState(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
     for _, fs in ipairs(content.statLinePool) do StopLineAnimation(fs) end
@@ -5132,7 +5206,6 @@ frame:SetScript("OnEnter", nil)
 
 
 local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
-    -- Prepare the content, play the animations, and show the panel.
     local db = ns.db or {}
     if db.enabled == false then return end
 
@@ -5146,7 +5219,13 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     if content.playerModel then content.playerModel:SetAlpha(0); content.playerModel:Hide() end
     content:SetAlpha(0)
     content.currentTrainerAbilities = trainerAbilities or {}
-    content.currentWarlockPetAbilities = ns.GetCurrentFlavor() ~= "retail" and warlockPetAbilities or {}
+    content.currentWarlockPetAbilities = ns.SupportsTrainerData() and warlockPetAbilities or {}
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview and content.screenshotPreview.grimoires then
+        content.currentWarlockPetAbilities = warlockPetAbilities or {}
+    end
+    --@end-do-not-package@
     ApplyPopupWidth()
     frame:SetScale(ns.GetPopupScale())
     EnsureAllTextGlows()
@@ -5163,7 +5242,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     content.statPageRowCount = content.secondaryStatChanges and math.max(#ns.FilterRelevantStats(statChanges or {}), #content.secondaryStatChanges) or nil
     content.currentStatChanges = statChanges or {}
     local statCount = UpdateStatLines(content.currentStatChanges)
-    -- Current stats must be measured before the first visible frame.
+    -- Measure the new rows before showing the frame to avoid a one-frame width jump.
     ApplyPopupWidth()
 
     content.currentLevelPlayedTime, content.previousFastestLevelTime = timePlayedThisLevel, previousFastest
@@ -5195,7 +5274,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     -- Reset the previous popup's effect clock and portrait alpha before Show.
     local entranceDuration = entranceTimeline.finish
     StartVisualEffects()
-    if db.screenshotMilestones and content.isMilestone and not previewActive then
+    if db.screenshotMilestones and content.isMilestone and not previewState.active then
         render.screenshotAt = entranceDuration + .15
     end
     content:SetAlpha(1)
@@ -5212,14 +5291,14 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
             + math.max(0,#content.secondaryStatChanges-1)*BASE_STAT_STAGGER_STEP + 1)/Speed()
         render.statPages = {phase = "waiting", holdAge = 0, halfDuration = halfDuration,
             animationScale = math.min(1, math.min(halfDuration, secondaryDuration) / animationLength),
-            lastAge = 0, paused = ShouldSuspendPreview()}
+            lastAge = 0}
     end
     ScheduleFadeOut(lifetime)
     UpdateVisualEffects()
 
-    local soundOK, soundError = pcall(ns.PlayLevelUpSound)
+    local soundOK, soundError = pcall(ns.PlayLevelUpSound, false, previewState.active)
     if not soundOK then
-        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Play sound on level up") .. ": " .. tostring(soundError))
+        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not play the selected sound. Choose another sound in Options > Sound. Details: %s", tostring(soundError)))
     end
 end
 
@@ -5231,17 +5310,31 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
     content.replayRecord = replayRecord
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    ---@type {kind: string, weapons: boolean, grimoires: boolean, costs: boolean}|nil
+    local screenshotRequest = ns.screenshotPreviewRequest
+    content.screenshotPreview = isPreview and screenshotRequest or nil
+    --@end-do-not-package@
     content.pacePreview = isPreview == true and pacePreview == true
-    previewActive = isPreview == true
-    previewSuspended = false
-    remainingPreviewTime = nil
+    ResetPreviewState(isPreview)
     local level = tonumber(currentLevel)
     rangeStart = tonumber(rangeStart)
     content.levelRangeStart = rangeStart and level and rangeStart >= 1 and rangeStart % 1 == 0 and rangeStart < level - 1 and rangeStart or nil
     content.isMaxLevel = level ~= nil and level == ns.GetLevelCap() and (not isPreview or maxLevelPreview == true)
     -- Ordinary previews stay normal; /glu milestone opts into the celebration.
     local milestone = (not isPreview or milestonePreview == true) and level and level > 0
-        and (level % 10 == 0 or content.levelRangeStart and math.floor(level / 10) > math.floor(content.levelRangeStart / 10))
+        and (content.isMaxLevel or ns.IsMilestoneLevel(level, content.levelRangeStart))
+    if isPreview and replayRecord and type(replayRecord.milestone) == "boolean" then
+        milestone = replayRecord.milestone
+    end
+    --@do-not-package@
+    -- SSTEST: local screenshot presentation only.
+    if content.screenshotPreview then
+        content.isMaxLevel = content.screenshotPreview.kind == "max"
+        milestone = content.screenshotPreview.kind ~= "normal"
+    end
+    --@end-do-not-package@
     local perf = ns.PerfStart("popup_prepare")
     local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
     ns.PerfEnd(perf)
@@ -5254,6 +5347,6 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     end
     if not ok then
         print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err))
-        print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up screen failed to display (see above). Please report this error."))
+        print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up popup could not be shown. Try /reload. If it happens again, report the error above."))
     end
 end

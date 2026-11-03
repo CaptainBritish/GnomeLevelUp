@@ -86,7 +86,11 @@ function ns.CreateOptionsLayout(parent)
     local function LayoutCell(cell, x, top, width)
         local label, control = cell.label, cell.control
         local kind = cell.kind
-        if kind == "header" then
+        if kind == "history" then
+            control:SetWidth(width)
+            Place(control, x, top)
+            return ns.LayoutLevelHistory(control, width)
+        elseif kind == "header" then
             local height = ns.WrapOptionsText(label, width - 12) + 12
             control:SetSize(width, height)
             Place(control, x, top)

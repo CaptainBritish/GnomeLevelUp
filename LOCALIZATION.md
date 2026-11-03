@@ -31,19 +31,26 @@ Set a flag to `true` to make that locale available to auto-detection and the lan
 | zhCN | Chinese (Simplified) | Enabled |
 | zhTW | Chinese (Traditional) | Enabled |
 
-All ten non-English locale dictionaries contain all 270 canonical source keys. Spanish shares one vocabulary table with regional overrides, while the esES/esMX switches remain independent. All languages are available regardless of review status. The translation tables received contextual and glossary review; machine-translated wording still benefits from native-speaker feedback.
+Every new player-facing string must have entries in all ten non-English locales.
+English source text is the lookup key. Spanish shares a base vocabulary with
+regional overrides; esES and esMX remain independently selectable. Native-speaker
+feedback is welcome; do not describe generated wording as officially reviewed.
 
-## English key cleanup
+## Translation conventions
 
-- One `On` and one `Off` key serve menus, minimap status and slash-command setting status.
-- `Compact Layout`, `Lock Location`, `Preview Level-Up`, `Reset Appearance` and other equivalent settings use the same English source in both menus.
-- Trainer-cost, new-skill, pet, profession, sound, text-shadow and debug labels no longer have separate short and long synonyms for the same setting.
-- One `%s (recommended for gamepad)` format replaces duplicated gamepad variants.
-- Hue and rotation controls share nine position labels and two format strings.
-- The trainer-save notification is one complete format string; it no longer joins translated singular/plural sentence fragments.
-- Proper font names, media titles, internal setting keys, slash commands, spell IDs and asset paths are not translated. Native language names in the dropdown are deliberately stable.
+Use the same English key for the same control across mouse Options, controller
+Options and setup. Write complete messages with format placeholders instead of
+joining sentence fragments. Keep placeholder types and counts unchanged.
 
-The original cleanup reduced 228 keys to 194; the startup announcement and trainer-report messages brought the catalogue to 203; retiring six Classic chat keys leaves 197; the highlighted report-option hint adds one, followed by seven visual-effect/control labels; removing the level-number control left 204; combining the two portrait effect labels left 203; the four extra effects bring the count to 207; twelve debug particle fields brought it to 219; portrait/ring settle, stat gain counting and divider reveal brought it to 222; merging counting into emphasis removes one unused label, leaving 221; the Animated Elements colour label brings it to 222; the three effect opacity labels bring it to 225; Copy and its shortcut hint bring it to 227, including newly covered faction/NPC/theme names and the default-font label. Different concepts that happen to have the same translated value keep separate keys.
+Do not translate saved-variable keys, API names, commands, spell/item IDs, texture
+paths, proper font names or media titles. Language names in the selector identify
+themselves in their own language. Native spell names and game tooltips follow the
+client language.
+
+English labels use British spelling, including **colour**. Existing canonical keys
+such as `Colors` remain stable; display aliases handle their English wording.
+Test changed labels and hover help in both menus and in a narrow window. The
+shared help checks cover all eleven supported languages.
 
 ## Terminology review
 

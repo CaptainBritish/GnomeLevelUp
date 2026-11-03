@@ -212,7 +212,6 @@ local function MarkLearned(entry, level)
 end
 
 function ns.IsTrainerSkillLearned(entry, level, learnedStore)
-    -- Check whether a cached skill is already learned.
     local spellID = type(entry) == "table" and entry.spellID
     local store = learnedStore or GetLearnedStore()
     if not store then return false end
@@ -221,7 +220,6 @@ function ns.IsTrainerSkillLearned(entry, level, learnedStore)
 end
 
 function ns.MarkKnownTrainerSkills(spellSnapshot, known)
-    -- Mark cached skills that are already in the spellbook.
     local store = EnsureSavedStore()
     if not store or not UnitGUID("player") then return end
     known = known or ns.BuildKnownTrainingLookup(spellSnapshot)
@@ -248,7 +246,6 @@ function ns.MergeSavedTrainerData()
 end
 
 function ns.ClearScannedTrainerData()
-    -- Remove all saved trainer data and start a fresh scan.
     GnomeLevelUpDB.scannedTraining = { forever = {} }
     GnomeLevelUpDB.learnedTraining = nil
     GnomeLevelUpDB.trainerRescanRequired = false
@@ -458,7 +455,6 @@ local function CheckTrainerCatalogue(npcName)
 end
 
 local function ScanTrainer()
-    -- Read the trainer window and save valid class skills.
     if not GetNumTrainerServices or not GetTrainerServiceInfo then return end
     local flavor = ns.GetCurrentFlavor()
     if flavor ~= "forever" then return end
@@ -576,7 +572,6 @@ QueueReconcile = function()
 end
 
 function ns.DumpTrainerData()
-    -- Print saved skills when debug mode is enabled.
     if not ns.IsDebugEnabled or not ns.IsDebugEnabled() then return end
     local flavor = ns.GetCurrentFlavor()
     local _, classToken = UnitClass("player")
@@ -593,7 +588,6 @@ function ns.DumpTrainerData()
 end
 
 function ns.TestTrainerList()
-    -- Print the skills currently shown in the level-up panel.
     if not ns.IsDebugEnabled or not ns.IsDebugEnabled() then return end
     local currentLevel = UnitLevel("player")
     local abilities
@@ -623,7 +617,6 @@ frame:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
--- Keep the cache updated while the player visits trainers or learns spells.
 frame:SetScript("OnEvent", function(self, event, ...)
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever"
         and event ~= "SPELLS_CHANGED" and event ~= "LEARNED_SPELL_IN_SKILL_LINE" then

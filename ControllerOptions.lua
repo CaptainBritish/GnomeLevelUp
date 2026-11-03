@@ -34,13 +34,6 @@ local function IsActive()
     return ns.GetCurrentFlavor() ~= "retail" and ns.IsControllerUIActive()
 end
 
-local function SetControllerIgnoreMouseoverDelay(value)
-    ns.db.ignoreMouseoverDelay = value == true
-    ns.db.ignoreMouseoverDelayUserSet = true
-    if value and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
-        ns.RescheduleFadeOut(0.15)
-    end
-end
 
 local function ControllerGlyphChoice()
     local value = ns.db and ns.db.controllerGlyphStyle
@@ -152,11 +145,6 @@ local function SetControllerPreviewStrata(active)
     end
 end
 
-local function IsControllerBackButton(button)
-    button = tostring(button or ""):upper()
-    return button == "PAD2" or button == "PADB" or button == "PADBACK"
-        or button == "GAMEPAD_BUTTON_B" or button == "GAMEPAD_B"
-end
 
 local function CreateControllerCloseButton(parent, onClose)
     local button = CreateFrame("Button", nil, parent)
@@ -348,7 +336,7 @@ end
 local function Toggle(label, key, after)
     local setting = ns.OPTION_SETTINGS[key]
     if setting then
-        return { label = setting.label, isAvailable = setting.isAvailable,
+        return { label = label or setting.label, isAvailable = setting.isAvailable,
             get = function() return setting.get() and "On" or "Off" end,
             activate = function()
                 if not setting.isAvailable or setting.isAvailable() then setting.set(not setting.get()) end
@@ -357,7 +345,7 @@ local function Toggle(label, key, after)
     local function available()
         if ns.db.reducedMotion and ns.CLASSIC_FLAIR_SETTINGS[key] then return false end
         if key == "muteNativeDing" or key == "playSound" then return not ns.UsesNativeLevelUpSound() end
-        if key == "showWeaponSkills" then return not ns.db.horizontalMode and ns.GetCurrentFlavor() == "forever" end
+        if key == "showWeaponSkills" then return ns.WeaponTrainingAvailable() end
         if key == "compactMode" then return not ns.db.horizontalMode end
         if key == "frameEdgeGlow" then return ns.db.backgroundMode ~= "MODERN" end
         return key ~= "autoScanTrainers" or ns.CanCaptureTrainerData()
@@ -421,7 +409,7 @@ local function BuildEntries(key)
             Toggle("Show time played this level", "showLevelTime"),
             Toggle("Compact Layout", "compactMode"),
         }
-        if ns.GetCurrentFlavor() ~= "retail" then
+        if ns.SupportsTrainerData() then
             entries[#entries + 1] = { label = "Show pet skills",
                 get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
                 activate = function()
@@ -434,7 +422,7 @@ local function BuildEntries(key)
         entries[#entries + 1] = Toggle("Right-click to close", "rightClickClose")
         entries[#entries + 1] = { label = "Ignore mouseover delay",
             get = function() return ns.db.ignoreMouseoverDelay and "On" or "Off" end,
-            activate = function() SetControllerIgnoreMouseoverDelay(not ns.db.ignoreMouseoverDelay) end }
+            activate = function() ns.OPTION_SETTINGS.ignoreMouseoverDelay.set(not ns.db.ignoreMouseoverDelay) end }
         entries[#entries + 1] = { label = "Use class colors",
             get = function() return ns.db.useClassColors and "On" or "Off" end,
             activate = function() ns.SetClassColorsEnabled(not ns.db.useClassColors) end }
@@ -442,7 +430,7 @@ local function BuildEntries(key)
             function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
             { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
               { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } })
-        if ns.GetCurrentFlavor() ~= "retail" then
+        if ns.SupportsTrainerData() then
             entries[#entries + 1] = Toggle("Show unlearned weapon skills", "showWeaponSkills")
             entries[#entries + 1] = Toggle("Show learning costs", "showTrainerCosts")
         else
@@ -503,6 +491,7 @@ local function BuildEntries(key)
                 end },
             Toggle("Don't show until combat ends", "waitForCombatEnd"),
             Toggle("Show time played this level", "showLevelTime"),
+            Toggle("Compare account-wide bests", "compareAccountLevelTimes"),
             Toggle("Show minimap button", "minimapButtonShown", function(v) ns.SetMinimapButtonShown(v) end),
             Toggle("Compact Layout", "compactMode"),
             Toggle("Horizontal layout", "horizontalMode"),
@@ -510,11 +499,7 @@ local function BuildEntries(key)
             Toggle(ns.L("%s (recommended for gamepad)", ns.L("Allow click-through")), "clickThrough", function(v) ns.ApplyClickThrough(v) end),
             { label = ns.L("%s (recommended for gamepad)", ns.L("Ignore mouseover delay")),
                 get = function() return ns.db.ignoreMouseoverDelay == true and "On" or "Off" end,
-                activate = function() SetControllerIgnoreMouseoverDelay(not (ns.db.ignoreMouseoverDelay == true)) end },
-            CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or ns.GetDefaultControllerGlyphStyle() end,
-                function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
-                { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
-                  { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } }),
+                activate = function() ns.OPTION_SETTINGS.ignoreMouseoverDelay.set(not (ns.db.ignoreMouseoverDelay == true)) end },
             CycleChoice("Frame strata", function() return ns.db.frameStrata or "HIGH" end,
                 function(v) ns.db.frameStrata = v; ns.ApplyFrameStrata(v) end, ns.STRATA_CHOICES),
         }
@@ -528,6 +513,11 @@ local function BuildEntries(key)
         end
         options[#options + 1] = Toggle("Show secondary stats", "showSecondaryStats")
         options[#options + 1] = NumericOption("secondaryStatStartPercent")
+        options[#options + 1] = CycleChoice("Controller glyphs", function() return ns.db.controllerGlyphStyle or ns.GetDefaultControllerGlyphStyle() end,
+                function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
+                { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
+                  { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } })
+        options[#options + 1] = CycleChoice("Milestone interval", ns.GetMilestoneInterval, ns.SetMilestoneInterval, ns.MILESTONE_INTERVAL_CHOICES)
         return options
     elseif key == "trainer" then
         if ns.GetCurrentFlavor() == "retail" then
@@ -546,7 +536,7 @@ local function BuildEntries(key)
             PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
             PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
         }
-        if ns.GetCurrentFlavor() ~= "retail" then
+        if ns.SupportsTrainerData() then
             table.insert(options, 6, Toggle("Only display new skills", "showOnlyNewSkills"))
         end
         return options
@@ -882,15 +872,6 @@ local function RefreshRowHighlight(row, entryIndex, entry)
     end
 end
 
-local function SelectVisibleEntry(entryIndex)
-    if controllerLayoutRunning or not window.entries or not window.entries[entryIndex] then return end
-    selected = entryIndex
-    for _, row in ipairs(rows) do
-        if row:IsShown() and row.entryIndex and window.entries[row.entryIndex] then
-            RefreshRowHighlight(row, row.entryIndex, window.entries[row.entryIndex])
-        end
-    end
-end
 
 local function Render()
     if not window or controllerLayoutRunning then return end

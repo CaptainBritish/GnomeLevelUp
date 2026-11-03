@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 local GetSpellLevelLearned = rawget(_G, "GetSpellLevelLearned")
 
--- Keep spellbook differences in one place so the rest of the addon can use names and IDs.
+-- Cache spellbook reads until a spell-change event invalidates them.
 local spellbookRevision = 0
 local cachedSpellbook
 local cachedRevision = -1

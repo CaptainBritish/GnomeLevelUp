@@ -12,10 +12,15 @@ function ns.CreatePopupHeadingFitter(context)
         if scale == 1 then return end
         local horizontal = IsHorizontalLayout()
         local specs = {{content.statsHeader, TEXT_WIDTH}}
-        if ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0 then
+        if ns.AbilitySectionVisible(content.currentTrainerAbilities) then
             specs[#specs + 1] = {content.spellsHeader, horizontal and TrainingWidth(content.abilityViewport) or TEXT_WIDTH}
         end
-        if ns.GetCurrentFlavor() ~= "retail" and #(content.currentWarlockPetAbilities or {}) > 0 then
+        local includePets = ns.SupportsTrainerData()
+        --@do-not-package@
+        -- SSTEST: local screenshot presentation only.
+        includePets = includePets or content.screenshotPreview and content.screenshotPreview.grimoires
+        --@end-do-not-package@
+        if includePets and #(content.currentWarlockPetAbilities or {}) > 0 then
             specs[#specs + 1] = {content.petSpellsHeader, horizontal and TrainingWidth(content.petAbilityViewport) or TEXT_WIDTH}
         end
         local parts = {tostring(scale)}
@@ -89,7 +94,7 @@ function ns.CreatePopupSectionPositioner(context)
             content.timeBottomDivider:Hide()
         end
 
-        local showAbilities = ns.GetCurrentFlavor() ~= "retail" or #(content.currentTrainerAbilities or {}) > 0
+        local showAbilities = ns.AbilitySectionVisible(content.currentTrainerAbilities)
         ApplyToTextLayers(content.spellsHeader, "SetShown", showAbilities)
         content.abilitiesDivider:SetShown(showAbilities)
         content.abilityViewport:SetShown(showAbilities)

@@ -1,8 +1,8 @@
 local ADDON_NAME, ns = ...
 
--- Build the sharing window only when requested. The text area is independent
--- of the profile-creation field, so a leftover name cannot block an import.
-local window, name, text, status, selectedProfile
+-- Sharing has its own name field so unfinished edits in Options cannot change
+-- the name used by an import.
+local transferWindow, profileNameInput, profileTextInput, statusText, selectedProfileText
 
 function ns.RequestDeleteProfile(callback)
     local profile = ns.GetActiveProfileName()
@@ -31,74 +31,29 @@ function ns.RequestDeleteProfile(callback)
 end
 
 local function ClearFocus()
-    name:ClearFocus()
-    text:ClearFocus()
+    profileNameInput:ClearFocus()
+    profileTextInput:ClearFocus()
 end
 
 local function UpdateSelectedProfile()
-    selectedProfile:SetText(ns.L("Profile") .. ": " .. ns.GetActiveProfileName())
+    selectedProfileText:SetText(ns.L("Profile") .. ": " .. ns.GetActiveProfileName())
 end
 
-local function BuildWindow()
-    window = CreateFrame("Frame", "GnomeLevelUpProfileTransfer", UIParent, "BackdropTemplate")
-    window:Hide()
-    window:SetSize(640, 460)
-    window:SetPoint("CENTER")
-    window:SetFrameStrata("FULLSCREEN_DIALOG")
-    window:SetClampedToScreen(true)
-    window:SetMovable(true)
-    window:EnableMouse(true)
-    window:RegisterForDrag("LeftButton")
-    window:SetScript("OnDragStart", window.StartMoving)
-    window:SetScript("OnDragStop", window.StopMovingOrSizing)
-    window:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 24,
-        insets = { left = 8, right = 8, top = 8, bottom = 8 },
-    })
-    local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -2, -2)
-    close:SetScript("OnClick", function() window:Hide() end)
-    local specialFrames = _G["UISpecialFrames"]
-    if type(specialFrames) == "table" then specialFrames[#specialFrames + 1] = "GnomeLevelUpProfileTransfer" end
-
-    local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 22, -20)
-    title:SetText(ns.L("Import / export"))
-    selectedProfile = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    selectedProfile:SetPoint("TOPLEFT", 22, -50)
-    selectedProfile:SetSize(590, 36)
-    selectedProfile:SetJustifyH("LEFT")
-    selectedProfile:SetWordWrap(true)
-    local label = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    label:SetPoint("TOPLEFT", 22, -91)
-    label:SetSize(255, 36)
-    label:SetJustifyH("LEFT")
-    label:SetWordWrap(true)
-    label:SetText(ns.L("Profile name (optional)"))
-    name = CreateFrame("EditBox", "GnomeLevelUpProfileTransferName", window, "InputBoxTemplate")
-    name:SetSize(310, 24)
-    name:SetPoint("TOPLEFT", 292, -90)
-    name:SetAutoFocus(false)
-    name:SetMaxLetters(80)
-    name:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    name:SetScript("OnEscapePressed", function() window:Hide() end)
-
-    local scroll = CreateFrame("ScrollFrame", nil, window, "UIPanelScrollFrameTemplate")
+local function CreateProfileTextArea()
+    local scroll = CreateFrame("ScrollFrame", nil, transferWindow, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 24, -142)
     scroll:SetPoint("BOTTOMRIGHT", -46, 100)
-    text = CreateFrame("EditBox", "GnomeLevelUpProfileTransferText", scroll)
-    text:SetMultiLine(true)
-    text:SetAutoFocus(false)
-    text:SetMaxLetters(65536)
-    text:SetFontObject(ChatFontNormal)
-    text:SetWidth(560)
-    text:SetHeight(210)
-    text:SetTextInsets(4, 4, 4, 4)
-    text:SetScript("OnEscapePressed", function() window:Hide() end)
-    text:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
-    text:SetScript("OnCursorChanged", function(_, _, y, _, height)
+    profileTextInput = CreateFrame("EditBox", "GnomeLevelUpProfileTransferText", scroll)
+    profileTextInput:SetMultiLine(true)
+    profileTextInput:SetAutoFocus(false)
+    profileTextInput:SetMaxLetters(65536)
+    profileTextInput:SetFontObject(ChatFontNormal)
+    profileTextInput:SetWidth(560)
+    profileTextInput:SetHeight(210)
+    profileTextInput:SetTextInsets(4, 4, 4, 4)
+    profileTextInput:SetScript("OnEscapePressed", function() transferWindow:Hide() end)
+    profileTextInput:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
+    profileTextInput:SetScript("OnCursorChanged", function(_, _, y, _, height)
         local offset, top = scroll:GetVerticalScroll(), -y
         if top < offset then
             scroll:SetVerticalScroll(math.max(0, top))
@@ -106,54 +61,111 @@ local function BuildWindow()
             scroll:SetVerticalScroll(math.max(0, top + height - scroll:GetHeight()))
         end
     end)
-    scroll:SetScrollChild(text)
+    scroll:SetScrollChild(profileTextInput)
     local backing = scroll:CreateTexture(nil, "BACKGROUND")
     backing:SetAllPoints()
     backing:SetColorTexture(0, 0, 0, 0.45)
 
-    local import = CreateFrame("Button", "GnomeLevelUpProfileTransferImport", window, "UIPanelButtonTemplate")
+    return scroll
+end
+
+local function BuildWindow()
+    transferWindow = CreateFrame("Frame", "GnomeLevelUpProfileTransfer", UIParent, "BackdropTemplate")
+    transferWindow:Hide()
+    transferWindow:SetSize(640, 460)
+    transferWindow:SetPoint("CENTER")
+    transferWindow:SetFrameStrata("FULLSCREEN_DIALOG")
+    transferWindow:SetClampedToScreen(true)
+    transferWindow:SetMovable(true)
+    transferWindow:EnableMouse(true)
+    transferWindow:RegisterForDrag("LeftButton")
+    transferWindow:SetScript("OnDragStart", transferWindow.StartMoving)
+    transferWindow:SetScript("OnDragStop", transferWindow.StopMovingOrSizing)
+    transferWindow:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 24,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 },
+    })
+    local close = CreateFrame("Button", nil, transferWindow, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", -2, -2)
+    close:SetScript("OnClick", function() transferWindow:Hide() end)
+    local specialFrames = _G["UISpecialFrames"]
+    if type(specialFrames) == "table" then specialFrames[#specialFrames + 1] = "GnomeLevelUpProfileTransfer" end
+
+    local title = transferWindow:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 22, -20)
+    title:SetText(ns.L("Import / export"))
+    selectedProfileText = transferWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    selectedProfileText:SetPoint("TOPLEFT", 22, -50)
+    selectedProfileText:SetSize(590, 36)
+    selectedProfileText:SetJustifyH("LEFT")
+    selectedProfileText:SetWordWrap(true)
+    local label = transferWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", 22, -91)
+    label:SetSize(255, 36)
+    label:SetJustifyH("LEFT")
+    label:SetWordWrap(true)
+    label:SetText(ns.L("Profile name (optional)"))
+    profileNameInput = CreateFrame("EditBox", "GnomeLevelUpProfileTransferName", transferWindow, "InputBoxTemplate")
+    profileNameInput:SetSize(310, 24)
+    profileNameInput:SetPoint("TOPLEFT", 292, -90)
+    profileNameInput:SetAutoFocus(false)
+    profileNameInput:SetMaxLetters(80)
+    profileNameInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    profileNameInput:SetScript("OnEscapePressed", function() transferWindow:Hide() end)
+
+    local scroll = CreateProfileTextArea()
+
+    local import = CreateFrame("Button", "GnomeLevelUpProfileTransferImport", transferWindow, "UIPanelButtonTemplate")
     import:SetSize(270, 32)
     import:SetPoint("BOTTOMLEFT", 24, 60)
     import:SetText(ns.L("Import profile"))
     import:SetScript("OnClick", function()
-        local ok, reason = ns.ImportProfile(text:GetText(), name:GetText())
-        status:SetText(ns.L(ok and "Profile imported." or reason))
+        local ok, reason = ns.ImportProfile(profileTextInput:GetText(), profileNameInput:GetText())
+        local message = ns.L(ok and "Profile imported." or reason)
+        if not ok and reason == "Invalid profile string." then
+            message = message .. " " .. ns.L("Paste the complete GLU profile export, then try again.")
+        elseif not ok and reason == "Invalid profile settings." then
+            message = message .. " " .. ns.L("Export the profile again from an up-to-date GLU installation.")
+        end
+        statusText:SetText(message)
         if ok then
-            text:SetText("")
-            name:SetText("")
+            profileTextInput:SetText("")
+            profileNameInput:SetText("")
             ClearFocus()
             scroll:SetVerticalScroll(0)
             UpdateSelectedProfile()
         end
     end)
-    local export = CreateFrame("Button", "GnomeLevelUpProfileTransferExport", window, "UIPanelButtonTemplate")
+    local export = CreateFrame("Button", "GnomeLevelUpProfileTransferExport", transferWindow, "UIPanelButtonTemplate")
     export:SetSize(270, 32)
     export:SetPoint("BOTTOMRIGHT", -24, 60)
     export:SetText(ns.L("Export profile"))
     export:SetScript("OnClick", function()
-        name:SetText("")
-        name:ClearFocus()
-        text:SetText(ns.ExportProfile())
+        profileNameInput:SetText("")
+        profileNameInput:ClearFocus()
+        profileTextInput:SetText(ns.ExportProfile())
         scroll:SetVerticalScroll(0)
-        text:SetFocus()
-        text:HighlightText()
-        status:SetText(ns.L("Press Ctrl+C to copy."))
+        profileTextInput:SetFocus()
+        profileTextInput:HighlightText()
+        statusText:SetText(ns.L("Press Ctrl+C to copy."))
         UpdateSelectedProfile()
     end)
-    status = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    status:SetPoint("BOTTOMLEFT", 24, 16)
-    status:SetSize(590, 36)
-    status:SetWordWrap(true)
-    status:SetJustifyH("LEFT")
-    status:SetText("")
-    window:SetScript("OnHide", ClearFocus)
+    statusText = transferWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    statusText:SetPoint("BOTTOMLEFT", 24, 16)
+    statusText:SetSize(590, 36)
+    statusText:SetWordWrap(true)
+    statusText:SetJustifyH("LEFT")
+    statusText:SetText("")
+    transferWindow:SetScript("OnHide", ClearFocus)
 end
 
 function ns.OpenProfileTransfer()
     ns.EnsureDatabase()
-    if not window then BuildWindow() end
+    if not transferWindow then BuildWindow() end
     UpdateSelectedProfile()
-    status:SetText("")
-    window:Show()
-    text:SetFocus()
+    statusText:SetText("")
+    transferWindow:Show()
+    profileTextInput:SetFocus()
 end

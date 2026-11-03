@@ -42,6 +42,7 @@ local defaults = {
     compactMode = false,
     horizontalMode = true,
     showLevelTime = true,
+    compareAccountLevelTimes = false,
     showSecondaryStats = false,
     secondaryStatStartPercent = 50,
     statTextScale = 1,
@@ -67,6 +68,7 @@ local defaults = {
     reducedMotion = false,       -- Classic Mode: suppress decorative flair, retain structural transitions
     backgroundAnimations = true,
     milestoneAnimations = true,
+    milestoneInterval = 10,
     maxLevelCelebration = true,
     screenshotMilestones = false,
     portraitRingGlint = true,
@@ -233,6 +235,47 @@ function ns.GetSecondaryStatStartPercent()
     return math.max(25, math.min(75, value))
 end
 
+-- Use the same interval for live events, combined gains and milestone previews.
+ns.MILESTONE_INTERVAL_CHOICES = {
+    { value = 5, label = "Every 5 levels" },
+    { value = 10, label = "Every 10 levels" },
+    { value = 20, label = "Every 20 levels" },
+}
+function ns.GetMilestoneInterval()
+    local value = ns.db and ns.db.milestoneInterval
+    return (value == 5 or value == 10 or value == 20) and value or 10
+end
+function ns.SetMilestoneInterval(value)
+    ns.EnsureDatabase()
+    if value ~= 5 and value ~= 10 and value ~= 20 then return false end
+    ns.db.milestoneInterval = value
+    return true
+end
+function ns.IsMilestoneLevel(level, previousLevel)
+    local interval = ns.GetMilestoneInterval()
+    if type(level) ~= "number" or level < 1 or level % 1 ~= 0 then return false end
+    if level % interval == 0 then return true end
+    return type(previousLevel) == "number" and previousLevel >= 1 and previousLevel < level
+        and math.floor(level / interval) > math.floor(previousLevel / interval)
+end
+
+-- Rendering and menus share these rules; callers retain their layout and pools.
+function ns.SupportsTrainerData()
+    return ns.GetCurrentFlavor() ~= "retail"
+end
+function ns.AbilitySectionVisible(abilities)
+    return ns.SupportsTrainerData() or type(abilities) == "table" and #abilities > 0
+end
+function ns.TrainerCostsEnabled()
+    return ns.SupportsTrainerData() and ns.db ~= nil and ns.db.showTrainerCosts == true
+end
+function ns.WeaponTrainingAvailable()
+    return ns.SupportsTrainerData() and ns.db ~= nil and not ns.db.horizontalMode
+end
+function ns.DecorativeAnimationsEnabled()
+    return not ns.db or not ns.db.reducedMotion and ns.db.backgroundAnimations ~= false
+end
+
 -- Shared controls keep mouse, controller and setup changes on the same path.
 ns.OPTION_SETTINGS = {
     duration = { label = "Display duration", minimum = 1, maximum = 60, step = 1,
@@ -279,6 +322,13 @@ SharedToggle("showLevelTime", "Show time played this level", function(value)
     if value then ns.RequestLevelPlayedTime() end
     ns.RefreshLevelPaceDisplay()
 end, "Show the level timer and celebrate new best times.")
+SharedToggle("compareAccountLevelTimes", "Compare account-wide bests", nil,
+    "Compare new level times with your fastest recorded level across characters in the same game mode.")
+SharedToggle("ignoreMouseoverDelay", "Ignore mouseover delay", function(value)
+    ns.db.ignoreMouseoverDelayUserSet = true
+    if value and ns.levelUpFrame and ns.levelUpFrame:IsShown() then ns.RescheduleFadeOut(0.15) end
+end)
+SharedToggle("clickThrough", "Allow click-through", function(value) ns.ApplyClickThrough(value) end)
 SharedToggle("rightClickClose", "Right-click to close", nil, "Close the popup by right-clicking it.")
 SharedToggle("lockFramePosition", "Lock Location", function(value) ns.ApplyFrameLock(value) end)
 SharedToggle("equalStatWidths", "Equal-width stat text", function()
@@ -343,11 +393,11 @@ ns.RESETTABLE_SETTING_KEYS = {
     "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize",
     "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity", "fireworkSize", "fireworkOpacity", "frameInset",
     "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
-    "milestoneAnimations", "screenshotMilestones", "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
+    "milestoneAnimations", "milestoneInterval", "screenshotMilestones", "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
-    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
+    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
@@ -943,6 +993,7 @@ local function InitDB()
     GnomeLevelUpDB.persistentOptionsPreview = nil
     GnomeLevelUpDB.themePreview = nil
     ns.db = GnomeLevelUpDB
+    ns.db.milestoneInterval = ns.GetMilestoneInterval()
 
     -- Retire the deleted placeholder in profiles saved by older theme builds.
     local savedRingTexture = ns.db.portraitRingTexture
@@ -1600,20 +1651,32 @@ local function PlaySoundKitWithVolume(soundKitID, channel)
     end
 end
 
-local previewSoundHandle
+local previewSoundHandle, nativePreviewSoundHandle
 function ns.StopPreviewSound()
     if previewSoundHandle and type(StopSound) == "function" then pcall(StopSound, previewSoundHandle) end
-    previewSoundHandle = nil
+    if nativePreviewSoundHandle and nativePreviewSoundHandle ~= previewSoundHandle and type(StopSound) == "function" then
+        pcall(StopSound, nativePreviewSoundHandle)
+    end
+    previewSoundHandle, nativePreviewSoundHandle = nil, nil
 end
 
-function ns.PlayLevelUpSound(force)
-    -- Play a custom sound or one of the built-in sounds.
+local function PlayNativePreviewSound()
+    ns.SetGnomeLevelUpSoundMuted(false)
+    local success, handle = PlaySoundFile(ns.GetNativeLevelUpSoundFileID(), "SFX")
+    if success then nativePreviewSoundHandle = handle end
+end
+
+function ns.PlayLevelUpSound(force, isLevelUpPreview)
+    -- Real level-ups get their native ding from Blizzard. Previews have no event
+    -- to trigger it, so reproduce it only when the native sound is unmuted.
     local db = ns.db or {}
-    if force or ns.UsesNativeLevelUpSound() then ns.StopPreviewSound() end
+    if force or isLevelUpPreview or ns.UsesNativeLevelUpSound() then ns.StopPreviewSound() end
     if ns.UsesNativeLevelUpSound() then
         if ns.SetGnomeLevelUpSoundMuted then ns.SetGnomeLevelUpSoundMuted(false) end
+        if isLevelUpPreview then PlayNativePreviewSound() end
         return
     end
+    if isLevelUpPreview and db.muteNativeDing == false then PlayNativePreviewSound() end
     if db.playSound == false and not force then return end
     if ns.CanAdjustSoundVolume() and SoundVolume() == 0 then return end
 
@@ -1642,7 +1705,7 @@ function ns.PlayLevelUpSound(force)
     end
 
     local success, handle = PlaySelectedSound()
-    if force and success then previewSoundHandle = handle end
+    if (force or isLevelUpPreview) and success then previewSoundHandle = handle end
 end
 
 
@@ -1813,39 +1876,7 @@ function ns.GetLevelCap()
     return nil
 end
 
-function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart)
-    -- Use a predictable example so the options preview does not depend on live data.
-    EnsureDatabase()
-    -- A preview does not fire PLAYER_LEVEL_UP, so queue the popup cleanup below.
-    local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or UnitLevel("player")
-
-    local trainerAbilities = {}
-    if debugSkills or abilityCount then
-        trainerAbilities = BuildDebugAbilityPreview(currentLevel, abilityCount or 15)
-    else
-        -- Include client-appropriate examples without requiring trainer data.
-        trainerAbilities = BuildPreviewAbilityExamples()
-    end
-
-    local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(currentLevel)
-    local _, classToken = UnitClass("player")
-    local warlockPetAbilities = {}
-    local forever = ns.GetCurrentFlavor() == "forever"
-    if forever and debugSkills then
-        warlockPetAbilities = BuildDebugGrimoirePreview(15)
-    elseif forever and classToken == "WARLOCK" then
-        warlockPetAbilities[1] = {
-            name = "Firebolt (Rank 2)",
-            icon = 133738,
-            cost = 1337 * 10000,
-            itemID = 16302,
-            kind = "warlockPet",
-            trainingRank = 2,
-            isNewAbility = false,
-            preview = true,
-        }
-    end
-    if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
+local function BuildPreviewStatChanges(maxLevelPreview)
     local previewStats = {
         { name = STRENGTH or "Strength", old = 20, new = 23 },
         { name = STAMINA or "Stamina", old = 22, new = 27 },
@@ -1875,6 +1906,41 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
             end
         end
     end
+    return previewStats
+end
+
+function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart)
+    EnsureDatabase()
+    local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or UnitLevel("player")
+
+    local trainerAbilities = {}
+    if debugSkills or abilityCount then
+        trainerAbilities = BuildDebugAbilityPreview(currentLevel, abilityCount or 15)
+    else
+        -- Trainer data may be empty before the first visit.
+        trainerAbilities = BuildPreviewAbilityExamples()
+    end
+
+    local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(currentLevel)
+    local _, classToken = UnitClass("player")
+    local warlockPetAbilities = {}
+    local forever = ns.GetCurrentFlavor() == "forever"
+    if forever and debugSkills then
+        warlockPetAbilities = BuildDebugGrimoirePreview(15)
+    elseif forever and classToken == "WARLOCK" then
+        warlockPetAbilities[1] = {
+            name = "Firebolt (Rank 2)",
+            icon = 133738,
+            cost = 1337 * 10000,
+            itemID = 16302,
+            kind = "warlockPet",
+            trainingRank = 2,
+            isNewAbility = false,
+            preview = true,
+        }
+    end
+    if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
+    local previewStats = BuildPreviewStatChanges(maxLevelPreview)
     local seconds = ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime()
     local previous
     if paceScenario then
@@ -2047,17 +2113,18 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
             ns.RequestLevelPlayedTime()
             ns.PreviewLevelUp(false, nil, true, count)
         else
-            print("|cff3fe0ffGnomeLevelUp|r: the client did not report a level cap.")
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("The level cap is unavailable. Wait for loading to finish, then try /glu maxlevel again."))
         end
     elseif msg == "milestone" or msg:match("^milestone%s") then
         local levelText, countText = msg:match("^milestone%s+(%d+)%s+(%d+)$")
         local count = countText and tonumber(countText) or 3
-        local level = msg == "milestone" and math.max(10, math.ceil(UnitLevel("player") / 10) * 10)
+        local interval = ns.GetMilestoneInterval()
+        local level = msg == "milestone" and math.max(interval, math.ceil(UnitLevel("player") / interval) * interval)
             or tonumber(levelText or msg:match("^milestone%s+(%d+)$"))
-        if level and count >= 1 and count <= 30 and level >= 10 and level <= 1000 and level % 10 == 0 then
+        if level and count >= 1 and count <= 30 and level >= interval and level <= 1000 and level % interval == 0 then
             ns.PreviewLevelUp(false, level, nil, count)
         else
-            print("|cff3fe0ffGnomeLevelUp|r: /glu milestone [level] [1-30] — level: 10–1000, multiple of 10; default count: 3.")
+            print("|cff3fe0ffGnomeLevelUp|r: /glu milestone [level] [1-30] " .. ns.L("Choose a level up to 1000 that is a multiple of %d.", interval))
         end
     elseif msg == "test" or msg:match("^test%s") then
         local count = msg == "test" and 3 or tonumber(msg:match("^test%s+(%d+)$"))

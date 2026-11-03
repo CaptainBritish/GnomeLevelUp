@@ -74,7 +74,6 @@ end
 local function BuildOptions()
     if panel.gluOptionsBuilt then return end
 
-    -- Keep the settings page compact and aligned with Blizzard's panels.
     local LEFT = 16
     local CONTROL_X = 160
     local APPEARANCE_SHIFT = 50
@@ -174,7 +173,6 @@ local function BuildOptions()
         end
     end
 
-    -- Keep the character artwork as a subtle watermark behind the settings.
     local watermark = panel:CreateTexture(nil, "BACKGROUND")
     watermark:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, 18)
     watermark:SetAlpha(0.40)
@@ -252,12 +250,11 @@ local function BuildOptions()
     local sections = {}
     local currentSection
 
-    -- The original row identifiers preserve setting order; measured cells own
-    -- positioning, wrapping, collapse visibility and debug-only visibility.
+    -- Row IDs preserve control order; measured cells handle wrapping and visibility.
     local optionLayout = ns.CreateOptionsLayout(body)
     local optionTabs = ns.CreateOptionsTabs(panel, chrome, optionsScroll, optionLayout)
     function ns.SelectOptionsTab(key) return optionTabs:Select(key) end
-    local function IsForeverMode() return ns.GetCurrentFlavor() ~= "retail" end
+    local IsForeverMode = ns.SupportsTrainerData
     local trainerOnlyControls = {
         ["Check trainer lists for catalogue changes"] = true,
         ["Export trainer report"] = true,
@@ -468,7 +465,7 @@ local function BuildOptions()
             for i, c in ipairs(menuChoices) do
                 if c.value == value then return ns.LocalizeChoiceLabel(c) end
             end
-            return ns.LocalizeChoiceLabel(menuChoices[1])
+            return menuChoices[1] and ns.LocalizeChoiceLabel(menuChoices[1]) or ns.L("None")
         end
 
         UIDropDownMenu_Initialize(dd, function(_, level)
@@ -565,6 +562,11 @@ local function BuildOptions()
         return firstCheck, firstLabel, secondCheck, secondLabel
     end
 
+    local function AddSettingCheckboxPair(firstKey, secondKey)
+        local first, second = ns.OPTION_SETTINGS[firstKey], ns.OPTION_SETTINGS[secondKey]
+        return AddCheckboxPair({ first.label, first.get, first.set }, { second.label, second.get, second.set })
+    end
+
     local function AddAvailabilityRefresh(checkButton, label, isAvailable)
         local section = currentSection
         refreshers[#refreshers + 1] = function()
@@ -583,8 +585,8 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.2"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.2")))
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.4"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.4")))
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
@@ -884,7 +886,6 @@ local function BuildOptions()
         end
         y = textureGridStartY - math.ceil(#textureColorChoices / 2) * 34
 
-        -- Keep each texture's transform controls in a compact two-column grid.
         local textureTransformStartY = y
         for _, entry in ipairs(textureColorChoices) do
             local index = _
@@ -1059,27 +1060,11 @@ local function BuildOptions()
         function(v) ns.db.screenshotMilestones = v end, LEFT + 270, modeRowY)
     y = modeRowY - 32
 
-    local shortStatsCheck, _, relevantStatsCheck = AddCheckboxPair({
-        "Shorten stat totals",
-        function() return ns.db.shortenRetailStatTotals == true end,
-        function(v) ns.db.shortenRetailStatTotals = v; ns.RefreshRetailStatOptions() end,
-    }, {
-        "Relevant stats only",
-        function() return ns.db.relevantRetailStatsOnly == true end,
-        function(v) ns.db.relevantRetailStatsOnly = v; ns.RefreshRetailStatOptions() end,
-    })
+    local shortStatsCheck, _, relevantStatsCheck = AddSettingCheckboxPair("shortenRetailStatTotals", "relevantRetailStatsOnly")
     shortStatsCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() == "retail" end
     relevantStatsCheck.gluOptionsCell.isVisible = shortStatsCheck.gluOptionsCell.isVisible
 
-    AddCheckboxPair({
-        "Equal-width stat text",
-        function() return ns.db.equalStatWidths == true end,
-        function(v) ns.db.equalStatWidths = v; ns.RefreshStatTextLayout(); ns.RefreshPopupLayout() end,
-    }, {
-        "Abbreviate stat names",
-        function() return ns.db.abbreviateStatNames == true end,
-        function(v) ns.db.abbreviateStatNames = v; ns.RefreshStatTextLayout(); ns.RefreshPopupLayout() end,
-    })
+    AddSettingCheckboxPair("equalStatWidths", "abbreviateStatNames")
 
     AddCheckbox("Hide Blizzard level-up toast",
         function() return ns.db.hideBlizzardLevelUp ~= false end,
@@ -1098,27 +1083,13 @@ local function BuildOptions()
     AddSettingCheckbox("showSecondaryStats", LEFT, secondaryRow)
     AddNumericOption("secondaryStatStartPercent", LEFT + 270, CONTROL_X + 270, secondaryRow)
     y = secondaryRow - 34
-    AddSettingCheckbox("showLevelTime", LEFT, y)
     AddCheckbox("Don't show until combat ends",
         function() return ns.db.waitForCombatEnd end,
         function(v) ns.db.waitForCombatEnd = v end, LEFT + 270, y)
     y = y - 32
 
-    AddCheckbox("Ignore mouseover delay",
-        function() return ns.db.ignoreMouseoverDelay == true end,
-        function(v)
-            ns.db.ignoreMouseoverDelay = v
-            ns.db.ignoreMouseoverDelayUserSet = true
-            if v and ns.levelUpFrame and ns.levelUpFrame:IsShown() then
-                ns.RescheduleFadeOut(0.15)
-            end
-        end, LEFT, y)
-    AddCheckbox("Allow click-through",
-        function() return ns.db.clickThrough == true end,
-        function(v)
-            ns.db.clickThrough = v
-            ns.ApplyClickThrough(v)
-        end, LEFT + 270, y)
+    AddSettingCheckbox("ignoreMouseoverDelay", LEFT, y)
+    AddSettingCheckbox("clickThrough", LEFT + 270, y)
     y = y - 32
 
     AddCheckbox("Enable debug commands",
@@ -1136,7 +1107,7 @@ local function BuildOptions()
         end, LEFT, y)
     y = y - 32
 
-    DeferDebugControls(math.ceil(#ns.ANIMATION_SOUND_SETTINGS / 3) * 60 + 32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34, function()
+    DeferDebugControls(math.ceil(#ns.ANIMATION_SOUND_SETTINGS / 3) * 60 + 32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34 + 32, function()
         local allGrimoiresCheck = AddCheckbox("Show all available grimoires",
             function() return ns.db.showAllWarlockGrimoires == true end,
             function(v) ns.db.showAllWarlockGrimoires = v end,
@@ -1256,6 +1227,15 @@ local function BuildOptions()
         end
         y = y - 60
 
+        AddButton("Fill sample times (20h)", 210, LEFT, y, function()
+            ns.SetLevelHistorySamples(true)
+            optionTabs:Select("level_history")
+        end, true, y, 32)
+        AddButton("Clear sample history", 180, LEFT + 230, y, function()
+            ns.SetLevelHistorySamples(false)
+        end, true, y, 32)
+        y = y - 32
+
         AddButton("Print performance report", 170, LEFT, y, function()
             ns.PrintPerformanceDiagnostics()
         end, true, y, 32)
@@ -1301,6 +1281,7 @@ local function BuildOptions()
 
     end)
 
+    local modeFooterRow = y
     AddDropdown("Controller glyphs", {
         { value = "none", label = "None" },
         { value = "xbox", label = "Xbox" },
@@ -1311,8 +1292,56 @@ local function BuildOptions()
         function(value)
             ns.db.controllerGlyphStyle = value
             ns.RefreshControllerGlyph()
-        end, y, 130, LEFT, CONTROL_X)
+        end, modeFooterRow, 130, LEFT, CONTROL_X)
+    AddDropdown("Milestone interval", ns.MILESTONE_INTERVAL_CHOICES, ns.GetMilestoneInterval, ns.SetMilestoneInterval,
+        modeFooterRow, 180, LEFT + 270, CONTROL_X + 270)
+    y = modeFooterRow - 36
+
+    AddSectionHeader("Level History", "level_history")
+    AddSettingCheckbox("showLevelTime", LEFT, y)
+    AddSettingCheckbox("compareAccountLevelTimes", LEFT + 270, y)
+    y = y - 34
+    local historyFrame = CreateFrame("Frame", nil, body)
+    local historyChoices, currentCharacter = ns.GetLevelHistoryCharacters()
+    historyFrame.character = historyChoices[1] and historyChoices[1].value or nil
+    historyFrame.flavor = ns.GetCurrentFlavor()
+    local historyReset
+    local function HistoryCharacterChoices()
+        local choices = ns.GetLevelHistoryCharacters()
+        for _, choice in ipairs(choices) do
+            if choice.value == historyFrame.character then return choices end
+        end
+        historyFrame.character = choices[1] and choices[1].value or nil
+        return choices
+    end
+    local refreshHistoryCharacter = AddDropdown("Character", HistoryCharacterChoices,
+        function() return historyFrame.character end,
+        function(value)
+            historyFrame.character = value
+            if historyReset then historyReset:SetEnabled(value == currentCharacter) end
+        end, y, 220)
+    AddDropdown("History mode", { { value = "retail", label = "Retail" }, { value = "forever", label = "WoW: Forever" } },
+        function() return historyFrame.flavor end,
+        function(value) historyFrame.flavor = value end, y, 180, LEFT + 270, CONTROL_X + 270)
     y = y - 36
+    historyReset = AddButton("Reset this character's times", 220, LEFT, y, function()
+        ns.ResetLevelTimers()
+        ns.RefreshOptionsPanel()
+    end)
+    y = y - 32
+    AddLabel("Only characters with recorded level times are listed. Missing levels are shown as a dash.", y, LEFT)
+    y = y - 32
+    LayoutCell("history", y, LEFT, nil, historyFrame, { historyFrame }, false, { optionLabel = "Level History" })
+    y = y - 40
+    refreshers[#refreshers + 1] = function()
+        historyReset:SetEnabled(historyFrame.character == currentCharacter)
+    end
+    function ns.RefreshLevelHistoryOptions(showCurrentCharacter)
+        if showCurrentCharacter then historyFrame.character = currentCharacter end
+        refreshHistoryCharacter()
+        historyReset:SetEnabled(historyFrame.character == currentCharacter)
+        if optionTabs.selected == "level_history" then ReflowSections() end
+    end
 
     AddSectionHeader("Trainer Data", "trainer_data")
 
@@ -1334,7 +1363,7 @@ local function BuildOptions()
         function() return ns.db.showOnlyNewSkills == true end,
         function(v) ns.db.showOnlyNewSkills = v end,
     })
-    newSkillsCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() ~= "retail" end
+    newSkillsCheck.gluOptionsCell.isVisible = ns.SupportsTrainerData
     AddAvailabilityRefresh(autoScanCheck, autoScanLabel, function()
         return ns.CanCaptureTrainerData()
     end)
@@ -1348,11 +1377,8 @@ local function BuildOptions()
         function() return ns.db.showTrainerCosts end,
         function(v) ns.db.showTrainerCosts = v end,
     })
-    local function IsForeverClient()
-        return ns.GetCurrentFlavor() == "forever"
-    end
-    AddAvailabilityRefresh(weaponCheck, weaponLabel, function() return IsForeverClient() and not ns.db.horizontalMode end)
-    AddAvailabilityRefresh(costCheck, costLabel, IsForeverClient)
+    AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
+    AddAvailabilityRefresh(costCheck, costLabel, ns.SupportsTrainerData)
 
     local currentLevelCheck, currentLevelLabel, petCheck, petLabel = AddCheckboxPair({
         "Only skills unlocked at this level",
@@ -1374,7 +1400,7 @@ local function BuildOptions()
         function() return ns.db.showHunterPetSkills ~= false end,
         function(v) ns.db.showHunterPetSkills = v end)
     local function IsForeverHunter()
-        if not IsForeverClient() then return false end
+        if not ns.SupportsTrainerData() then return false end
         local _, classToken = UnitClass("player")
         return classToken == "HUNTER"
     end
@@ -1597,7 +1623,6 @@ local function BuildOptions()
 
     do
         AddSectionHeader("Profile", "profile")
-        local profileSection = currentSection
         AddCheckbox("Save per Character", ns.GetSavePerCharacter, ns.SetSavePerCharacter)
         AddDropdown("Profile", ns.GetProfileChoices, ns.GetActiveProfileName, ns.SelectProfile)
         AddLabel("Changes are saved automatically.", y):SetWidth(520)

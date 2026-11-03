@@ -1,243 +1,124 @@
 # Working on GnomeLevelUp
 
-The current development version is 1.5.2; the last public release is 1.3.8. WoW Forever is the primary test client. Retail compatibility needs separate in-game testing.
+Read the addon version and load order from `GnomeLevelUp.toc`. Retail and Forever
+share the renderer but use different ability and stat rules. Test both paths;
+headless checks cannot confirm native rendering, sound or controller input.
 
-## Code map
+## Source map
 
-- `Core.lua`: defaults, saved settings, themes and addon events.
-- `UI.lua`: level-up display and ability rows.
-- `TextureCompat.lua`: shared texture assignment, atlas lookup and controller glyph fallbacks.
-- `ThemeRenderer.lua`: shared frame geometry, independent corner sizes, theme painting and fill transforms for the popup and both menu variants.
-- `Options.lua`, `OptionsLayout.lua`: Blizzard settings panel and text layout.
-- `ControllerOptions.lua`: controller menu, navigation and preview.
-- `Locals.lua`: UI translations and locale selection.
-- `Data/ForeverCatalog.lua` and class data files: bundled trainer skills and metadata lookup.
-- `TrainerReport.lua`: trainer differences, report export and report window.
-- `Tools/`: development checks; excluded from release packaging by `.pkgmeta`.
+| Area | Files |
+| --- | --- |
+| Defaults, shared settings/display rules, migrations and commands | `Core.lua` |
+| Profiles and sharing window | `Profiles.lua`, `ProfileTransfer.lua` |
+| Live level events, /played cache and pending popups | `LevelUp.lua` |
+| Recorded intervals, best times, account history and its Options page | `LevelHistory.lua` |
+| Last real level-up snapshot and replay | `LevelReplay.lua` |
+| Stats, resource filtering and number formatting | `Stats.lua` |
+| Popup lifecycle, animation clock and frame layout | `UI.lua` |
+| Text measurement, section anchors and effect updates | `UIStatText.lua`, `UIPopupLayout.lua`, `UIEffects.lua`, `UIRender.lua` |
+| Theme definitions, texture compatibility and textured frames | `ThemeList.lua`, `TextureCompat.lua`, `ThemeRenderer.lua` |
+| Mouse Options, tabs and responsive controls | `Options.lua`, `OptionsTabs.lua`, `OptionsLayout.lua` |
+| Controller menu and first-time setup | `ControllerOptions.lua` |
+| Shared option descriptions and translations | `OptionHelp.lua`, `Locals.lua` |
+| Spellbook, trainer data and pet training | `SpellBookCompat.lua`, `TrainerScan.lua`, `WarlockPet.lua`, `Data/` |
+| Trainer reports | `TrainerReport.lua` |
+| Native notification suppression and minimap shortcuts | `HideBlizzardLevelUp.lua`, `MinimapButton.lua` |
 
-## Comments and translations
+## Editing conventions
 
-Use comments to explain client quirks, constraints and decisions that the code cannot make obvious. Keep conversation history and instructions out of runtime comments. Describe current behavior in the README and record release changes in the changelog.
+Use comments for the reason behind a workaround, a client limitation or an
+important data boundary. Avoid restating the next line or leaving conversational
+history in runtime files. Name longer-lived locals by their purpose. Extract a
+function when a caller needs to distinguish separate jobs, rather than creating
+wrappers around individual API calls.
 
-Every new user-facing string must be added to all ten non-English dictionaries. English source strings are the lookup keys. Do not translate saved-variable keys, API names, slash commands, spell IDs or asset paths. See `LOCALIZATION.md` for locale status and review guidance.
+Keep saved-variable keys, translation keys and public `ns` functions stable.
+Call required addon functions directly after their TOC dependencies load. Keep
+feature checks for client APIs and optional libraries. Do not remove a migration
+just because its old setting no longer appears in Options.
 
-## Trainer data
+Every new player-facing string needs all ten non-English translations. Do not
+translate API names, commands, IDs or asset paths. See [LOCALIZATION.md](LOCALIZATION.md).
 
-The bundled catalogue is the normal source of trainer skills. Trainer visits provide a fallback for detecting new spell IDs or changed required levels. Prices can vary with discounts, and an absent service does not prove that a spell was removed.
+## State boundaries
 
-Reports are stored in SavedVariables when the player reloads or logs out. The export window can also provide report-only JSON. Profession capture remains experimental and off by default; its slash command remains available, but there is no profession checkbox in the options panel.
+- `Core.lua` owns defaults, shared setting setters and client/display policies.
+  Shared mouse and controller settings use `OPTION_SETTINGS`; `Profiles.lua` applies
+  validated snapshots without replacing the live `ns.db` table.
+- `LevelHistory.lua` owns saved level intervals, best times and account history.
+  `LevelUp.lua` owns the live stat baseline, pending level-up batch and /played
+  cache. Its reset command asks history to clear records, then resets the cache.
+- `UI.lua` owns preview lifetime and its closing timer. Menus request suspension;
+  they do not change the timer or stat-page state. Effect helpers read the popup
+  clock through their context and update their own pooled textures.
+- `LevelReplay.lua` owns the saved last-level-up snapshot. Profiles and test
+  previews do not replace real history or replay records.
 
-The catalogue validator currently reports 22 family/rank collisions for review and 72 explicit external spell references. Do not rewrite these records merely to silence warnings: check the actual spell relationship first.
+Keep saved-data writes in their owning module. Use returned history views for
+rendering; do not edit stored records from menus or event callbacks.
 
-## Local checks
+## Automated checks
 
-Run these from the addon directory with Python 3 and `liblua5.4` installed:
+Run from the addon directory with Python 3:
 
-```sh
-python3 Tools/verify_localization.py
-python3 Tools/verify_forever_training.py
-python3 Tools/verify_refresh.py
-python3 Tools/validate_forever_catalog.py
-python3 Tools/verify_catalogue_validation.py
-python3 Tools/verify_trainer_reports.py
-python3 Tools/verify_lazy_options.py
-python3 Tools/verify_controller_layout.py
-python3 Tools/verify_texture_compat.py
-python3 Tools/verify_ui_load_order.py
-python3 Tools/verify_wow_api_runner.py
-python3 Tools/verify_native_level_chat.py
-python3 Tools/verify_hunter_report_update.py
-python3 Tools/verify_shaman_report_update.py
-python3 Tools/verify_mage_report_update.py
-python3 Tools/verify_paladin_report_update.py
-python3 Tools/verify_visual_effects.py
+```text
+python -X utf8 Tools/run_checks.py
+python -X utf8 Tools/run_checks.py verify_screenshot_test.py verify_max_background_fade.py
+python Tools/check_wow_api.py
 ```
 
-These checks exercise mocked APIs. They cannot confirm client rendering, controller focus or actual trainer responses. In game, check language changes after `/reload`, mouse and controller options, narrow panels, trainer reports after saving, and the level-up preview. Check sound behavior on the target client before changing its mute logic.
+The first command runs the main regression set. Pass individual `verify_*.py`
+filenames for focused work; the remaining checks are under `Tools/`. Linux uses
+`liblua5.4.so.0`. On Windows, the runner finds the VS Code Lua extension, or accepts
+`--luals "C:/path/to/lua-language-server.exe"`.
 
-Package source archives with the `GnomeLevelUp/` folder at the root. Exclude Python bytecode and temporary files. Keep development tools in source archives; release packaging excludes them through `.pkgmeta`.
+For the API check, run `python Tools/check_wow_api.py --setup` once to install
+checksum-verified dependencies. `--cache PATH` selects their location. Use `--output PATH` to choose the report
+directory. Versions and hashes are pinned in
+`Tools/wow-api-lock.json`.
 
-## Compatibility maintenance
+The API check fails on errors or new warnings. Four existing warnings have
+specific explanations in `Tools/wow-api-baseline.json`; do not regenerate that
+baseline to hide new findings. `--strict` also fails on reviewed warnings.
+Results go to `Tools/Diagnostics/` by default.
 
-Call required addon functions directly once their TOC dependencies have loaded.
-Retain checks for client APIs, optional libraries and the controller module, which
-returns early on Retail. Keep texture fallback rules in `TextureCompat.lua`;
-share textured-frame sizing and transforms through `ThemeRenderer.lua`. Callers
-own frame lifetime, Modern backgrounds, visibility and text fallback.
+## In-game checks
 
-The 19 October 2026 refactor log and rollback files are under `Tools/`.
+After `/reload`, check the affected controls with the mouse and controller.
+For popup changes, compare normal, milestone and max-level previews in both
+layouts, Modern and a textured theme, and Classic Mode. Check long stat strings,
+secondary-page switching, early close and automatic close. Test new text in a
+longer translation and a narrow Options window.
 
-## WoW API diagnostics
+Use `/glu perf on`, `/glu perf reset`, run the preview, then `/glu perf` for
+callback timings. Keep portrait, effects and location consistent when comparing
+runs. Warm up first. `/glu memory` samples allocations; a manual collection with
+the popup closed distinguishes retained data from pending garbage. GLU does not
+force collection automatically.
 
-Run the API-aware check as part of development validation:
+Never automate WoW input. Rendering, audio, controller focus and actual trainer
+responses require manual confirmation on the target client.
 
-```sh
-# First run: install checksum-verified LuaLS and Ketho definitions in a user cache.
-python3 Tools/check_wow_api.py --setup
+## Data and packaging
 
-# Later runs reuse those exact dependencies; missing tools fail explicitly.
-python3 Tools/check_wow_api.py
+The bundled Forever catalogue is the primary trainer list. Trainer visits can
+report changed IDs or required levels; discounts and missing services are not
+proof that the catalogue changed. Keep uncertain records for review rather than
+rewriting them merely to silence a warning.
 
-# Show the unsuppressed warning outcome (currently returns exit code 1).
-python3 Tools/check_wow_api.py --strict
-```
+Release packages use `GnomeLevelUp/` as their root. `.pkgmeta` excludes development
+tools and contributor/localization notes. The temporary screenshot command stays
+in `Tools/ScreenshotTest.lua`; its loader and renderer overrides have
+`@do-not-package@` markers. Keep those markers intact while the tool is in use.
 
-The runner needs Python 3.9+ and supports the pinned Linux/macOS x64/arm64 and
-Windows x64 packages. Installation needs access to GitHub and codeload.github.com.
-Use `--cache PATH` to choose a dependency cache and `--output PATH` to choose
-where reports are written. The default output is `Tools/Diagnostics/`.
+Historical decisions and rollback instructions remain under `Tools/`. Preserve
+all rollback backups, including the six explicitly retained by the user. The
+readability snapshots are `Tools/Rollback/2026-11-02-readability/` and
+`Tools/Rollback/2026-11-02-rules-state/`.
 
-`Tools/wow-api-lock.json` pins LuaLS 3.19.2 and Ketho 0.22.3 plus archive hashes.
-The Ketho version matches the uploaded VSCode settings. The user's LuaLS version
-and user-wide editor settings were not supplied, so exact editor parity is not
-claimed. The command uses Ketho Core definitions, WoW Lua 5.1, disabled stock
-Lua builtins, and the uploaded recognized-global and weak-union settings from
-`Tools/wow-api-config.json`. It does not run VSCode's extension-host callbacks
-that automatically modify diagnostic settings. No broad warning category is
-disabled to obtain a clean result.
+## Readability work status
 
-Embedded libraries are loaded for their declarations; their own diagnostics are
-excluded. Development fixtures and rollback copies are excluded. These files
-remain covered by their existing checks where applicable.
-
-The initial result is zero errors and four reviewed warnings. Each is recorded
-with its reason in `Tools/wow-api-baseline.json`: the guarded legacy GetSpellInfo
-lookup, initialization of the Forever cache through EnsureSavedStore, and two
-optional trainer-tooltip ID fields absent from Ketho's declared type. The last
-two still require live Forever verification. Existing mocked coverage does not
-prove the real-client tooltip shape.
-
-The normal command exits 0 only when no new diagnostics or errors appear. It
-prints the reviewed warning count and preserves all findings in JSON/Markdown;
-strict mode exits 1 on any warning. The comparison uses file, diagnostic code,
-message, source text and occurrence count, so line-number shifts do not create
-noise and duplicate/new findings still fail. Exit 2 indicates setup or checker
-failure. Review baseline edits manually; never regenerate them merely to silence
-a failing run. If a reviewed warning disappears, remove its baseline entry after
-reviewing the reason.
-
-Read `Tools/Diagnostics/api-check-results.md` and the corresponding JSON for the
-latest static findings. Continue the live WoW tests described above.
-
-
-The visual-effects check runs the real `/glu test` entry point against headless
-widgets. It covers new/rank samples without trainer data, rank metadata in all
-ability sources, pooled icon reuse, individual toggles, appearance reset,
-Reduced Motion, portrait colour/layer/opacity and hidden-frame cleanup.
-It does not render Blizzard textures or prove in-game appearance. In the client,
-compare `/glu test` with each Animation effect off/on, both portrait modes,
-custom themes, compact layout and Reduced Motion.
-
-
-Scale animations use `SetScaleFrom`/`SetScaleTo`; the visual-effects mock exposes
-only the documented Scale setters instead of accepting arbitrary `Set*` names.
-Keep the explicit `Scale` type on the portrait-pulse animation so LuaLS checks
-its calls against Ketho's Scale definitions rather than the generic return
-from `CreateAnimation`.
-
-
-Stat rows now move a shared parent frame each render tick instead of animating
-text/glow regions independently. The visual regression samples their movement
-and checks that they remain at the final position through later effects. It
-also checks delayed starburst growth, both settling brightness dips, 40% base
-opacity, the half-second post-fade shimmer delay and three-second repeats, stronger class tints
-independent of the global colour setting, and the Gnomeregan Smash preview.
-The level text has no added scale or starburst effect and no reveal toggle.
-Reduced Motion skips the growth/blink/repeating-shimmer sequence.
-
-
-The seven effect controls are in Animation in both menus. The regression selects
-None through the normal dropdown and controller choice, checks no horizontal
-stat motion with fading preserved (including switching off a running slide),
-and samples three consecutive repeating ability/stat shimmer cycles. The repeat
-interval is three real seconds and is independent of Animation speed.
-
-
-Compact sizing checks cover the emphasized-stat width increase, longer localized
-labels and large values, unchanged normal width, live toggles, synchronized text
-and glow widths, 42px new versus 40px rank-up icons, pooled reuse, pet rows,
-trainer costs, five-icon compact scrolling and layout refreshes that do not
-replay entrance animations. Measurements in the widget mock ignore colour codes
-and account for inline texture placeholders instead of counting formatting as
-visible text.
-
-
-The stat sweep regression samples ordered row peaks and overlapping neighbours
-over three cycles, verifies updates on consecutive 144 Hz ticks, and checks a
-single visible row with hidden pooled rows. It preserves delayed startup, a
-two-second sweep/one-second gap, unchanged ability timing, no row movement,
-Reduced Motion and hidden-frame cleanup. Actual glow rendering still needs
-`/glu test` in the client.
-
-
-The latest stat regression checks top/bottom glyph samples, neighbouring-row
-overlap, stationary base text, clipping windows and gain-only text alignment,
-font changes, pooled allocation reuse and hidden rows. The renderer uses 32
-pooled horizontal clipping slices shared by all rows, with a raised-cosine
-alpha profile. It approximates a soft gradient using ~1.625px slices at the
-default scale; live-client rendering is the final visual check.
-
-Portrait checks cover the combined toggle in both menus, old-setting migration,
-the 0.2s delay at normal/double speed, original 1.4x expansion, starburst beginning only on
-pulse completion, cancellation, Reduced Motion and retained settling/40% opacity.
-
-
-After a live report that the sliced sweep was invisible, its windows now use
-ScrollFrames with top-left anchored, padded scroll children. Tests resolve
-viewport position, child-local text position and vertical scroll together to
-check stationary glyphs and in-range offsets, and assert the highlight frame
-level is above the base rows. The widget mock cannot certify native clipping
-or prove the renderer fault is fixed: confirm with `/glu test` in WoW.
-
-
-Four extra texture effects share the visible-only driver: six portrait sparks,
-eight embers, twelve edge-glow strips, and two corner sparkles per pooled icon.
-They use built-in star4/WHITE8X8 textures. Regression checks independent menus,
-class colours with global colour mode off, post-pulse ordering, main/pet new/rank
-classification, repeat timing, one-shot completion, pooling, Reduced Motion and
-hide/disable cleanup. Actual appearance still requires the WoW client.
-
-
-Latest renderer correction replaces stat-sweep ScrollFrames with plain Frames
-using SetClipsChildren and locally anchored counter-moving canvases. Tests reject
-ScrollFrames and texture regions in this tree and resolve screen positions.
-Native rendering still needs confirmation; neither mocks nor static API checks
-prove glyph clipping looks correct.
-
-Mote tests cover the half-starburst-entrance threshold, randomized per-popup
-parameters, decreasing travel over equal time intervals, opacity approaching
-zero, final hiding, and no motes without a visible starburst. Edge tests check a
-root-parented 30%-alpha layer, visibility during initial fade-in and bounded
-combined strip intensity. No UI strings or setting keys changed.
-
-
-The second starburst-mote pool has six textures sharing Portrait sparks. Seeded
-headings/origins stay in the lower half, and clamped endpoints keep the complete
-rotated mote inside the panel without per-frame boundary stops. Tests sample
-non-upward motion, normal and narrow/offset panel bounds, class tint, pooled
-reuse and cleanup. The bottom pool is 40 (8x5), with its original eight duration
-variants repeated across the larger pool. Sweep alpha samples must be exactly
-70% of their prior profile (peak coefficient 0.455 rather than 0.65).
-
-
-The user canceled the glyph-sweep experiment. Current production code uses the
-original text/glow layers for whole-row highlights, one stat at a time. No
-stat clipping windows, ScrollFrames, extra glyph copies or moving bars remain.
-The regression checks exclusive ordered row peaks, 0.455 maximum gain blend,
-delayed startup, three repeats, quiet gaps, single-row/hidden-row reuse and
-hide/Reduced Motion cleanup. Earlier sweep-rendering notes above are historical.
-
-
-Portrait motes now use one original and two contained slots, shared across the
-whole portrait emitter. Expired invisible slots reroll their parameters and
-restart at zero alpha; no textures are created. Regression runs a 15-second
-preview past multiple lifetimes, checks a 2–3 active population and stable object
-counts, fresh paths, disable/re-enable and Reduced Motion resume. Bottom motes
-remain a separate pool of forty. Earlier one-shot count notes are historical.
-
-
-Mote sizes use base*1.10*(0.90+random*0.20), selected per lifetime for portrait
-slots and per rising cycle for background motes. Tests cover the resulting size
-bounds, no size changes mid-cycle, cycle renewal, exact 21% background-opacity
-peak, all forty background class tints with global colouring off, and retained
-containment for larger motes. No new UI strings or settings are introduced.
+All nine original suggestions are complete. The second pass consolidated display
+rules and setting callbacks, moved timing persistence into history, and made
+preview lifetime private to the renderer. The saved schema, public entry points
+and temporary screenshot tool remain compatible.

@@ -2,8 +2,8 @@
 ## Title: GnomeLevelUp
 ## Notes: A gnometastic level-up screen showing stat gains and unlearned trainer abilities.
 ## Author: Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU Roleplay) Captain_British on Curse
-## Version: 1.5.2
-## SavedVariables: GnomeLevelUpDB, GnomeLevelUpProfilesDB
+## Version: 1.5.4
+## SavedVariables: GnomeLevelUpDB, GnomeLevelUpProfilesDB, GnomeLevelUpHistoryDB
 ## SavedVariablesPerCharacter: GnomeLevelUpCharacterDB
 ## X-Website: https://welcometozombo.com/
 ## IconTexture: Interface\AddOns\GnomeLevelUp\Textures\minimap-button.tga
@@ -36,6 +36,7 @@ TrainerScan.lua
 TextureCompat.lua
 ThemeRenderer.lua
 LevelReplay.lua
+LevelHistory.lua
 UIRender.lua
 UIStatText.lua
 UIPopupLayout.lua
@@ -48,3 +49,8 @@ OptionsTabs.lua
 Options.lua
 MinimapButton.lua
 LevelUp.lua
+
+#@do-not-package@
+# SSTEST: local screenshot tool; stripped from release packages.
+Tools\ScreenshotTest.lua
+#@end-do-not-package@

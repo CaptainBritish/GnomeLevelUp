@@ -1,6 +1,31 @@
 # Changelog
 
-## 1.5.2
+## 1.5.4 - The Stability Patch!
+
+
+
+##### New Features
+
+* Added a Level History tab with recorded times!
+
+
+
+##### Bug Fixes and Optimization
+
+* Level-up previews now include Blizzard's native ding when it is unmuted.
+* Debug history fill now uses 20-hour times for every level, allowing new records to replace the samples.
+
+* Improved code readability, removed old controller helpers and obsolete history-view data.
+* Popup, audio and profile-import failures now include translated recovery instructions.
+* Added an option for milestone intervals of 5, 10 or 20 levels.
+* Secondary stats now switch normally while Suspend Preview keeps the popup open in Options.
+* Simplified the README to focus on essential features and options.
+* Fixed invisible price labels reserving space in Retail.
+* Routed shared menu settings through common values, removing some code clutter.
+
+
+
+## 1.5.2 - The "Lessa fucked up and caused a memory leak" Patch!
 
 ##### New Features
 

@@ -245,7 +245,7 @@ function ns.BuildSecondaryPreviewStats()
 end
 
 function ns.SnapshotStats(reuse)
-    -- Keep the snapshot simple; the values may be secret, so DiffStats filters them later.
+    -- Store raw values here; DiffStats rejects protected values before comparing them.
     local _, powerToken = UnitPowerType("player")
     local powerLabel = "Power"
     if type(powerToken) == "string" and type(_G[powerToken]) == "string" then
@@ -301,7 +301,7 @@ function ns.BuildMaxLevelPreviewStats()
 end
 
 function ns.DiffStats(before, after)
-    -- Return only values that increased after the level-up.
+    -- Primary rows show increases; the secondary page can also show decreases.
     local diff = {
         level = GetVisibleNumber(after.level) or after.level,
         stats = {},

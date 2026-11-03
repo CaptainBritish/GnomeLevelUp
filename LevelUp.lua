@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
--- Use stat snapshots so the displayed changes are consistent.
-
+-- Event handling owns the live baseline, pending popup and /played request cache.
+-- Saved timing records belong to LevelHistory.lua.
 local baselineStats
 local pendingSinceCombat = false -- true while a level-up is waiting for combat to end
 local levelUpPending = false
@@ -64,8 +64,7 @@ function ns.GetCurrentLevelPlayedTime()
 end
 
 function ns.ResetLevelTimers()
-    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
-    GnomeLevelUpCharacterDB.levelTimes, GnomeLevelUpCharacterDB.fastestLevelTimes = nil, nil
+    ns.ClearRecordedLevelTimes()
     cachedTimeLevel, cachedTimeSeconds, cachedTimeReceivedAt, levelTimeForDisplay = nil, nil, nil, nil
     requestedTimeLevel = nil
     pendingElapsed, pendingTimes = nil, {}
@@ -73,54 +72,6 @@ function ns.ResetLevelTimers()
     RestorePlayedTimeChat()
     if ns.ClearLevelPaceComparison then ns.ClearLevelPaceComparison() end
     RequestPlayedTime()
-end
-
-function ns.RecordCompletedLevel(reachedLevel, seconds)
-    reachedLevel, seconds = tonumber(reachedLevel), tonumber(seconds)
-    if not reachedLevel or reachedLevel % 1 ~= 0 or reachedLevel < 2
-        or not seconds or seconds ~= seconds or seconds < 0 or seconds == math.huge then return end
-    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
-    local history = GnomeLevelUpCharacterDB.levelTimes
-    if type(history) ~= "table" then history = {}; GnomeLevelUpCharacterDB.levelTimes = history end
-    local flavor = ns.GetCurrentFlavor()
-    if type(history[flavor]) ~= "table" then history[flavor] = {} end
-    -- Keys are the level completed: 1 means the full 1 -> 2 interval.
-    if history[flavor][reachedLevel - 1] == nil then
-        history[flavor][reachedLevel - 1] = seconds
-    end
-end
-
-function ns.GetTimeToMaxLevel()
-    local cap = ns.GetLevelCap()
-    local history = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB.levelTimes
-    local times = type(history) == "table" and history[ns.GetCurrentFlavor()]
-    if not cap or type(times) ~= "table" then return nil end
-    local total = 0
-    for level = 1, cap - 1 do
-        local seconds = times[level]
-        if type(seconds) ~= "number" or seconds ~= seconds or seconds < 0 or seconds == math.huge then return nil end
-        total = total + seconds
-    end
-    return total < math.huge and total or nil
-end
-
-function ns.RecordLevelPace(seconds)
-    seconds = tonumber(seconds)
-    if not seconds or seconds ~= seconds or seconds == math.huge or seconds < 1 then return nil end
-    seconds = math.floor(seconds)
-    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
-    local records = GnomeLevelUpCharacterDB.fastestLevelTimes
-    if type(records) ~= "table" then records = {}; GnomeLevelUpCharacterDB.fastestLevelTimes = records end
-    local flavor = ns.GetCurrentFlavor()
-    local previous = tonumber(records[flavor])
-    if not previous or previous ~= previous or previous == math.huge or previous < 1 then
-        records[flavor] = seconds
-        return nil
-    elseif seconds < previous then
-        records[flavor] = seconds
-        return previous
-    end
-    return previous
 end
 
 function ns.RefreshBaseline()
@@ -156,7 +107,6 @@ end
 local function DisplayLevelUp()
     if not levelUpPending then return end
     pendingSinceCombat = false
-    -- Compare the saved stats with the new stats and show the panel.
     if not baselineStats then
         ns.RefreshBaseline()
         levelUpPending = false
@@ -169,8 +119,8 @@ local function DisplayLevelUp()
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
     local afterSpells = ns.SnapshotSpellBook()
     local startLevel = tonumber(pendingStart) or tonumber(baselineStats.level)
-    local multiple = startLevel and afterStats.level > startLevel + 1
-    local rangeStart = multiple and startLevel or nil
+    local combinedGain = startLevel and afterStats.level > startLevel + 1
+    local rangeStart = combinedGain and startLevel or nil
     local retailFutureSpells = pendingFutureSpells or (ns.GetRetailFutureSpellsBeforeLevel
         and ns.GetRetailFutureSpellsBeforeLevel() or nil)
 
@@ -189,7 +139,7 @@ local function DisplayLevelUp()
         if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
         local previousFastest
         local displayTime = levelTimeForDisplay
-        if multiple then
+        if combinedGain then
             displayTime = pendingElapsed
             trainerAbilities = UniqueAbilities(trainerAbilities)
             warlockPetAbilities = UniqueAbilities(warlockPetAbilities)
@@ -209,7 +159,7 @@ local function DisplayLevelUp()
         end
     end)
     if not ok then
-        print("|cff3fe0ffGnomeLevelUp|r: couldn't display the level-up screen this time (" .. tostring(err) .. ")")
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Could not prepare the level-up popup. Try /reload. If it happens again, report this error: %s", tostring(err)))
     end
 
     baselineStats = afterStats
@@ -248,6 +198,7 @@ combatWaitFrame:RegisterEvent("UNIT_MAXPOWER")
 combatWaitFrame:RegisterEvent("UNIT_STATS")
 combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
     if event == "PLAYER_LOGIN" then
+        if ns.SyncLevelHistory then ns.SyncLevelHistory() end
         RequestPlayedTime()
         if ns.CaptureRetailFutureSpells then ns.CaptureRetailFutureSpells() end
     elseif event == "TIME_PLAYED_MSG" then

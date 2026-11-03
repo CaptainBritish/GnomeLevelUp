@@ -40,13 +40,18 @@ end
 
 -- Forever uses a separate default sound. Retail plays 567431 directly, so
 -- leave that file available while still muting the other native sound.
-local GLU_MUTED_SOUND_IDS = { 569593, 567431 }
+local NATIVE_LEVEL_UP_FILES = { forever = 569593, retail = 567431 }
+local GLU_MUTED_SOUND_IDS = { NATIVE_LEVEL_UP_FILES.forever, NATIVE_LEVEL_UP_FILES.retail }
+
+function ns.GetNativeLevelUpSoundFileID()
+    return NATIVE_LEVEL_UP_FILES[ns.GetCurrentFlavor()] or NATIVE_LEVEL_UP_FILES.forever
+end
 
 function ns.SetGnomeLevelUpSoundMuted(muted)
     if ns.UsesNativeLevelUpSound() then muted = false end
     local retail = ns.GetCurrentFlavor() == "retail"
     for _, soundID in ipairs(GLU_MUTED_SOUND_IDS) do
-        local shouldMute = muted and not (retail and soundID == 567431)
+        local shouldMute = muted and not (retail and soundID == NATIVE_LEVEL_UP_FILES.retail)
         local soundFunction = shouldMute and MuteSoundFile or UnmuteSoundFile
         if type(soundFunction) == "function" then pcall(soundFunction, soundID) end
     end

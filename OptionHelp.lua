@@ -3,6 +3,12 @@ local ADDON_NAME, ns = ...
 -- Shared help is keyed by source labels; widgets translate only when hovered.
 ns.OPTION_DESCRIPTIONS = {
     ["Reset Theme Hues"] = "Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept.",
+    ["Level History"] = "Review recorded level times and your best times across characters. Hover a row to see which character set the personal best.",
+    ["Character"] = "Choose a character whose recorded level times you want to view.",
+    ["History mode"] = "View Retail or Forever history. Records are kept separate.",
+    ["Reset this character's times"] = "Clear this character's recorded times and bests in both game modes. Other characters are kept.",
+    ["Fill sample times (20h)"] = "Fill every level with temporary 20-hour times. New records replace the samples; existing history is not overwritten.",
+    ["Clear sample history"] = "Remove the temporary sample times and show real records again.",
     ["Language"] = "Choose the language used by GLU.",
     ["Theme"] = "Choose the popup background and frame style.",
     ["Portrait"] = "Choose the artwork shown in the portrait ring.",
@@ -49,7 +55,8 @@ ns.OPTION_DESCRIPTIONS = {
     ["Sound channel"] = "Choose which game audio channel plays GLU sounds.",
     ["Sound volume"] = "Adjust GLU sound volume where the client supports it.",
     ["Play sound"] = "Preview the selected sound.",
-    ["Milestone Animations"] = "Add celebration effects when crossing a ten-level milestone.",
+    ["Milestone interval"] = "Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle.",
+    ["Milestone Animations"] = "Add celebration effects at the selected milestone interval.",
     ["Max Level Celebration"] = "Add celebration effects when reaching the level cap.",
     ["Portrait pulse and starburst"] = "Play the portrait pulse and starburst during the entrance.",
     ["Highlight new abilities"] = "Make newly learned ability icons shine.",
@@ -138,7 +145,7 @@ for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
     ns.OPTION_DESCRIPTIONS[spec.label .. " (ID)"] = "Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."
 end
 local animationDescriptions = {
-    ["Milestone Animations"] = "Celebrate each ten-level milestone with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair.",
+    ["Milestone Animations"] = "Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair.",
     ["Max Level Celebration"] = "At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects.",
     ["Portrait pulse and starburst"] = "Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine.",
     ["Highlight new abilities"] = "Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted.",
