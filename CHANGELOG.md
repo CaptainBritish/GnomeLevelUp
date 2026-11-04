@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.5
+
+* Fixed incorrect icon sizing in WoWF.
+* Fixed incorrect test spell display in WoWF
+
 ## 1.5.4 - The Stability Patch!
 
 
@@ -11,6 +16,8 @@
 
 
 ##### Bug Fixes and Optimization
+
+* Fixed inconsistent icon enlargement between new abilities and rank upgrades in sparse ability lists.
 
 * Level-up previews now include Blizzard's native ding when it is unmuted.
 * Debug history fill now uses 20-hour times for every level, allowing new records to replace the samples.

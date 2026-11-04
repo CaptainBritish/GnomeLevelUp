@@ -585,8 +585,8 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.4"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.4")))
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.5"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.5")))
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))

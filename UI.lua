@@ -2234,7 +2234,7 @@ function render.FitSparseAbilityIcons(viewport, pool)
     local width, height = viewport:GetWidth(), viewport:GetHeight()
     local base = NewAbilityIconSize()
     local function IconSize(icon, size)
-        return icon.isNewAbility == true and size or math.min(ABILITY_ICON_SIZE, ABILITY_ICON_SIZE * size / base)
+        return icon.isNewAbility == true and size or ABILITY_ICON_SIZE * size / base
     end
     local function Measure(size, position)
         local columns, rows = {}, {}

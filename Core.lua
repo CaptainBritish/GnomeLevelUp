@@ -1770,7 +1770,21 @@ end
 local function AddPreviewEntries(target, source, limit)
     for _, entry in ipairs(source or {}) do
         if #target >= limit then break end
-        target[#target + 1] = entry
+        local copy = {}
+        for key, value in pairs(entry) do copy[key] = value end
+        target[#target + 1] = copy
+    end
+end
+
+local function SetPreviewIcons(abilities)
+    local query = C_Spell and C_Spell.GetSpellTexture or rawget(_G, "GetSpellTexture")
+    local texture
+    if type(query) == "function" then
+        local ok, result = pcall(query, 11362) -- Teleport to Gnomeregan.
+        if ok then texture = result end
+    end
+    for _, ability in ipairs(abilities) do
+        ability.icon = texture or "Interface\\Icons\\INV_Misc_QuestionMark"
     end
 end
 
@@ -1939,6 +1953,7 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
             preview = true,
         }
     end
+    SetPreviewIcons(trainerAbilities)
     if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
     local previewStats = BuildPreviewStatChanges(maxLevelPreview)
     local seconds = ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime()
