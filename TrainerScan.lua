@@ -295,6 +295,7 @@ local function ReadService(index)
     end
 
     local spellID = GetServiceSpellID(index)
+    if ns.IsTrainerRidingSpell and ns.IsTrainerRidingSpell(spellID) then return end
     if (not subtext or subtext == "") and spellID and C_Spell and C_Spell.GetSpellSubtext then
         subtext = C_Spell.GetSpellSubtext(spellID)
     end

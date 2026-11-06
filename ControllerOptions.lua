@@ -531,6 +531,7 @@ local function BuildEntries(key)
             Toggle("Include profession trainers", "scanProfessionTrainers"),
             Toggle("Show unlearned weapon skills", "showWeaponSkills"),
             Toggle("Show learning costs", "showTrainerCosts"),
+            Toggle("Show prices in tooltips", "showTrainerCostsInTooltips"),
             Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
             PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
             PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),

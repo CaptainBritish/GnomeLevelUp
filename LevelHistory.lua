@@ -41,6 +41,8 @@ function ns.SyncLevelHistory()
     if type(characters[key]) ~= "table" then characters[key] = {} end
     local character = characters[key]
     character.name = name
+    local _, classToken = UnitClass("player")
+    character.classToken = classToken or character.classToken
     local legacy = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     for _, flavor in ipairs({ "retail", "forever" }) do
         local record = FlavorRecord(character, flavor)
@@ -227,18 +229,19 @@ function ns.GetLevelHistoryView(key, flavor)
     local sample = samples and ns.IsDebugEnabled() and key == current
     if sample then record = samples[flavor] end
     local cap = HistoryLevelCap(flavor)
-    local view = { name = character.name, rows = {}, total = 0, count = 0, cap = cap, sample = sample }
+    local view = { name = character.name, classToken = character.classToken, rows = {}, total = 0, count = 0, cap = cap, sample = sample }
     for level = 1, cap - 1 do
         local row = { level = level, time = record.times[level] }
         if not ValidTime(row.time) then row.time = nil end
         if sample then
-            row.accountBest, row.owner = record.bests[level], character.name
+            row.accountBest, row.owner, row.ownBest = record.bests[level], character.name, true
         else
-            for _, other in pairs(characters) do
+            for otherKey, other in pairs(characters) do
                 local otherRecord = type(other) == "table" and type(other.flavors) == "table" and other.flavors[flavor]
                 local best = type(otherRecord) == "table" and type(otherRecord.bests) == "table" and otherRecord.bests[level]
-                if ValidTime(best) and (not row.accountBest or best < row.accountBest) then
-                    row.accountBest, row.owner = best, other.name
+                if ValidTime(best) and (not row.accountBest or best < row.accountBest
+                    or best == row.accountBest and otherKey == key) then
+                    row.accountBest, row.owner, row.ownBest = best, other.name, otherKey == key
                 end
             end
         end
@@ -287,6 +290,8 @@ local function CreateHistoryRow(frame)
     local row = CreateFrame("Frame", nil, frame)
     row.background = row:CreateTexture(nil, "BACKGROUND")
     row.background:SetAllPoints(row)
+    row.bestHighlight = row:CreateTexture(nil, "BORDER", nil, -1)
+    row.bestHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
     row.bar = row:CreateTexture(nil, "BORDER")
     row.bar:SetColorTexture(.15, .65, .7, .12)
     row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
@@ -311,7 +316,7 @@ local function CreateHistoryRow(frame)
     return row
 end
 
-local function LayoutHistoryRow(row, record, index, width, top, longestTime)
+local function LayoutHistoryRow(row, record, index, width, top, longestTime, classColor)
     row.data = record
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", 0, -top)
@@ -325,6 +330,11 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime)
     local height = recordHolder and math.max(28, 28 + ns.WrapOptionsText(row.ownerText, ownerWidth)) or 28
     row:SetSize(width, height)
     row.background:SetColorTexture(1, 1, 1, index % 2 == 0 and .045 or .015)
+    row.bestHighlight:SetShown(record.ownBest == true and classColor ~= nil)
+    if record.ownBest and classColor then
+        row.bestHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", width * HISTORY_COLUMN_STARTS[3], 0)
+        row.bestHighlight:SetColorTexture(classColor[1], classColor[2], classColor[3], .30)
+    end
     row.bar:SetWidth(math.max(1, width * (record.time or 0) / longestTime))
     row.bar:SetShown(record.time ~= nil)
     local values = {
@@ -354,13 +364,15 @@ end
 function ns.LayoutLevelHistory(frame, width)
     local view = ns.GetLevelHistoryView(frame.character, frame.flavor or ns.GetCurrentFlavor())
     local top = LayoutHistoryHeaders(frame, width, UpdateHistorySummary(frame, view, width))
+    local classColor = ns.CLASS_COLORS and ns.CLASS_COLORS[view.classToken]
+    if not classColor then classColor = ns.GetClassColor("title") end
     local longestTime = 1
     for _, record in ipairs(view.rows) do longestTime = math.max(longestTime, record.time or 0) end
     frame.rows = frame.rows or {}
     for index, record in ipairs(view.rows) do
         local row = frame.rows[index] or CreateHistoryRow(frame)
         frame.rows[index] = row
-        top = top + LayoutHistoryRow(row, record, index, width, top, longestTime)
+        top = top + LayoutHistoryRow(row, record, index, width, top, longestTime, classColor)
     end
     for index = #view.rows + 1, #frame.rows do frame.rows[index]:Hide() end
     frame:SetHeight(top + 8)

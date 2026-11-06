@@ -14,7 +14,7 @@ function ns.WrapOptionsText(text, width, alignment)
     return height
 end
 
-function ns.CreateOptionsLayout(parent)
+function ns.CreateOptionsLayout(parent, minimumHeight)
     local layout = { parent = parent, rows = {}, ready = false }
 
     function layout:Replace(widgets, cell)
@@ -260,7 +260,7 @@ function ns.CreateOptionsLayout(parent)
                 end
             end
         end
-        parent:SetHeight(math.max(260, top + 16))
+        parent:SetHeight(math.max(minimumHeight or 260, top + 16))
         if self.onReflow then self.onReflow() end
         self.running = false
     end

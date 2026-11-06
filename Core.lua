@@ -30,6 +30,7 @@ local defaults = {
     scanProfessionTrainers = false,
     showWeaponSkills = false,
     showTrainerCosts = false,
+    showTrainerCostsInTooltips = false,
     showOnlyCurrentLevelSkills = false,
     showOnlyNewSkills = false,
     shortenRetailStatTotals = false,
@@ -56,6 +57,8 @@ local defaults = {
     useClassColors = true,
     rightClickClose = true,
     lockFramePosition = false,
+    abilityCostSize = 11,
+    horizontalAbilityCostSize = 13,
     sectionPadding = 8,
     compactHorizontalPadding = 2,
     bgOpacity = 0.80,           -- background darkness at its peak (0-1)
@@ -266,18 +269,50 @@ end
 function ns.AbilitySectionVisible(abilities)
     return ns.SupportsTrainerData() or type(abilities) == "table" and #abilities > 0
 end
+local function AbilityCostSizeKey()
+    return ns.db and ns.db.horizontalMode and "horizontalAbilityCostSize" or "abilityCostSize"
+end
+
+function ns.GetAbilityCostSize()
+    local key = AbilityCostSizeKey()
+    local size = tonumber(ns.db and ns.db[key])
+    if not size or size ~= size then size = defaults[key] end
+    return math.floor(math.max(8, math.min(20, size)))
+end
+
 function ns.TrainerCostsEnabled()
     return ns.SupportsTrainerData() and ns.db ~= nil and ns.db.showTrainerCosts == true
 end
 function ns.WeaponTrainingAvailable()
     return ns.SupportsTrainerData() and ns.db ~= nil and not ns.db.horizontalMode
 end
+function ns.TrainerCostsInTooltips()
+    return ns.SupportsTrainerData() and ns.db ~= nil and ns.db.showTrainerCostsInTooltips == true
+end
+
+function ns.MigrateTrainerPriceSettings(settings)
+    if settings.showTrainerCostsInTooltips == nil then
+        settings.showTrainerCostsInTooltips = settings.showTrainerCosts == true
+        if settings.trainerCostsTooltipOnly == true then settings.showTrainerCosts = false end
+    end
+    settings.trainerCostsTooltipOnly = nil
+end
+
 function ns.DecorativeAnimationsEnabled()
     return not ns.db or not ns.db.reducedMotion and ns.db.backgroundAnimations ~= false
 end
 
 -- Shared controls keep mouse, controller and setup changes on the same path.
 ns.OPTION_SETTINGS = {
+    abilityCostSize = { label = "Ability Cost Size", minimum = 8, maximum = 20, step = 1,
+        description = "Adjust the size of ability prices for the current layout.",
+        isAvailable = ns.TrainerCostsEnabled,
+        get = ns.GetAbilityCostSize,
+        set = function(value)
+            ns.db[AbilityCostSizeKey()] = value
+            ns.RefreshPopupLayout()
+        end,
+        format = function(value) return string.format(ns.L("%d pt"), value) end },
     duration = { label = "Display duration", minimum = 1, maximum = 60, step = 1,
         get = function() return tonumber(ns.db.duration) or 7 end,
         set = function(value) ns.db.duration = value end,
@@ -311,6 +346,13 @@ local function SharedToggle(key, label, changed, description, available)
             if changed then changed(ns.db[key]) end
         end }
 end
+local function RefreshTrainerCosts()
+    ns.RefreshPopupLayout()
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end
+SharedToggle("showTrainerCosts", "Show learning costs", RefreshTrainerCosts, nil, ns.SupportsTrainerData)
+SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshTrainerCosts,
+    "Show full learning costs when hovering over abilities.", ns.SupportsTrainerData)
 SharedToggle("horizontalMode", "Horizontal layout", function(value)
     ns.SetHorizontalMode(value); ns.RefreshPopupLayout()
 end, "Arrange portrait, stats and abilities side by side.")
@@ -379,6 +421,7 @@ ns.APPEARANCE_SETTING_KEYS = {
     "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
+    "abilityCostSize", "horizontalAbilityCostSize",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding",
     "scale",
 }
@@ -386,6 +429,7 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
+    "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
     "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",
     "shortenRetailStatTotals", "relevantRetailStatsOnly",
@@ -397,7 +441,7 @@ ns.RESETTABLE_SETTING_KEYS = {
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
-    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
+    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
@@ -809,6 +853,7 @@ local function InitDB()
     defaults.controllerGlyphStyle = ns.GetDefaultControllerGlyphStyle()
     -- Load saved settings and fill in anything that is missing.
     GnomeLevelUpDB = GnomeLevelUpDB or {}
+    ns.MigrateTrainerPriceSettings(GnomeLevelUpDB)
     local savedSchemaVersion = tonumber(GnomeLevelUpDB.schemaVersion) or 0
     -- Capture the pre-1.3.2 selectors before defaults add the new independent
     -- fields. This lets the migration distinguish an old custom theme from a
@@ -1816,6 +1861,7 @@ local function BuildPreviewAbilityExamples()
 end
 
 local function BuildDebugAbilityPreview(currentLevel, limit)
+    if limit == 0 then return {} end
     local previewCost = 1337 * 10000
     local abilities = BuildPreviewAbilityExamples()
     for i = #abilities, limit + 1, -1 do abilities[i] = nil end
@@ -1935,13 +1981,13 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
         trainerAbilities = BuildPreviewAbilityExamples()
     end
 
-    local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(currentLevel)
+    local unlearnedWeaponSkills = abilityCount == 0 and {} or ns.GetUnlearnedWeaponSkills(currentLevel)
     local _, classToken = UnitClass("player")
     local warlockPetAbilities = {}
     local forever = ns.GetCurrentFlavor() == "forever"
-    if forever and debugSkills then
+    if forever and debugSkills and abilityCount ~= 0 then
         warlockPetAbilities = BuildDebugGrimoirePreview(15)
-    elseif forever and classToken == "WARLOCK" then
+    elseif forever and classToken == "WARLOCK" and abilityCount ~= 0 then
         warlockPetAbilities[1] = {
             name = "Firebolt (Rank 2)",
             icon = 133738,

@@ -310,7 +310,8 @@ local function ControllerLabelStyle()
 end
 
 local function RefreshCloseButtonLabel()
-    if not IsControllerUIActive() then
+    frame.gluControllerActive = IsControllerUIActive()
+    if not frame.gluControllerActive then
         closeIcon:Hide()
         closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
         closeText:SetText("X")
@@ -722,11 +723,13 @@ content.fontElements = {}
 content.textLayers = {}
 local function RegisterFontElement(fs, sizeOverride, flagsOverride)
     local _, size, flags = fs:GetFont()
-    content.fontElements[#content.fontElements + 1] = {
+    local entry = {
         fs = fs,
         size = sizeOverride or size,
         flags = flagsOverride or flags or "",
     }
+    content.fontElements[#content.fontElements + 1] = entry
+    return entry
 end
 
 function ns.ApplyFont(fontPath)
@@ -1303,7 +1306,9 @@ local ABILITY_ICON_SIZE = 40
 local function NewAbilityIconSize()
     return ns.GetCurrentFlavor() == "retail" and 48 or ABILITY_ICON_SIZE * 1.05
 end
-local ABILITY_COST_HEIGHT = 14
+local function AbilityCostHeight()
+    return ns.GetAbilityCostSize() + 3
+end
 local ABILITY_COST_GAP = 1
 local ABILITY_COST_TOP_PADDING = 0
 
@@ -1317,7 +1322,7 @@ local MONEY_ICON_PATHS = {
     copper = "Interface\\MoneyFrame\\UI-CopperIcon",
 }
 
-local function FormatTrainerCost(cost)
+local function FormatTrainerCost(cost, maxParts)
     cost = tonumber(cost)
     if not cost or cost <= 0 then return nil end
 
@@ -1326,7 +1331,7 @@ local function FormatTrainerCost(cost)
     local copper = cost % 100
     local parts = {}
     local function AddPart(amount, currency)
-        if amount > 0 and #parts < 2 then
+        if amount > 0 and #parts < (maxParts or 2) then
             parts[#parts + 1] = string.format("%d|T%s:10:10:0:0|t", amount, MONEY_ICON_PATHS[currency])
         end
     end
@@ -1349,24 +1354,38 @@ function render.FormatPaceTime(seconds)
     return ns.L("%ds", remaining)
 end
 
-local function TrainerCostsVisible()
+local function TrainerCostsVisible(inlineOnly)
     --@do-not-package@
     -- SSTEST: local screenshot presentation only.
     if content.screenshotPreview then return content.screenshotPreview.costs == true end
     --@end-do-not-package@
-    return ns.TrainerCostsEnabled()
+    if inlineOnly then return ns.TrainerCostsEnabled() end
+    return ns.TrainerCostsInTooltips()
 end
 
 local function AbilityCellHeight(iconSize)
     iconSize = iconSize or ABILITY_ICON_SIZE
-    if TrainerCostsVisible() then
-        if IsHorizontalLayout() then return iconSize + ABILITY_COST_GAP + ABILITY_COST_HEIGHT end
-        return iconSize + ABILITY_COST_GAP + ABILITY_COST_HEIGHT + ABILITY_COST_TOP_PADDING
+    if TrainerCostsVisible(true) then
+        if IsHorizontalLayout() then return iconSize + ABILITY_COST_GAP + AbilityCostHeight() end
+        return iconSize + ABILITY_COST_GAP + AbilityCostHeight() + ABILITY_COST_TOP_PADDING
     end
     return iconSize
 end
 
 local SCROLLBAR_HEIGHT = 10
+
+function render.AbilityScrollRange(viewport)
+    if viewport.scrollController then return content.abilityViewport.sharedMaximum or 0 end
+    return viewport.scrollMaximum or 0
+end
+
+function render.ScrollAbilities(viewport, steps)
+    local maximum = render.AbilityScrollRange(viewport)
+    if maximum <= 0 then return end
+    local slider = viewport.scrollController or viewport.slider
+    local value = slider:GetValue() + steps * (viewport.scrollStep or 40)
+    slider:SetValue(math.max(0, math.min(maximum, value)))
+end
 
 local function CreateAbilityViewport()
     local viewport = CreateFrame("ScrollFrame", nil, content)
@@ -1415,11 +1434,7 @@ local function CreateAbilityViewport()
     slider:SetObeyStepOnDrag(false)
     viewport:EnableMouseWheel(true)
     local function ScrollWithWheel(_, delta)
-        local controller = viewport.scrollController or slider
-        local maximum = viewport.scrollController and content.abilityViewport.sharedMaximum or viewport.scrollMaximum or 0
-        if maximum <= 0 then return end
-        local value = controller:GetValue() - delta * (viewport.scrollStep or 40)
-        controller:SetValue(math.max(0, math.min(maximum, value)))
+        render.ScrollAbilities(viewport, -delta)
     end
     viewport:SetScript("OnMouseWheel", ScrollWithWheel)
     slider:EnableMouseWheel(true)
@@ -1452,6 +1467,40 @@ content.petAbilityIconPool = {}
 content.currentWarlockPetAbilities = {}
 ApplyToTextLayers(content.petSpellsHeader, "Hide")
 content.petAbilityViewport:Hide()
+
+if type(frame.EnableGamePadStick) == "function" and type(frame.IsMouseOver) == "function" then
+    local target, stickX, stickY
+    local function SetTarget(viewport)
+        if target == viewport then return end
+        if (target == nil) ~= (viewport == nil) then frame:EnableGamePadStick(viewport ~= nil) end
+        target, stickX, stickY = viewport, 0, 0
+    end
+    frame:SetScript("OnGamePadStick", function(_, stick, x, y)
+        if stick == "RightStick" or stick == "Right" then stickX, stickY = x, y end
+    end)
+    frame:HookScript("OnUpdate", function(_, elapsed)
+        if frame.closingInputSuppressed or not ns.db or ns.db.clickThrough or not frame:IsMouseOver()
+            or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()) then
+            SetTarget(nil)
+            return
+        end
+        local main, pet = content.abilityViewport, content.petAbilityViewport
+        local mainScrolls = main:IsShown() and render.AbilityScrollRange(main) > 0
+        local petScrolls = pet:IsShown() and render.AbilityScrollRange(pet) > 0
+        if not (mainScrolls or petScrolls) or not frame.gluControllerActive then
+            SetTarget(nil)
+            return
+        end
+        if petScrolls and (pet:IsMouseOver() or not mainScrolls) then
+            SetTarget(pet)
+        else
+            SetTarget(main)
+        end
+        local axis = target.verticalLayout and -stickY or stickX
+        if math.abs(axis) >= .25 then render.ScrollAbilities(target, axis * math.min(elapsed, .05) * 8) end
+    end)
+    frame:HookScript("OnHide", function() SetTarget(nil) end)
+end
 
 content.weaponSkillsText = NewText(content, "GameFontHighlightSmall", 1.5)
 content.weaponSkillsText:SetWidth(TEXT_WIDTH)
@@ -1928,12 +1977,12 @@ local function GetAbilityIcon(index, row, pool)
     btn.icon = tex
 
     local costText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    costText:SetHeight(ABILITY_COST_HEIGHT)
+    costText:SetHeight(AbilityCostHeight())
     costText:SetPoint("TOP", btn, "BOTTOM", 0, -ABILITY_COST_GAP)
     costText:SetJustifyH("CENTER")
     costText:SetJustifyV("TOP")
     costText:SetWordWrap(false)
-    RegisterFontElement(costText, 10)
+    btn.costFont = RegisterFontElement(costText, 11)
     costText:SetTextColor(1, 1, 1, 1)
     costText:Hide()
     btn.costText = costText
@@ -1968,6 +2017,10 @@ local function GetAbilityIcon(index, row, pool)
         end
         if ns.db and ns.db.highlightNewAbilities and self.isNewAbility ~= nil then
             GameTooltip:AddLine(ns.L(self.isNewAbility and "New ability" or "Rank upgrade"), 1, 0.82, 0.20)
+        end
+        if self.trainerCost and TrainerCostsVisible() then
+            local price = FormatTrainerCost(self.trainerCost, 3)
+            if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
         end
         GameTooltip:Show()
     end)
@@ -2061,6 +2114,9 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     -- letting neighboring prices overlap (including compact/scroll layouts).
     local cellWidth = ABILITY_ICON_SIZE
     local rowIconSize = ABILITY_ICON_SIZE
+    local costFontSize = ns.GetAbilityCostSize()
+    local showCosts = TrainerCostsVisible()
+    local showInlineCosts = TrainerCostsVisible(true)
     for i, spell in ipairs(abilities) do
         local icon = GetAbilityIcon(i, row, pool)
         local iconSize = spell.isNewAbility == true and newIconSize or ABILITY_ICON_SIZE
@@ -2069,13 +2125,20 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         cellWidth = math.max(cellWidth, iconSize)
         rowIconSize = math.max(rowIconSize, iconSize)
         ---@type string|boolean|nil
-        local formattedCost = TrainerCostsVisible() and FormatTrainerCost(spell.cost)
+        local formattedCost = showInlineCosts and FormatTrainerCost(spell.cost)
+        icon.trainerCost = showCosts and spell.cost or nil
         if formattedCost ~= icon.formattedCost then
             icon.costText:SetText(formattedCost or "")
             icon.formattedCost = formattedCost
         end
         icon.costText:SetShown(formattedCost ~= nil and formattedCost ~= false)
         if formattedCost then
+            local fontPath, fontSize, fontFlags = icon.costText:GetFont()
+            icon.costFont.size = costFontSize
+            if fontSize ~= costFontSize then
+                icon.costText:SetFont(fontPath or DEFAULT_FONT_PATH, costFontSize, fontFlags)
+            end
+            icon.costText:SetHeight(AbilityCostHeight())
             icon.costText:SetWidth(0)
             local costWidth = math.ceil(icon.costText:GetStringWidth()) + 2
             icon.costText:SetWidth(costWidth)
@@ -2100,6 +2163,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local cellHeight = AbilityCellHeight(rowIconSize)
     local verticalGap = vertical and 0 or gap
     row.viewport.cellHeight = cellHeight
+    row.viewport.rowIconSize = rowIconSize
     local totalHeight = rows * cellHeight + (rows - 1) * verticalGap
     row.viewport.rowContentHeight = totalHeight
     local viewportHeight = totalHeight
@@ -2115,11 +2179,13 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
         row.viewport:SetWidth(viewportWidth)
     end
     row:SetWidth(vertical and viewportWidth or (shouldScroll and totalWidth or viewportWidth))
-    row:SetHeight(totalHeight)
+    -- Keep the scroll child at the native origin. Put the scrollbar clearance
+    -- inside the child so horizontal scrolling cannot change the vertical inset.
+    local scrollbarSpace = not vertical and shouldScroll and SCROLLBAR_HEIGHT or 0
+    row:SetHeight(totalHeight + scrollbarSpace)
     row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", row.viewport, "TOPLEFT", 0,
-        not vertical and shouldScroll and -(SCROLLBAR_HEIGHT / 2) or 0)
-    row.viewport:SetHeight(viewportHeight + (not vertical and shouldScroll and SCROLLBAR_HEIGHT or 0))
+    row:SetPoint("TOPLEFT", row.viewport, "TOPLEFT", 0, 0)
+    row.viewport:SetHeight(viewportHeight + scrollbarSpace)
     local slider, track = row.viewport.slider, row.viewport.scrollTrack
     slider:ClearAllPoints()
     track:ClearAllPoints()
@@ -2148,6 +2214,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local maximum = shouldScroll and math.max(0, vertical and totalHeight - viewportHeight or totalWidth - viewportWidth) or 0
     row.viewport.scrollMaximum = maximum
     row.viewport.scrollStep = vertical and cellHeight + verticalGap or cellWidth + gap
+    row.viewport:UpdateScrollChildRect()
     slider:SetMinMaxValues(0, maximum)
     local value = math.max(0, math.min(maximum, previousValue))
     slider:SetValue(value)
@@ -2244,7 +2311,7 @@ function render.FitSparseAbilityIcons(viewport, pool)
             local column = vertical and math.floor((i - 1) / 3) + 1 or i
             local row = vertical and (i - 1) % 3 + 1 or 1
             local cellWidth = math.max(iconSize, icon.formattedCost and icon.costText:GetWidth() or 0)
-            local cellHeight = iconSize + (icon.formattedCost and ABILITY_COST_GAP + ABILITY_COST_HEIGHT or 0)
+            local cellHeight = iconSize + (icon.formattedCost and ABILITY_COST_GAP + AbilityCostHeight() or 0)
             columns[column] = math.max(columns[column] or 0, cellWidth)
             rows[row] = math.max(rows[row] or 0, cellHeight)
         end
@@ -2271,7 +2338,7 @@ function render.FitSparseAbilityIcons(viewport, pool)
                 icon:SetPoint("CENTER", viewport.row, "CENTER", x, y - (activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
             end
         end
-        local centeredCost = vertical and count == 1 and pool[1].formattedCost and ABILITY_COST_GAP + ABILITY_COST_HEIGHT or 0
+        local centeredCost = vertical and count == 1 and pool[1].formattedCost and ABILITY_COST_GAP + AbilityCostHeight() or 0
         return groupWidth + (vertical and 16 or 0), groupHeight + centeredCost
     end
     local low, high = base, base * (count <= 3 and 1.5 or 1)
@@ -4895,6 +4962,8 @@ local function LayoutFrame(statCount)
         main.slider:SetHeight(math.max(main:GetHeight(), hasPet and pet:GetHeight() or 0))
         main.scrollTrack:SetPoint("TOP", main.slider, "TOP", 0, 0)
         main.scrollTrack:SetHeight(main.slider:GetHeight())
+        main:UpdateScrollChildRect()
+        pet:UpdateScrollChildRect()
         main.slider:SetMinMaxValues(0, main.sharedMaximum)
         local value = math.max(0, math.min(main.sharedMaximum, main.requestedScroll or 0))
         main.slider:SetValue(value)
@@ -4975,7 +5044,9 @@ local function LayoutFrame(statCount)
                 for i=1,viewport.abilityCount do
                     local icon=pool[i]
                     local row=i<=9 and (i-1)%3 or 3+math.floor((i-10)/3)
-                    local y=viewport.row:GetHeight()/2-icon:GetHeight()/2-row*viewport.cellHeight
+                    -- Align icon bottoms so prices share a baseline in each row.
+                    local y = viewport.row:GetHeight() / 2 - viewport.rowIconSize
+                        + icon:GetHeight() / 2 - row * viewport.cellHeight
                     icon.animationY=y;icon:ClearAllPoints()
                     icon:SetPoint("CENTER",viewport.row,"CENTER",icon.animationX,y-(activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
                 end

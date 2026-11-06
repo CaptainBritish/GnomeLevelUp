@@ -3,6 +3,21 @@ local ADDON_NAME, ns = ...
 -- Observations are evidence for the author, never runtime catalogue overrides.
 local MAX_REPORTS = 250
 local indexByClass = {}
+local lastFilteredChanges
+
+-- Match the skill itself, regardless of the trainer, class or client language.
+local RIDING_SPELLS = {
+    -- Legacy racial riding and mechanostrider piloting.
+    [824] = true, [825] = true, [826] = true, [828] = true,
+    [10861] = true, [10906] = true, [18995] = true,
+    -- Riding ranks and Cold Weather Flying.
+    [33388] = true, [33391] = true, [34090] = true, [34091] = true,
+    [54197] = true, [90265] = true,
+}
+
+function ns.IsTrainerRidingSpell(spellID)
+    return RIDING_SPELLS[spellID] == true
+end
 local reportWindow, reportEdit, copyHint
 local copyArmed, copyText
 local revision = ns.ForeverTrainingRevision or "1.4.0-custom"
@@ -46,6 +61,16 @@ local function Store()
         store = { schemaVersion = 1, changes = {} }
         GnomeLevelUpDB.trainerChangeReports = store
     end
+    -- Remove old riding false positives once per loaded report table.
+    local changes = store.changes
+    if changes ~= lastFilteredChanges then
+        for key, entry in pairs(changes) do
+            if type(entry) == "table" and ns.IsTrainerRidingSpell(entry.spellID) then
+                changes[key] = nil
+            end
+        end
+        lastFilteredChanges = changes
+    end
     return store
 end
 
@@ -58,7 +83,7 @@ function ns.RecordTrainerObservation(observation)
         or ns.db.enabled == false or not ns.GetCurrentFlavor or ns.GetCurrentFlavor() ~= "forever" then return false end
     local classToken, spellID, level = observation.classToken, observation.spellID, observation.level
     if not ns.ClassTrainingForever or not ns.ClassTrainingForever[classToken]
-        or not PositiveInteger(spellID) or not PositiveInteger(level) or level > 100 then return false end
+        or not PositiveInteger(spellID) or ns.IsTrainerRidingSpell(spellID) or not PositiveInteger(level) or level > 100 then return false end
     local knownLevels = CatalogueIndex(classToken)[spellID]
     if knownLevels and knownLevels[level] then return false end
     local store = Store()
@@ -128,7 +153,9 @@ end
 
 function ns.GetTrainerReportJSON()
     local store = Store()
-    return JSON({ addon = ADDON_NAME, addonVersion = "1.5", schemaVersion = 1,
+    local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or rawget(_G, "GetAddOnMetadata")
+    local version = getMetadata and getMetadata(ADDON_NAME, "Version") or "unknown"
+    return JSON({ addon = ADDON_NAME, addonVersion = version, schemaVersion = 1,
         catalogueRevision = revision, changes = store and store.changes or {},
         truncated = store and store.truncated == true or false })
 end

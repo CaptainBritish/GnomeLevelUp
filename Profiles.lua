@@ -16,6 +16,7 @@ local optional = {
 }
 
 local function NormalizeSettings(settings)
+    ns.MigrateTrainerPriceSettings(settings)
     -- Older themes serialized an unset optional path as false. Keep accepting
     -- those exports, but store and export the ordinary nil representation.
     for key in pairs(optional) do
@@ -339,6 +340,7 @@ local ranges = {
     portraitModelMaskSize = { 25, 300 },
     portraitModelViewportSize = { 25, 300 },
     scale = { 0.5, 2 }, horizontalScale = { 0.5, 2 }, duration = { 1, 60 }, soundVolume = { 0, 1 }, bgOpacity = { 0, 1 }, backgroundHueOpacity = { 0, 1 },
+    abilityCostSize = { 8, 20 }, horizontalAbilityCostSize = { 8, 20 },
     statTextScale = { .5, 2 }, headingTextScale = { .5, 2 }, timeTextScale = { .5, 2 },
     animSpeedMultiplier = { 0.25, 3 }, playerPortraitScale = { 0.1, 5 },
     portraitRingScale = { 0.1, 5 }, horizontalPortraitRingScale = { 0.1, 5 }, sectionPadding = { 0, 100 },

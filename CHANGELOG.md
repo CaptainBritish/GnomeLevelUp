@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.6
+* Fixed ability scrollbar jump in Vertical mode.
+* Stopped GLU notifying the user that riding skills are missing at the trainer.
+* Preview controls are now fixed to the bottom of the options panel.
+* Added an Ability Cost Size option.
+* Right clicking on preview now lets you select how many skills to preview.
+
 ## 1.5.5
 
 * Fixed incorrect icon sizing in WoWF.

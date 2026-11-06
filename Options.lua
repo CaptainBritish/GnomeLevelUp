@@ -252,6 +252,12 @@ local function BuildOptions()
 
     -- Row IDs preserve control order; measured cells handle wrapping and visibility.
     local optionLayout = ns.CreateOptionsLayout(body)
+    local footer = CreateFrame("Frame", nil, panel)
+    footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 4, 8)
+    footer:SetFrameLevel(panel:GetFrameLevel() + 30)
+    footer:EnableMouse(true)
+    local footerLayout = ns.CreateOptionsLayout(footer, 0)
+    footerLayout.topPadding = function() return 0 end
     local optionTabs = ns.CreateOptionsTabs(panel, chrome, optionsScroll, optionLayout)
     function ns.SelectOptionsTab(key) return optionTabs:Select(key) end
     local IsForeverMode = ns.SupportsTrainerData
@@ -288,7 +294,9 @@ local function BuildOptions()
                 if name then ns.BindOptionTooltip(_G[name .. "Button"], helpLabel) end
             end
         end
-        return optionLayout:Replace(widgets, cell)
+        local layout = control and control:GetParent() == footer and footerLayout or optionLayout
+        if layout == footerLayout then cell.section = nil end
+        return layout:Replace(widgets, cell)
     end
     local function TrackElement(element, x, rowY, debugOnly)
         if not element then return end
@@ -346,7 +354,8 @@ local function BuildOptions()
         return fs
     end
 
-    local function AddButton(text, width, x, rowY, onClick, debugOnly, debugRowY, debugRowHeight)
+    local function AddButton(text, width, x, rowY, onClick, debugOnly, debugRowY, debugRowHeight, parent)
+        local body = parent or body
         local trainerOnly = trainerOnlyControls[text]
         text = ns.L(text)
         local btn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
@@ -433,11 +442,11 @@ local function BuildOptions()
             adjust(1)
             refresh()
         end, debugOnly, trackedRowY, debugRowHeight)
-        LayoutCell("stepper", rowY, left, label, nil, { label, valueText, minus, plus }, debugOnly,
+        local cell = LayoutCell("stepper", rowY, left, label, nil, { label, valueText, minus, plus }, debugOnly,
             { value = valueText, minus = minus, plus = plus, optionLabel = labelText })
         refreshers[#refreshers + 1] = refresh
         if not rowYOverride then y = y - 34 end
-        return refresh
+        return refresh, cell
     end
 
     local function AddNumericOption(key, left, controlX, rowY)
@@ -498,7 +507,8 @@ local function BuildOptions()
         return refresh, dd, label
     end
 
-    local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride, debugOnly, debugRowHeight, debugRowY)
+    local function AddCheckbox(labelText, getValue, setValue, xOverride, rowYOverride, debugOnly, debugRowHeight, debugRowY, parent)
+        local body = parent or body
         local setting = ns.OPTION_SETTINGS_BY_LABEL[labelText]
         if setting and not setting.step then getValue, setValue = setting.get, setting.set end
         local trainerOnly = trainerOnlyControls[labelText]
@@ -585,8 +595,8 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.5"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.5")))
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.6"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.6")))
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
@@ -721,13 +731,10 @@ local function BuildOptions()
             ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
         end, nil, nil, nil, LEFT, CONTROL_X, y)
 
-    AddStepper("Section padding",
-        function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
-        function() return ns.GetSectionPadding() end,
-        function(dir)
-            ns.SetSectionPadding(ns.GetSectionPadding() + dir)
-            ns.RefreshPopupLayout()
-        end, nil, nil, nil, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT, y)
+    local _, costSizeCell = AddNumericOption("abilityCostSize", LEFT, CONTROL_X, y)
+    costSizeCell.isVisible = ns.TrainerCostsEnabled
+    costSizeCell.columns = 2
+    AddNumericOption("statTextScale", LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 220 + APPEARANCE_SHIFT, y)
     y = y - 34
 
     local function AddSmallSectionLabel(text)
@@ -951,14 +958,24 @@ local function BuildOptions()
     AddNumericOption("duration", LEFT, CONTROL_X, durationScaleRow)
     AddNumericOption("popupScale", LEFT + 280, CONTROL_X + 230, durationScaleRow)
     y = durationScaleRow - 34
-    for _, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do AddNumericOption(setting.key) end
+    AddStepper("Section padding",
+        function(v) return string.format("%d px", math.floor(tonumber(v) or 0)) end,
+        function() return ns.GetSectionPadding() end,
+        function(dir)
+            ns.SetSectionPadding(ns.GetSectionPadding() + dir)
+            ns.RefreshPopupLayout()
+        end)
+    for _, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do
+        if setting.key ~= "statTextScale" then AddNumericOption(setting.key) end
+    end
 
     -- Pack the main Appearance settings independently of the optional debug rows.
     local appearanceCells = {}
     for _, row in pairs(optionLayout.rows) do
         for _, cell in ipairs(row) do
             if not cell.skip and cell.section == currentSection and not cell.debugOnly
-                and (cell.kind == "dropdown" or cell.kind == "stepper") then
+                and (cell.kind == "dropdown" or cell.kind == "stepper")
+                and cell.optionLabel ~= "Ability Cost Size" and cell.optionLabel ~= "Stat text size" then
                 appearanceCells[#appearanceCells + 1] = cell
             end
         end
@@ -970,7 +987,7 @@ local function BuildOptions()
     optionLayout:ArrangeGroups(appearanceCells, {
         { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background Fill Mode", "Frame" } },
         { columns = 3, positions = { 1, 3 }, labels = { "Frame strata", "Font" } },
-        { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Stat text size", "Heading text size", "Time to Level text size" } },
+        { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Section padding", "Heading text size", "Time to Level text size" } },
     }, appearanceRow)
 
     local appearanceToggleRow = y
@@ -979,23 +996,62 @@ local function BuildOptions()
     local compactButton, compactLabel = AddSettingCheckbox("compactMode", LEFT + 150, appearanceToggleRow)
     AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
     end
-    AddCheckbox("Suspend Preview",
-        function() return ns.db.suspendPreview ~= false end,
-        function(v)
-            ns.db.suspendPreview = v
-            ns.RefreshPreviewSuspension()
-        end, LEFT + 320, appearanceToggleRow)
     y = appearanceToggleRow - 32
     AddSettingCheckbox("horizontalMode", LEFT, y)
     y = y - 32
 
-    AddButton("Reset Appearance", 150, LEFT, y, function()
+    local suspendPreview = AddCheckbox("Suspend Preview",
+        function() return ns.db.suspendPreview ~= false end,
+        function(value)
+            ns.db.suspendPreview = value
+            ns.RefreshPreviewSuspension()
+        end, LEFT, 0, nil, nil, nil, footer)
+    suspendPreview.gluOptionsCell.columns = 3
+    local previewMenu
+    local previewCounts = { 0, 3, 9, 12 }
+    local function PreviewWithCount(count)
+        ns.PreviewLevelUp(false, nil, nil, count)
+    end
+    local previewButton = AddButton("Preview Level-Up", 150, LEFT + 160, 0, function(button, mouseButton)
+        if mouseButton ~= "RightButton" then
+            ns.PreviewLevelUp()
+            return
+        end
+        local toggleMenu = rawget(_G, "ToggleDropDownMenu")
+        if type(toggleMenu) ~= "function" then
+            local menuUtil = rawget(_G, "MenuUtil")
+            if menuUtil and menuUtil.CreateContextMenu then
+                menuUtil.CreateContextMenu(button, function(_, root)
+                    for _, count in ipairs(previewCounts) do
+                        root:CreateButton(ns.L("%d abilities", count), PreviewWithCount, count)
+                    end
+                end)
+            end
+            return
+        end
+        if not previewMenu then
+            previewMenu = CreateFrame("Frame", "GnomeLevelUpPreviewPresets", footer, "UIDropDownMenuTemplate")
+            UIDropDownMenu_Initialize(previewMenu, function(_, level)
+                for _, count in ipairs(previewCounts) do
+                    local item = UIDropDownMenu_CreateInfo()
+                    item.text = ns.L("%d abilities", count)
+                    item.notCheckable = true
+                    item.func = function()
+                        CloseDropDownMenus()
+                        PreviewWithCount(count)
+                    end
+                    UIDropDownMenu_AddButton(item, level)
+                end
+            end, "MENU")
+            previewMenu:Hide()
+        end
+        toggleMenu(1, nil, previewMenu, button, 0, 0)
+    end, nil, nil, nil, footer)
+    previewButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    AddButton("Reset Appearance", 150, LEFT + 320, 0, function()
         ns.ResetAppearanceToDefaults()
-    end)
-    AddButton("Preview Level-Up", 150, LEFT + 160, y, function()
-        ns.PreviewLevelUp()
-    end)
-    y = y - 34
+    end, nil, nil, nil, footer)
+    footerLayout.ready = true
 
     AddColorsSection()
 
@@ -1348,11 +1404,6 @@ local function BuildOptions()
     AddCheckbox("Check trainer lists for catalogue changes",
         function() return ns.db.monitorTrainerChanges ~= false end,
         function(value) ns.db.monitorTrainerChanges = value end)
-    AddButton("Export trainer report", 180, LEFT, y, function()
-        ns.OpenTrainerReport()
-    end)
-    y = y - 34
-
 
     local autoScanCheck, autoScanLabel, newSkillsCheck = AddCheckboxPair({
         "Automatically save trainer data",
@@ -1379,6 +1430,8 @@ local function BuildOptions()
     })
     AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
     AddAvailabilityRefresh(costCheck, costLabel, ns.SupportsTrainerData)
+    local tooltipCosts = AddSettingCheckbox("showTrainerCostsInTooltips")
+    tooltipCosts.gluOptionsCell.isVisible = ns.SupportsTrainerData
 
     local currentLevelCheck, currentLevelLabel, petCheck, petLabel = AddCheckboxPair({
         "Only skills unlocked at this level",
@@ -1416,6 +1469,11 @@ local function BuildOptions()
         function(v) ns.db.useHorizontalAbilityScroll = v end,
     })
     AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
+
+    AddButton("Export trainer report", 180, LEFT, y, function()
+        ns.OpenTrainerReport()
+    end)
+    y = y - 34
 
     AddSectionHeader("Sound", "sound")
 
@@ -1747,10 +1805,13 @@ local function BuildOptions()
         local tabTop = headerBottom + (controllerOptionsButton:IsShown() and math.max(26, launcherHeight) + 12 or 0)
         local headerHeight = optionTabs:Layout(width, tabTop) + 4
         chrome:SetHeight(headerHeight)
+        footer:SetFrameLevel(panel:GetFrameLevel() + 30)
+        footer:SetWidth(width + 32)
+        footerLayout:Reflow()
         if optionsScroll then
             optionsScroll:ClearAllPoints()
             optionsScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -(headerHeight + 8))
-            optionsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 8)
+            optionsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, footer:GetHeight() + 8)
         end
         return 8
     end
