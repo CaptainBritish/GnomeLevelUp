@@ -35,7 +35,7 @@ local CLASS_ICON_SIZE = PLAYER_PORTRAIT_SIZE
 local PORTRAIT_RING_PADDING = 6
 
 local function IsPlayerPortrait()
-    return ns.db and (ns.db.portraitMode == "player" or ns.db.portraitMode == "player3d")
+    return ns.db and (ns.db.portraitMode == "player" or ns.db.portraitMode == "player3d" or ns.db.portraitMode == "mw2skull")
 end
 
 local function PortraitBaseSize()
@@ -53,7 +53,7 @@ local function PortraitIconSize()
 end
 
 local function PortraitArtworkSize()
-    return PortraitIconSize() * (ns.db and ns.db.portraitMode == "player" and 0.95 or 1)
+    return PortraitIconSize() * (ns.db and (ns.db.portraitMode == "player" or ns.db.portraitMode == "mw2skull") and 0.95 or 1)
 end
 
 local function PortraitRingSize()
@@ -1136,6 +1136,15 @@ function ns.RefreshClassIcon()
         content.classRingGraphic:Hide()
         return
     end
+    if portraitMode == "mw2skull" then
+        content.classIcon:SetTexture("Interface\\AddOns\\GnomeLevelUp\\Textures\\MW2Skull.tga")
+        content.classIcon:SetTexCoord(0, 1, 0, 1)
+        content.classIcon:SetVertexColor(1, 1, 1, 1)
+        content.classIcon:Show()
+        content.classRing:Show()
+        ns.RefreshPortraitRing()
+        return
+    end
     if portraitMode == "player" then
         content.classIcon:SetTexCoord(0, 1, 0, 1)
         if SetPortraitTexture then
@@ -1355,10 +1364,6 @@ function render.FormatPaceTime(seconds)
 end
 
 local function TrainerCostsVisible(inlineOnly)
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview then return content.screenshotPreview.costs == true end
-    --@end-do-not-package@
     if inlineOnly then return ns.TrainerCostsEnabled() end
     return ns.TrainerCostsInTooltips()
 end
@@ -2368,10 +2373,6 @@ end
 
 local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
     local hideRetailPets = not ns.SupportsTrainerData()
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.screenshotPreview.grimoires then hideRetailPets = false end
-    --@end-do-not-package@
     if hideRetailPets then petAbilities = {} end
     content.currentWarlockPetAbilities = petAbilities or {}
     local hasAbilities = type(petAbilities) == "table" and #petAbilities > 0
@@ -2389,17 +2390,9 @@ end
 
 local function UpdateWeaponSkillText(unlearnedWeaponSkills)
     local hideRetailWeapons = not ns.SupportsTrainerData()
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.screenshotPreview.weapons then hideRetailWeapons = false end
-    --@end-do-not-package@
     if hideRetailWeapons then unlearnedWeaponSkills = {} end
     content.currentWeaponSkills = unlearnedWeaponSkills or {}
     local enabled = ns.WeaponTrainingAvailable() and ns.db.showWeaponSkills ~= false
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.screenshotPreview.weapons then enabled = true end
-    --@end-do-not-package@
     if not enabled or type(unlearnedWeaponSkills) ~= "table" or #unlearnedWeaponSkills == 0 then
         ApplyToTextLayers(content.weaponSkillsText, "SetShown", false)
         ApplyToTextLayers(content.weaponSkillsText, "SetText", "")
@@ -4503,10 +4496,6 @@ function render.ReleasePopupData()
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     content.currentStatChanges = nil
     content.replayRecord = nil
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    content.screenshotPreview = nil
-    --@end-do-not-package@
     content.levelRangeStart, content.currentReachedLevel = nil, nil
     content.currentTrainerAbilities = {}
     content.currentWarlockPetAbilities = {}
@@ -4861,17 +4850,6 @@ local function LayoutFrame(statCount)
     h = h + (abilitiesLast and render.AbilitySectionPadding() or SectionPadding())
     content:ClearAllPoints()
     if IsHorizontalLayout() then
-        --@do-not-package@
-        -- SSTEST: keep weapon names below the ability columns, clear of the timer.
-        if content.screenshotPreview and content.weaponSkillsText:IsShown() then
-            local width = TrainingWidth(content.abilityViewport)
-            if content.petSpellsHeader:IsShown() then width = width + 28 + TrainingWidth(content.petAbilityViewport) end
-            ApplyToTextLayers(content.weaponSkillsText, "SetWidth", width)
-            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", 0)
-            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", TextHeight(content.weaponSkillsText, 18))
-            SyncTextGeometry(content.weaponSkillsText)
-        end
-        --@end-do-not-package@
         local statsHeight = 24 + TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + statCount * STAT_LINE_HEIGHT
         if content.levelTimeText:IsShown() then statsHeight = statsHeight + 2 + content.levelTimeText:GetHeight() end
         -- Keep the established frame budget. The visible grid has three rows;
@@ -4916,12 +4894,6 @@ local function LayoutFrame(statCount)
         local minimumAbilityPadding = ns.db and ns.db.backgroundMode == "MODERN"
             and UI_METRICS.modernAbilityPadding or UI_METRICS.texturedAbilityPadding
         local abilityPadding = math.max(render.AbilitySectionPadding(), minimumAbilityPadding / fit)
-        --@do-not-package@
-        -- SSTEST: local screenshot presentation only.
-        if content.screenshotPreview and content.weaponSkillsText:IsShown() then
-            abilityPadding = abilityPadding + TextHeight(content.weaponSkillsText, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
-        end
-        --@end-do-not-package@
         local topGap = UI_METRICS.abilityTopGap / fit
         for _, viewport in ipairs({main, pet}) do
             local count = viewport.abilityCount or 0
@@ -5024,18 +4996,6 @@ local function LayoutFrame(statCount)
     closeButton:ClearAllPoints()
     closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
     frame:SetHeight(h)
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.weaponSkillsText:IsShown() and IsHorizontalLayout() then
-        local first = content.abilityViewport
-        local last = content.petSpellsHeader:IsShown() and content.petAbilityViewport or first
-        content.weaponDivider:ClearAllPoints()
-        content.weaponDivider:SetPoint("TOPLEFT", first, "BOTTOMLEFT", 0, -gap)
-        content.weaponDivider:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", 0, -gap)
-        content.weaponSkillsText:ClearAllPoints()
-        content.weaponSkillsText:SetPoint("TOP", content.weaponDivider, "BOTTOM", 0, -gap)
-    end
-    --@end-do-not-package@
     render.PositionPaceRecord()
     if IsHorizontalLayout() then
         for _, entry in ipairs({{content.abilityViewport,content.abilityIconPool},{content.petAbilityViewport,content.petAbilityIconPool}}) do
@@ -5291,12 +5251,6 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     content:SetAlpha(0)
     content.currentTrainerAbilities = trainerAbilities or {}
     content.currentWarlockPetAbilities = ns.SupportsTrainerData() and warlockPetAbilities or {}
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.screenshotPreview.grimoires then
-        content.currentWarlockPetAbilities = warlockPetAbilities or {}
-    end
-    --@end-do-not-package@
     ApplyPopupWidth()
     frame:SetScale(ns.GetPopupScale())
     EnsureAllTextGlows()
@@ -5381,12 +5335,6 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
     content.replayRecord = replayRecord
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    ---@type {kind: string, weapons: boolean, grimoires: boolean, costs: boolean}|nil
-    local screenshotRequest = ns.screenshotPreviewRequest
-    content.screenshotPreview = isPreview and screenshotRequest or nil
-    --@end-do-not-package@
     content.pacePreview = isPreview == true and pacePreview == true
     ResetPreviewState(isPreview)
     local level = tonumber(currentLevel)
@@ -5399,13 +5347,6 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     if isPreview and replayRecord and type(replayRecord.milestone) == "boolean" then
         milestone = replayRecord.milestone
     end
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview then
-        content.isMaxLevel = content.screenshotPreview.kind == "max"
-        milestone = content.screenshotPreview.kind ~= "normal"
-    end
-    --@end-do-not-package@
     local perf = ns.PerfStart("popup_prepare")
     local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
     ns.PerfEnd(perf)

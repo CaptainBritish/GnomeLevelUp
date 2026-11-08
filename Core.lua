@@ -1625,6 +1625,7 @@ ns.PORTRAIT_CHOICES = {
     { value = "class",  label = "Class icon" },
     { value = "player", label = "Player portrait" },
     { value = "player3d", label = "Player 3D portrait" },
+    { value = "mw2skull", label = "MW2 Skull Emblem" },
 }
 
 

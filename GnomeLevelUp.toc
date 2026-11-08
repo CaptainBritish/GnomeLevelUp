@@ -50,7 +50,3 @@ Options.lua
 MinimapButton.lua
 LevelUp.lua
 
-#@do-not-package@
-# SSTEST: local screenshot tool; stripped from release packages.
-Tools\ScreenshotTest.lua
-#@end-do-not-package@

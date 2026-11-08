@@ -354,7 +354,7 @@ local enums = {
     controllerMenuFrameStrata = { AUTO = true, BACKGROUND = true, LOW = true, MEDIUM = true,
         HIGH = true, DIALOG = true, FULLSCREEN = true, FULLSCREEN_DIALOG = true, TOOLTIP = true },
     forceFlavor = { auto = true, retail = true, forever = true },
-    portraitMode = { none = true, class = true, player = true, player3d = true },
+    portraitMode = { none = true, class = true, player = true, player3d = true, mw2skull = true },
     statSlideDirection = { none = true, alternate = true, left = true, right = true },
     backgroundMode = { MODERN = true, CUSTOM = true },
     soundChannel = { Master = true, SFX = true, Music = true, Ambience = true, Dialog = true },

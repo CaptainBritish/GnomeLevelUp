@@ -16,10 +16,6 @@ function ns.CreatePopupHeadingFitter(context)
             specs[#specs + 1] = {content.spellsHeader, horizontal and TrainingWidth(content.abilityViewport) or TEXT_WIDTH}
         end
         local includePets = ns.SupportsTrainerData()
-        --@do-not-package@
-        -- SSTEST: local screenshot presentation only.
-        includePets = includePets or content.screenshotPreview and content.screenshotPreview.grimoires
-        --@end-do-not-package@
         if includePets and #(content.currentWarlockPetAbilities or {}) > 0 then
             specs[#specs + 1] = {content.petSpellsHeader, horizontal and TrainingWidth(content.petAbilityViewport) or TEXT_WIDTH}
         end
