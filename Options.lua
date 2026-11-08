@@ -595,8 +595,8 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.6"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.6")))
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.7"
+    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.7")))
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
@@ -1787,6 +1787,15 @@ local function BuildOptions()
     end)
     AddButton("Refresh Cache Status", 160, LEFT + 170, y, function() RefreshCacheStatus(); ReflowSections() end)
     y = y - 36
+
+    local contributorsTitle = body:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    contributorsTitle:SetText(ns.L("Contributors"))
+    TrackElement(contributorsTitle, LEFT, y)
+    y = y - 26
+    local contributors = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    contributors:SetText("Shadowhand, Alyssa, Molly, Rena, 3Zeah, Sindarina, Bun")
+    TrackElement(contributors, LEFT, y)
+    y = y - 32
 
     optionLayout.topPadding = function(width)
         chrome:SetFrameLevel(panel:GetFrameLevel() + 30)

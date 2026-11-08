@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.7
+
+- Added Contributors to Cache Status
+- Fixed Paladin spellbook cache
+
 ## 1.5.6
 * Fixed ability scrollbar jump in Vertical mode.
 * Stopped GLU notifying the user that riding skills are missing at the trainer.
