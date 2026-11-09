@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1
+
+- Added a workaround for a case where entering combat around a level-up could cause missing stat gains. (This was meant to be in 1.6 but I forgot it, sorry for the double update.)
+-  The Hidden Gnome has been removed
+
 ## 1.6 - The Desperation Patch
 (This patch wasn't quite ready yet but I really wanted to fix two major bugs brought to my attention, keep an eye out for custom themes in the near future!) 
 

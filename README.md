@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.6**
+**Development version: 1.6.1**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds

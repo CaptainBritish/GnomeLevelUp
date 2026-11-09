@@ -178,7 +178,8 @@ local function ScheduleDisplay(delay, retryCount)
     local function DisplayWhenReady()
         if token ~= displayToken then return end
         displayTimer = nil
-        if ns.db and ns.db.waitForCombatEnd ~= false and UnitAffectingCombat("player") then
+        local inCombat = UnitAffectingCombat("player")
+        if inCombat and (not ns.db or ns.db.waitForCombatEnd ~= false) then
             pendingSinceCombat = true
             return
         end
@@ -187,6 +188,10 @@ local function ScheduleDisplay(delay, retryCount)
             and ns.HasMissingLevelUpStats(baselineStats, afterStats, expectedStatGains) then
             if (retryCount or 0) < STAT_RETRY_LIMIT then
                 ScheduleDisplay(STAT_RETRY_DELAY, (retryCount or 0) + 1)
+                return
+            end
+            if inCombat then
+                pendingSinceCombat = true
                 return
             end
             print("|cffff4040GnomeLevelUp|r: " .. ns.L("Stat capture failed: Expected stat changes were still missing after retrying."))
@@ -239,6 +244,7 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
         pendingSinceCombat = false
         ScheduleDisplay()
     elseif not levelUpPending and (event == "PLAYER_EQUIPMENT_CHANGED"
+        or event == "PLAYER_REGEN_ENABLED"
         or (unit == "player" and (event == "UNIT_AURA" or event == "UNIT_MAXHEALTH"
             or event == "UNIT_MAXPOWER" or event == "UNIT_STATS"))) then
         QueueBaselineRefresh()

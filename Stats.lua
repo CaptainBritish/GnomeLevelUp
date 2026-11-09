@@ -256,22 +256,38 @@ function ns.BuildSecondaryPreviewStats()
     return ns.DiffSecondaryStats(current, current)
 end
 
+local function GetVisibleNumber(value)
+    if type(issecretvalue) == "function" and issecretvalue(value) then
+        return nil
+    end
+    return value
+end
+
+local function ReadSnapshotNumber(value, previous)
+    value = GetVisibleNumber(value)
+    if type(value) == "number" then return value end
+    return previous
+end
+
 function ns.SnapshotStats(reuse)
-    -- Store raw values here; DiffStats rejects protected values before comparing them.
     local _, powerToken = UnitPowerType("player")
     local powerLabel = POWER_LABELS[powerToken]
     if not powerLabel then
         powerLabel = type(powerToken) == "string" and type(_G[powerToken]) == "string" and _G[powerToken] or "Power"
     end
     local snap = reuse or {}
-    snap.level = UnitLevel("player")
-    snap.health = UnitHealthMax("player")
-    snap.power = UnitPowerMax("player")
+    local level = UnitLevel("player")
+    -- An unreadable combat sample should not erase the baseline for this level.
+    local sameLevel = reuse and reuse.level == level
+    snap.level = level
+    snap.health = ReadSnapshotNumber(UnitHealthMax("player"), sameLevel and snap.health or nil)
+    snap.power = ReadSnapshotNumber(UnitPowerMax("player"),
+        sameLevel and snap.powerToken == powerToken and snap.power or nil)
     snap.powerToken, snap.powerLabel = powerToken, powerLabel
     snap.stats = snap.stats or {}
     snap.secondary = ns.db and ns.db.showSecondaryStats and ns.SnapshotSecondaryStats(snap.secondary) or nil
     for i = 1, 5 do
-        snap.stats[i] = UnitStat("player", i)
+        snap.stats[i] = ReadSnapshotNumber(UnitStat("player", i), sameLevel and snap.stats[i] or nil)
     end
     return snap
 end
@@ -281,13 +297,6 @@ local function GetDisplayedStatIndexes()
         return { 1, 2, 3, 4 } -- Strength, Agility, Stamina, Intellect
     end
     return { 1, 2, 3, 4, 5 } -- + Spirit
-end
-
-local function GetVisibleNumber(value)
-    if type(issecretvalue) == "function" and issecretvalue(value) then
-        return nil
-    end
-    return value
 end
 
 function ns.HasMissingLevelUpStats(before, after, expectedGains)
