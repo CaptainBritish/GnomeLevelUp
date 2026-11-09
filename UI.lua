@@ -72,7 +72,7 @@ end
 
 local function ModelPortraitDiameter()
     local size = PortraitIconSize()
-    if ns.db and ns.db.portraitRingEnabled then
+    if ns.db and ns.HasPortraitRingArtwork() then
         size = math.min(size, PortraitRingSize() * PortraitRingScale() * 0.90)
     end
     return math.max(1, size)
@@ -598,7 +598,7 @@ end
 
 -- Textured themes use a fixed content inset, independent of border artwork.
 local function ThemeContentInset()
-    return ns.db and ns.db.backgroundMode ~= "MODERN" and ns.GetParticleValue(ns.FRAME_INSET_SETTING, "value") or 0
+    return ns.db and ns.GetEffectiveBackgroundMode() ~= "MODERN" and ns.GetParticleValue(ns.FRAME_INSET_SETTING, "value") or 0
 end
 
 local BackgroundStyle = ns.GetBackgroundStyle
@@ -618,7 +618,7 @@ end
 
 local function LayoutBackground()
     local w, h = frame:GetWidth(), frame:GetHeight()
-    local custom = ns.db and ns.db.backgroundMode == "CUSTOM"
+    local custom = ns.db and ns.GetEffectiveBackgroundMode() == "CUSTOM"
     local horizontal = IsHorizontalLayout()
     local hasPet = horizontal and content.petSpellsHeader and content.petSpellsHeader:IsShown() or false
     if w == backgroundWidth and h == backgroundHeight and horizontal == backgroundHorizontal and hasPet == backgroundHasPet
@@ -653,12 +653,20 @@ function ns.ApplyBackgroundAppearance(opacityOverride)
     -- Fill coordinates depend on the destination dimensions for this layout.
     LayoutBackground()
     local theme = GetBackgroundTheme()
-    local useCustom = ns.db and ns.db.backgroundMode == "CUSTOM" and theme ~= nil
+    local backgroundMode = ns.GetEffectiveBackgroundMode()
+    local useCustom = backgroundMode == "CUSTOM" and theme ~= nil
     local themeTextures = theme and theme.textures or nil
     bg.modern:SetShown(not useCustom)
     local modernColor = ns.db and ns.db.backgroundColor or BLACK_COLOR
     local opacity = opacityOverride or (ns.db and ns.db.bgOpacity) or 0.70
     local fillOpacity = ns.GetBackgroundFillOpacity(opacity)
+    if ns.db and ns.db.backgroundMode == "CUSTOM" and backgroundMode == "MODERN" then
+        local preferences = ns.db.themeHuePreferences
+        local modern = preferences and preferences.background and preferences.background.NONE
+        modernColor = modern and modern.color or BLACK_COLOR
+        opacity = .80
+        fillOpacity = opacity * (modern and modern.opacity or 1)
+    end
     bg.appliedOpacity = fillOpacity
     bg.HideModernBackgroundFlash()
     bg.modern:SetVertexColor(modernColor[1], modernColor[2], modernColor[3], fillOpacity)
@@ -733,7 +741,7 @@ local function RegisterFontElement(fs, sizeOverride, flagsOverride)
 end
 
 function ns.ApplyFont(fontPath)
-    if type(fontPath) ~= "string" or fontPath == "" then fontPath = DEFAULT_FONT_PATH end
+    fontPath = ns.GetPopupFontPath(fontPath)
     for _, entry in ipairs(content.fontElements) do
         local scale = entry.fs.gluFontScaleKey and ns.GetTextScale(entry.fs.gluFontScaleKey) or 1
         entry.fs:SetFont(fontPath, entry.size * scale, entry.flags)
@@ -967,7 +975,7 @@ if content.portraitArtwork.CreateMaskTexture then
 end
 
 function render.PortraitLevelGap()
-    if not IsHorizontalLayout() and IsPlayerPortrait() and ns.db.portraitRingEnabled then
+    if not IsHorizontalLayout() and IsPlayerPortrait() and ns.HasPortraitRingArtwork() then
         local _, offsetY = PortraitRingOffset()
         return 9 + math.max(0, PortraitRingSize() * (PortraitRingScale() - 1) / 2 - offsetY)
     end
@@ -997,7 +1005,7 @@ function ns.RefreshPortraitGeometry(skipEffects)
         content.playerModel:SetSize(diameter * ModelViewportRatio(), diameter * ModelViewportRatio())
         content.modelBacking:SetSize(diameter, diameter)
         UpdateModelMaskGeometry(diameter)
-        local anchor = ns.db and ns.db.portraitRingEnabled and content.classRingGraphic or content.portraitAnchor
+        local anchor = ns.db and ns.HasPortraitRingArtwork() and content.classRingGraphic or content.portraitAnchor
         for _, region in ipairs({content.playerModel, content.modelBacking}) do
             region:ClearAllPoints()
             region:SetPoint("CENTER", anchor, "CENTER")
@@ -1059,7 +1067,7 @@ end
 
 function render.SyncPlayerModelCamera()
     local model = content.playerModel
-    if not model or not ns.db or ns.db.portraitMode ~= "player3d" then return end
+    if not model or not model.portraitLoaded or not ns.db or ns.db.portraitMode ~= "player3d" then return end
     if model.cameraWidth ~= model:GetWidth() or model.cameraHeight ~= model:GetHeight()
         or model.cameraScale ~= model:GetEffectiveScale() then
         render.ApplyPlayerModelCamera(model)
@@ -1072,6 +1080,85 @@ function ns.ApplyPlayerModelSettings()
     render.ApplyPlayerModelCamera()
 end
 
+local function SetPlayerPortraitTexture(texture)
+    texture:SetTexCoord(0, 1, 0, 1)
+    if SetPortraitTexture then
+        SetPortraitTexture(texture, "player")
+    else
+        texture:SetTexture("Interface\\CHARACTERFRAME\\TempPortrait")
+    end
+end
+
+function render.SetClassPortraitTexture(texture)
+    local _, classToken = UnitClass("player")
+    local coords = (CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classToken])
+        or FALLBACK_CLASS_COORDS[classToken]
+    if not coords then return false end
+    texture:SetTexture(CLASS_ICON_SHEET)
+    texture:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    return true
+end
+
+function render.SetModelLayersShown(shown)
+    content.modelBacking:SetShown(shown)
+    for _, mask in ipairs(content.modelMasks) do mask:SetShown(shown) end
+end
+
+local function FinishPlayerModelLoad(model)
+    if not model.unitAssigned or not model.loadReceived or model.loadDelayed or model.portraitLoaded or not model:IsShown()
+        or not frame:IsShown() or frame.closingInputSuppressed or ns.db.portraitMode ~= "player3d" then return end
+    if IsUnitModelReadyForUI and not IsUnitModelReadyForUI("player") then return end
+    if model.GetModelFileID then
+        local fileID = model:GetModelFileID()
+        if not fileID or fileID <= 0 then return end
+    end
+    render.ApplyPlayerModelCamera(model)
+    model.portraitLoaded = true
+    render.SetModelLayersShown(true)
+    model:SetAlpha(content.portraitArtwork:GetAlpha())
+    content.modelFallback:Hide()
+end
+
+local function LoadPlayerPortraitModel(model)
+    model.loadToken = (model.loadToken or 0) + 1
+    local token = model.loadToken
+    model.portraitLoaded, model.unitAssigned, model.loadReceived = false, false, false
+    local portraitTest = content.portraitLoadTest
+    model.loadDelayed = portraitTest == "delay"
+    model:SetAlpha(0)
+    render.SetModelLayersShown(false)
+    local fallback = content.modelFallback
+    if not (IsUnitModelReadyForUI and not IsUnitModelReadyForUI("player") and render.SetClassPortraitTexture(fallback)) then
+        SetPlayerPortraitTexture(fallback)
+    end
+    fallback:Show()
+    if portraitTest ~= "fail" then
+        local ok, assigned = pcall(model.SetUnit, model, "player")
+        -- Older clients may return nothing. An explicit false rejects the assignment.
+        model.unitAssigned = ok and assigned ~= false
+    end
+    FinishPlayerModelLoad(model)
+    if model.portraitLoaded then return end
+    C_Timer.After(1.5, function()
+        if model.loadToken == token and not model.portraitLoaded and not model.loadReported and model:IsShown()
+            and frame:IsShown() and not frame.closingInputSuppressed and ns.db.portraitMode == "player3d" then
+            FinishPlayerModelLoad(model)
+            if model.portraitLoaded then return end
+            model.loadReported = true
+            local message = model.unitAssigned and "3D Portrait render failed: The player model did not load in time."
+                or "3D Portrait render failed: Could not assign the player model."
+            print("|cffff4040GnomeLevelUp|r: " .. ns.L(message))
+        end
+    end)
+    if model.loadDelayed then
+        C_Timer.After(2.5, function()
+            if model.loadToken ~= token then return end
+            model.loadDelayed = false
+            FinishPlayerModelLoad(model)
+        end)
+    end
+end
+
 function ns.RefreshClassIcon()
     ns.RefreshPlayerModelIdentity()
     ns.RefreshPortraitGeometry()
@@ -1079,7 +1166,7 @@ function ns.RefreshClassIcon()
     local portraitMode = ns.db and ns.db.portraitMode or "class"
     if content.playerModel and portraitMode ~= "player3d" then
         content.playerModel:Hide()
-        content.modelBacking:Hide()
+        content.modelFallback:Hide()
     end
     if portraitMode == "player3d" then
         if not content.playerModel then
@@ -1093,14 +1180,24 @@ function ns.RefreshClassIcon()
             model:SetModelDrawLayer("ARTWORK")
             model:SetFlattensRenderLayers(true)
             model:SetIsFrameBuffer(true)
-            model:SetScript("OnModelLoaded", render.ApplyPlayerModelCamera)
-            model:SetScript("OnShow", function(self) self:SetUnit("player"); ns.ApplyPlayerModelSettings() end)
-            model:SetScript("OnHide", function(self) self:ClearModel() end)
+            model:SetScript("OnModelLoaded", function(self)
+                self.loadReceived = true
+                FinishPlayerModelLoad(self)
+            end)
+            model:SetScript("OnShow", LoadPlayerPortraitModel)
+            model:SetScript("OnHide", function(self)
+                self.loadToken = (self.loadToken or 0) + 1
+                self.portraitLoaded, self.loadReported = false, nil
+                self.unitAssigned, self.loadReceived = false, false
+                render.SetModelLayersShown(false)
+                content.modelFallback:Hide()
+                self:ClearModel()
+            end)
             model:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
             model:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
             model:SetScript("OnEvent", function(self)
                 local identityChanged = ns.RefreshPlayerModelIdentity()
-                if self:IsShown() then self:SetUnit("player"); ns.ApplyPlayerModelSettings() end
+                if self:IsShown() and not content.portraitLoadTest then LoadPlayerPortraitModel(self) end
                 if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then
                     ns.RefreshOptionsPanel()
                 end
@@ -1111,22 +1208,29 @@ function ns.RefreshClassIcon()
             overlay:SetAllPoints(content.portraitArtwork)
             overlay:SetFrameLevel(model:GetFrameLevel() + 1)
             content.classRingGraphic:SetParent(overlay)
+            -- Keep the fill above the solid ring. The fallback has its own overlay.
             content.modelBacking = content.portraitArtwork:CreateTexture(nil, "ARTWORK", nil, 2)
             content.modelBacking:SetSize(ModelPortraitDiameter(), ModelPortraitDiameter())
             content.modelBacking:SetPoint("CENTER", content.portraitAnchor, "CENTER")
-            content.modelBacking:SetColorTexture(0.025, 0.025, 0.03, 1)
             local mask = content.portraitArtwork:CreateMaskTexture()
             mask:SetAllPoints(content.modelBacking)
             mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
             content.modelBacking:AddMaskTexture(mask)
+            content.modelFallback = overlay:CreateTexture(nil, "ARTWORK", nil, 2)
+            content.modelFallback:SetAllPoints(content.modelBacking)
+            local fallbackMask = overlay:CreateMaskTexture()
+            fallbackMask:SetAllPoints(content.modelFallback)
+            fallbackMask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            content.modelFallback:AddMaskTexture(fallbackMask)
             CreateModelMask()
-
+            render.SetModelLayersShown(false)
+            content.modelFallback:Hide()
         end
+        local model = content.playerModel
         content.classIcon:Hide()
         content.classRing:Show()
-        content.playerModel:SetAlpha(portraitPreparing and 0 or content.portraitArtwork:GetAlpha())
+        model:SetAlpha(not portraitPreparing and model.portraitLoaded and content.portraitArtwork:GetAlpha() or 0)
         content.playerModel:SetShown(not portraitPreparing and content.portraitArtwork:IsShown())
-        content.modelBacking:Show()
         ns.RefreshPortraitRing()
         return
     end
@@ -1137,24 +1241,14 @@ function ns.RefreshClassIcon()
         return
     end
     if portraitMode == "player" then
-        content.classIcon:SetTexCoord(0, 1, 0, 1)
-        if SetPortraitTexture then
-            SetPortraitTexture(content.classIcon, "player")
-        else
-            content.classIcon:SetTexture("Interface\\CHARACTERFRAME\\TempPortrait")
-        end
+        SetPlayerPortraitTexture(content.classIcon)
         content.classIcon:Show()
         content.classRing:Show()
         ns.RefreshPortraitRing()
         return
     end
 
-    local _, classToken = UnitClass("player")
-    local coords = (CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classToken])
-        or FALLBACK_CLASS_COORDS[classToken]
-    if coords then
-        content.classIcon:SetTexture(CLASS_ICON_SHEET)
-        content.classIcon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    if render.SetClassPortraitTexture(content.classIcon) then
         content.classIcon:Show()
         content.classRing:Show()
         ns.RefreshPortraitRing()
@@ -1168,18 +1262,22 @@ end
 function ns.RefreshPortraitRing()
     if not content.classRingGraphic then return end
     local db = ns.db or {}
+    if content.modelBacking then
+        local fill = BLACK_COLOR
+        if db.classColourPortraitBackground then
+            local _, class = UnitClass("player")
+            fill = ns.CLASS_COLORS[class] or BLACK_COLOR
+        end
+        content.modelBacking:SetColorTexture(fill[1], fill[2], fill[3], 1)
+    end
     render.portraitGlintRadius = .5
     if db.portraitMode == "none" then
         content.classRing:Hide()
         content.classRingGraphic:Hide()
         return
     end
-    local reference = db.portraitRingTexture
-    if (type(reference) ~= "string" or reference == "")
-        and db.portraitRingChoice then
-        reference = ns.GetPortraitRingReference(db.portraitRingChoice)
-    end
-    local enabled = db.portraitRingEnabled == true
+    local reference = ns.GetSelectedPortraitRingReference()
+    local enabled = ns.HasPortraitRingArtwork()
         and ((type(reference) == "string" and reference ~= "")
             or (type(reference) == "table" and reference.atlas))
     local ringColor = enabled and (db.portraitRingColor or { 1, 1, 1 })
@@ -1285,8 +1383,7 @@ end
 function render.MeasureLevelTime()
     local horizontal = IsHorizontalLayout()
     local size = render.LevelTimeFontSize()
-    local path = ns.db and ns.db.customFontPath or DEFAULT_FONT_PATH
-    if type(path) ~= "string" or path == "" then path = DEFAULT_FONT_PATH end
+    local path = ns.GetPopupFontPath(ns.db and ns.db.customFontPath)
     local text = content.levelTimeText:GetText() or ""
     local key = path .. ":" .. size .. ":" .. TEXT_WIDTH .. ":" .. text
     if content.levelTimeMetricKey ~= key then
@@ -1544,7 +1641,7 @@ function render.HorizontalEndPadding()
     local left = centre - content.levelText:GetStringWidth() / 2
     if mode ~= "none" then
         left = math.min(left, centre - PortraitRingSize() / 2)
-        if ns.db and ns.db.portraitRingEnabled then
+        if ns.db and ns.HasPortraitRingArtwork() then
             local offsetX = PortraitRingOffset()
             left = math.min(left, centre + offsetX - PortraitRingSize() * PortraitRingScale() / 2)
         end
@@ -1692,7 +1789,7 @@ local function UpdateDividerEntrance(divider, stage, age, moving, fullWidth, isA
     local texture = isAccent and divider or divider.texture
     local alpha = EntranceAlpha(stage, age, moving)
     local reveal = 1
-    if ns.db and moving and stage and (isAccent and ns.db.backgroundMode == "MODERN"
+    if ns.db and moving and stage and (isAccent and ns.GetEffectiveBackgroundMode() == "MODERN"
         or ns.db.backgroundAnimations ~= false and not ns.db.reducedMotion and ns.db.dividerReveal) then
         -- Let the full-opacity centre expand slowly enough to read as motion.
         local duration = .60 / (render.closing and render.closing.speed or Speed())
@@ -1738,7 +1835,7 @@ local function UpdateSectionEntrance(age, moving)
     UpdateDividerEntrance(content.petDivider, plan.petHeader, age, moving)
     UpdateDividerEntrance(content.petHeaderDivider, plan.petHeader, age, moving, IsHorizontalLayout() and TrainingWidth(content.petAbilityViewport) or nil)
     UpdateDividerEntrance(content.weaponDivider, plan.weapon, age, moving)
-    if ns.db and ns.db.backgroundMode == "MODERN" then
+    if ns.db and ns.GetEffectiveBackgroundMode() == "MODERN" then
         for i, line in ipairs(bg.modernAccents) do
             local reveal = UpdateDividerEntrance(line, plan.background, age, moving, FRAME_WIDTH * 0.94, true)
             if i == 1 then
@@ -1813,6 +1910,7 @@ end
 
 local function StartLineAnimation(fs, container, startX, y, delay, duration, timingScale)
     StopLineAnimation(fs)
+    fs.statGlintSoundPlayed = false
     timingScale = timingScale or 1
     fs.slideFrame:SetWidth(TEXT_WIDTH)
     fs.slideFrame:ClearAllPoints()
@@ -1850,8 +1948,7 @@ local function GetStatLine(index)
     local pool = content.statLinePool
     if pool[index] then return pool[index] end
 
-    local fontPath = ns.db and ns.db.customFontPath
-    if type(fontPath) ~= "string" or fontPath == "" then fontPath = DEFAULT_FONT_PATH end
+    local fontPath = ns.GetPopupFontPath(ns.db and ns.db.customFontPath)
     local holder = CreateFrame("Frame", nil, content.statsContainer)
     holder.modernShade = holder:CreateTexture(nil, "BACKGROUND")
     holder.modernShade:SetAllPoints(holder)
@@ -2780,7 +2877,7 @@ ApplyStatLineText = function(fs)
         cache.gr, cache.gg, cache.gb = gainColor[1], gainColor[2], gainColor[3]
     end
     if fs.slideFrame and fs.slideFrame.modernShade then
-        fs.slideFrame.modernShade:SetShown(ns.db and ns.db.backgroundMode == "MODERN")
+        fs.slideFrame.modernShade:SetShown(ns.db and ns.GetEffectiveBackgroundMode() == "MODERN")
     end
     local label = ActiveColor("statLabel")
     render.StatColor(fs, label[1], label[2], label[3])
@@ -3101,9 +3198,25 @@ function render.UpdateAmbientSparkles()
     return render.ambientActive
 end
 
+function render.UpdateIdleMoteSound(visible)
+    if visible and render.idleMoteSoundInterval then
+        if not render.nextIdleMoteSoundAt or effectAge >= render.nextIdleMoteSoundAt then
+            render.nextIdleMoteSoundAt = effectAge + render.idleMoteSoundInterval
+            ns.PlayAnimationSound("idleMotes")
+        end
+    elseif render.nextIdleMoteSoundAt then
+        ns.StopAnimationSound("idleMotes")
+        render.nextIdleMoteSoundAt = nil
+    end
+end
+
 local function UpdateSmallEffects(cycleTime, moving)
     local db = ns.db or {}
-    if not moving or not frame:IsShown() then HideSmallEffects(); return false end
+    if not moving or not frame:IsShown() then
+        render.UpdateIdleMoteSound(false)
+        HideSmallEffects()
+        return false
+    end
     local active = false
     local width, height = frame:GetWidth(), frame:GetHeight()
     local portraitScale = PortraitIconSize() / PLAYER_PORTRAIT_SIZE
@@ -3145,7 +3258,7 @@ local function UpdateSmallEffects(cycleTime, moving)
             local heading = texture.driftAngle or 0
             local size = (texture.moteSize or 5) * settings.size
             if pool == content.portraitSparks and IsHorizontalLayout() then
-                local ringScale = db.portraitRingEnabled and PortraitRingScale() or 1
+                local ringScale = ns.HasPortraitRingArtwork() and PortraitRingScale() or 1
                 radius = PortraitRingSize() * ringScale * 0.52 + size * 0.5 + radius * 0.25
                 distance = distance * 1.7
             end
@@ -3168,6 +3281,14 @@ local function UpdateSmallEffects(cycleTime, moving)
     end
 
     local ambientAge = effectAge - fadeFinished
+    if render.idleMoteSoundInterval then
+        local settings = render.particleSettings
+        local portraitMotes, portraitTrail, backgroundMotes = settings[1], settings[2], settings[3]
+        local visible = motesEnabled and releaseAge > 0 and (portraitMotes.count > 0 and portraitMotes.opacity > 0
+            or portraitTrail.count > 0 and portraitTrail.opacity > 0)
+        render.UpdateIdleMoteSound(visible or (db.backgroundEmbers and ambientAge > 0
+            and backgroundMotes.count > 0 and backgroundMotes.opacity > 0))
+    end
     for i, texture in ipairs(content.backgroundEmbers) do
         local settings = render.particleSettings[3]
         local visible = db.backgroundEmbers and i <= settings.count and ambientAge >= 0
@@ -3203,7 +3324,7 @@ local function UpdateSmallEffects(cycleTime, moving)
     if db.backgroundEmbers and render.particleSettings[3].count > 0 then active = true end
 
     local edgeAge = effectAge
-    local edgeEnabled = db.frameEdgeGlow and db.backgroundMode ~= "MODERN"
+    local edgeEnabled = db.frameEdgeGlow and ns.GetEffectiveBackgroundMode() ~= "MODERN"
     local edgeVisible = edgeEnabled and edgeAge >= 0 and edgeAge < 1.25
     for _, texture in ipairs(content.edgeGlows) do
         render.Shown(texture, edgeVisible == true)
@@ -3407,7 +3528,7 @@ function render.UpdateMilestoneAccents()
         if shown then
             if i == 1 and not render.portraitImpactPlayed then
                 render.portraitImpactPlayed = true
-                ns.PlayPortraitImpactSound()
+                ns.PlayAnimationSound("portraitImpact")
             end
             local size = PortraitRingSize() * (1 + 1.7 * (1 - (1 - t) ^ 3)) * render.milestonePortraitScale
             render.Size(ring, size, size)
@@ -3471,11 +3592,16 @@ function render.UpdateMilestoneAccents()
     local alpha = opacity > 0 and math.min(1, (opacity * render.milestoneScale * 1.7 + 0.15) * 1.10) * render.fireworkOpacity or 0
     for i, texture in ipairs(accents.burst) do
         local ordinal = math.floor((i - 1) / 16) + 1
+        local particle = (i - 1) % 16
         local row = ordinal <= emitters and accents.statEmitters[ordinal]
         local burstTime = (burstAge - (ordinal - 1) * slot) / duration
-        local shown = burstEnabled and row and (i - 1) % 16 < count and burstTime >= 0 and burstTime < 1
+        local shown = burstEnabled and row and particle < count and burstTime >= 0 and burstTime < 1
         render.Shown(texture, shown == true)
         if shown and row then
+            if particle == 0 and ordinal > (render.lastStatFireworkSound or 0) then
+                render.lastStatFireworkSound = ordinal
+                if alpha > 0 then ns.PlayAnimationSound("fireworks") end
+            end
             local angle = texture.burstAngle or i * 2 * math.pi / 16
             local distance = (texture.burstDistance or 90) * (1 - (1 - burstTime) ^ 3)
             local size = math.min(36, (texture.burstSize or 7) * render.particleSettings[3].size * 1.25 * accents.burstScales[ordinal]) * render.fireworkSize
@@ -3553,7 +3679,7 @@ function render.PrepareMaxCelebration()
         EnsureParticlePool(effects.surge, effects.frame, 16)
     end
     if effects.prepared then return effects end
-    effects.prepared, effects.fireworksFinished = true, false
+    effects.prepared, effects.fireworksFinished, effects.fireworkSoundPlayed = true, false, false
     for i = 1, 8 do effects.origins[i] = (i % 2 == 0 and .28 or -.28) + (math.random() - .5) * .12 end
     for i, texture in ipairs(effects.fireworks) do
         if i % 2 == 1 then
@@ -3611,6 +3737,11 @@ function render.UpdateMaxCelebration()
                 local shown = t >= 0 and t < 1
                 render.Shown(texture, shown)
                 if shown then
+                    -- The edge sequence shares one cue across all its launches.
+                    if not effects.fireworkSoundPlayed then
+                        effects.fireworkSoundPlayed = true
+                        if render.fireworkOpacity > 0 then ns.PlayAnimationSound("fireworks") end
+                    end
                     local side, origin = math.floor(emitter / 2), effects.origins[emitter + 1]
                     local nx, ny = side == 0 and -1 or side == 1 and 1 or 0, side == 2 and 1 or side == 3 and -1 or 0
                     local x, y = nx * width / 2 + (nx == 0 and origin * width or 0), ny * height / 2 + (ny == 0 and origin * height or 0)
@@ -3630,7 +3761,7 @@ function render.UpdateMaxCelebration()
     local portrait = db.portraitMode ~= "none"
     local surgeAge = render.ringSurgeStartedAt and (effectAge - render.ringSurgeStartedAt - .2) * speed or -1
     local surgeEnabled = portrait and IsPlayerPortrait() and db.portraitAnimation and surgeAge >= 0
-    local ring = db.portraitRingEnabled and content.classRingGraphic or content.classRing
+    local ring = ns.HasPortraitRingArtwork() and content.classRingGraphic or content.classRing
     local ringRadius = ring:GetWidth() * .5 * content:GetScale()
     for i, texture in ipairs(effects.surge) do
         -- Independent slower flashes stay at one random spot for their whole life.
@@ -3802,7 +3933,7 @@ function render.ApplyClosingEntrance(age)
     render.Alpha(bg, EntranceAlpha(entranceTimeline.background, age, true))
     local alpha = EntranceAlpha(entranceTimeline.portrait, age, true)
     render.Alpha(content.portraitArtwork, alpha)
-    if content.playerModel then render.Alpha(content.playerModel, alpha) end
+    if content.playerModel and content.playerModel.portraitLoaded then render.Alpha(content.playerModel, alpha) end
     for _, fs in ipairs(content.statLinePool) do
         local motion = fs.entranceMotion
         if motion and (fs.statData or fs.plainText) then
@@ -3845,73 +3976,12 @@ function render.UpdateClosing(elapsed)
     if closing.age >= closing.duration then frame:Hide() end
 end
 
-function render.RefreshAnimationSoundSettings()
-    render.hasOptionalSounds = false
-    for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
-        if spec.cue ~= "portraitImpact" and spec.cue ~= "starburst" and ns.GetAnimationSoundID(spec.cue) > 0 then
-            render.hasOptionalSounds = true
-            break
-        end
-    end
-end
-
--- Optional cues follow visible stages and share the existing effect driver.
-function render.UpdateAnimationSounds()
-    local db, plan = ns.db or {}, entranceTimeline
-    if not render.hasOptionalSounds or not plan or not frame:IsShown() or not ns.DecorativeAnimationsEnabled() then return end
-    local seen = render.animationCueSeen
-    if not seen then return end
-    local function Once(cue, visible)
-        if visible and not seen[cue] then seen[cue] = true; ns.PlayAnimationSound(cue) end
-    end
-    local function Any(pool)
-        for _, texture in ipairs(pool or {}) do if texture:IsShown() then return true end end
-        return false
-    end
-    local effects, maximum = content.trialEffects or {}, content.maxLevelEffects or {}
-    local portrait = db.portraitAnimation and IsPlayerPortrait()
-    Once("portraitPulse", portrait and portraitStage == "pulse")
-    Once("ringGlint", db.portraitRingGlint and Any(effects.glints))
-    Once("glintSpark", db.portraitRingGlint and effectAge >= render.PortraitGlintFinish() and Any(effects.glints))
-    Once("ringSettle", db.portraitRingSettle and db.portraitMode ~= "none" and effectAge >= plan.portrait.start)
-    Once("statCount", db.emphasizeStatGains and next(activeLineAnims) ~= nil)
-    local impact = false
-    if not seen.statImpact then
-        for _, pool in pairs(effects.impacts or {}) do if Any(pool) then impact = true; break end end
-    end
-    Once("statImpact", impact)
-    local revealed, shine = false, false
-    for _, pool in ipairs(render.abilityPools) do
-        for _, icon in ipairs(pool) do
-            if icon:IsShown() and effectAge >= (icon.entranceEnd or math.huge) then revealed = true end
-            if icon.revealShine and icon.revealShine:IsShown() then shine = true end
-        end
-    end
-    Once("abilityReveal", db.highlightNewAbilities and revealed)
-    Once("abilityShine", db.highlightNewAbilities and shine)
-    Once("portraitMotes", Any(content.portraitSparks) or Any(content.starburstMotes))
-    Once("backgroundMotes", Any(content.backgroundEmbers))
-    Once("frameEdge", Any(content.edgeGlows))
-    Once("dividers", db.dividerReveal and effectAge >= plan.statsHeader.start)
-    Once("depth", Any(effects.depth))
-    local milestone = content.isMilestone and db.milestoneAnimations ~= false
-    Once("anticipation", milestone and portrait and portraitStage == "pulse")
-    Once("milestoneTint", milestone and (effects.white or 0) > 0)
-    Once("milestone", milestone and effectAge >= plan.portrait.finish)
-    Once("maxFireworks", Any(maximum.fireworks))
-    Once("ringSurges", Any(maximum.surge))
-    Once("maxSparks", Any(maximum.sparks))
-    local visible = effects.portraitShimmer and effects.portraitShimmer:IsShown() or false
-    if visible and not render.animationCueVisible.portraitShine then ns.PlayAnimationSound("portraitShine") end
-    render.animationCueVisible.portraitShine = visible
-end
-
 function render.BeginClosing(multiplier)
     if not entranceTimeline or render.closing then return end
     ns.SetClosingClickThrough(true)
     if bg.entranceGroup then bg.entranceGroup:Stop() end
     ns.StopAnimationSounds()
-    ns.PlayAnimationSound("closing")
+    ns.PlayAnimationSound("fadeOut")
     local closing = { age = 0, startEffectAge = effectAge, startAge = math.min(effectAge, entranceTimeline.finish),
         speed = Speed(), multiplier = multiplier or UI_METRICS.automaticCloseSpeed, duration = UI_METRICS.modernCloseSeconds / Speed(), textures = {} }
     for _, fs in ipairs(content.statLinePool) do StopLineAnimation(fs) end
@@ -4143,7 +4213,7 @@ function render.UpdateMaxBackgroundTint(force)
     local db = ns.db or {}
     local maxLevel = content.isMaxLevel and db.maxLevelCelebration ~= false
     local milestone = not content.isMaxLevel and content.isMilestone and db.milestoneAnimations ~= false
-    if db.backgroundMode ~= "MODERN" or not (maxLevel or milestone)
+    if ns.GetEffectiveBackgroundMode() ~= "MODERN" or not (maxLevel or milestone)
         or not ns.DecorativeAnimationsEnabled() or not frame:IsShown() then
         render.ResetMaxBackgroundTint()
         return false
@@ -4235,7 +4305,7 @@ UpdateVisualEffects = function()
         render.pointX, render.pointY = pointX, pointY
     end
     if content.playerModel and db.portraitMode == "player3d" then
-        render.Alpha(content.playerModel, ringAlpha)
+        render.Alpha(content.playerModel, content.playerModel.portraitLoaded and ringAlpha or 0)
         render.Shown(content.playerModel, not portraitPreparing and ringAlpha > 0)
     end
     render.Alpha(content.portraitArtwork, ringAlpha)
@@ -4260,7 +4330,7 @@ UpdateVisualEffects = function()
     end
     if starVisible and moving and render.starburstOpacity > 0 and not render.starburstSoundPlayed then
         render.starburstSoundPlayed = true
-        ns.PlayStarburstSound()
+        ns.PlayAnimationSound("starburst")
     end
     if render.UpdateMaxBackgroundTint() then active = true end
     render.Shown(content.portraitStarburst, starVisible == true)
@@ -4329,28 +4399,15 @@ UpdateVisualEffects = function()
     local maxPerf = content.isMaxLevel and ns.PerfStart("max_celebration_frame", effectAge)
     if render.UpdateMaxCelebration() then active = true end
     ns.PerfEnd(maxPerf)
-    render.UpdateAnimationSounds()
-    if render.screenshotAt then
-        if effectAge >= render.screenshotAt then
-            render.screenshotAt = nil
-            -- Capture real milestones once, after every entrance has settled.
-            if db.screenshotMilestones and content.isMilestone and not previewState.active
-                and frame:IsShown() and type(Screenshot) == "function" then
-                Screenshot()
-            end
-        else
-            active = true
-        end
-    end
     effectDriver:SetScript("OnUpdate", active and frame:IsShown() and RunVisualEffects or nil)
 end
 
 function ns.RefreshVisualEffects()
-    render.RefreshAnimationSoundSettings()
-    if ns.db and (ns.db.reducedMotion or ns.db.backgroundAnimations == false or not ns.db.portraitAnimation) then
-        ns.StopAnimationSounds()
-    end
     if render.closing or frame.fadeOutGroup and frame.fadeOutGroup:IsPlaying() then return end
+    local interval = ns.GetIdleMoteSoundInterval()
+    if render.idleMoteSoundInterval ~= interval then render.UpdateIdleMoteSound(false) end
+    render.idleMoteSoundInterval = interval
+    if not ns.DecorativeAnimationsEnabled() then ns.StopAnimationSounds(true) end
     if content.trialEffects then
         content.trialEffects.white = nil
         content.trialEffects.shinesFinished, content.trialEffects.impactsFinished = false, false
@@ -4384,7 +4441,7 @@ function ns.RefreshVisualEffects()
                     i == 3 and "BACKGROUND" or nil)
             end
         end
-        if db.frameEdgeGlow and db.backgroundMode ~= "MODERN" then render.EnsureEdgeGlows() end
+        if db.frameEdgeGlow and ns.GetEffectiveBackgroundMode() ~= "MODERN" then render.EnsureEdgeGlows() end
         if db.highlightNewAbilities then
             for _, pool in ipairs(render.abilityPools) do
                 for _, icon in ipairs(pool) do
@@ -4434,13 +4491,13 @@ end
 
 local function StartVisualEffects()
     ns.StopAnimationSounds()
-    render.animationCueSeen, render.animationCueVisible = {}, {}
-    render.RefreshAnimationSoundSettings()
+    render.lastStatFireworkSound = 0
+    render.nextIdleMoteSoundAt = nil
+    render.idleMoteSoundInterval = ns.GetIdleMoteSoundInterval()
     render.portraitImpactPlayed, render.starburstSoundPlayed = false, false
     render.ringSurgeStartedAt = nil
     render.HideMaxCelebration()
     if content.maxLevelEffects then content.maxLevelEffects.prepared = false end
-    render.screenshotAt = nil
     if render.CancelHideTimer then render.CancelHideTimer() end
     render.CancelClosing()
     render.HideTrialEffects()
@@ -4503,6 +4560,7 @@ function render.ReleasePopupData()
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     content.currentStatChanges = nil
     content.replayRecord = nil
+    content.portraitLoadTest = nil
     --@do-not-package@
     -- SSTEST: local screenshot presentation only.
     content.screenshotPreview = nil
@@ -4526,9 +4584,9 @@ frame:HookScript("OnHide", function()
     ResetPreviewState(false)
     ns.SetClosingClickThrough(false)
     render.ResetMaxBackgroundTint()
-    ns.StopAnimationSounds()
+    ns.StopAnimationSounds(true)
     render.HideMaxCelebration()
-    render.screenshotAt = nil
+    render.screenshotRequest = nil
     if render.CancelHideTimer then render.CancelHideTimer() end
     render.CancelClosing()
     render.HideTrialEffects()
@@ -4694,6 +4752,7 @@ function render.AdvanceStatPages(elapsed)
             and entranceTimeline.statFlashFinish - entranceTimeline.statFlashStart + .4 or 0
         entranceTimeline.statFlashPeriod = entranceTimeline.statFlashDuration + 3
         render.statIdle, render.glowWake = nil, nil
+        if content.trialEffects then content.trialEffects.impactsFinished = false end
         page.phase, page.age = "entering", 0
         ns.PerfEnd(perf)
     end
@@ -4912,8 +4971,8 @@ local function LayoutFrame(statCount)
         PositionSections()
         local main, pet = content.abilityViewport, content.petAbilityViewport
         local hasPet = content.petSpellsHeader:IsShown()
-        local bottomAbilityInset = ns.db and ns.db.backgroundMode == "MODERN" and 20 / fit or 0
-        local minimumAbilityPadding = ns.db and ns.db.backgroundMode == "MODERN"
+        local bottomAbilityInset = ns.db and ns.GetEffectiveBackgroundMode() == "MODERN" and 20 / fit or 0
+        local minimumAbilityPadding = ns.db and ns.GetEffectiveBackgroundMode() == "MODERN"
             and UI_METRICS.modernAbilityPadding or UI_METRICS.texturedAbilityPadding
         local abilityPadding = math.max(render.AbilitySectionPadding(), minimumAbilityPadding / fit)
         --@do-not-package@
@@ -4981,7 +5040,7 @@ local function LayoutFrame(statCount)
         content.portraitPulse:SetSize(PortraitRingSize() * 1.1, PortraitRingSize() * 1.1)
         content:SetScale(fit)
         content:SetSize(FRAME_WIDTH, naturalHeight)
-        local bottomClearance = ns.db and ns.db.backgroundMode ~= "MODERN" and content.isMaxLevel
+        local bottomClearance = ns.db and ns.GetEffectiveBackgroundMode() ~= "MODERN" and content.isMaxLevel
             and UI_METRICS.texturedHorizontalMaxBottomPadding or 0
         -- Grow downward so portrait/level placement keeps its existing top margin.
         content:SetPoint("CENTER", frame, "CENTER", 0, bottomClearance / 2)
@@ -4997,7 +5056,7 @@ local function LayoutFrame(statCount)
     else
         -- Reserve room below the last section before fitting textured content;
         -- otherwise ability icons can sit on the bottom border artwork.
-        if ns.db and ns.db.backgroundMode ~= "MODERN" then
+        if ns.db and ns.GetEffectiveBackgroundMode() ~= "MODERN" then
             h = h + UI_METRICS.texturedVerticalBottomPadding
         end
         content.portraitFit = 1
@@ -5087,7 +5146,7 @@ function render.RefreshPlayerModelLayout()
     if model.layoutHorizontal == horizontal and model.layoutPopupScale == scale and model.layoutFit == fit then return end
     model.layoutHorizontal, model.layoutPopupScale, model.layoutFit = horizontal, scale, fit
     if modelMaskState then modelMaskState.inset, modelMaskState.scale = nil, nil end
-    render.ApplyPlayerModelCamera(model)
+    if model.portraitLoaded then render.ApplyPlayerModelCamera(model) end
 end
 
 local function RefreshPopupLayoutNow()
@@ -5157,7 +5216,10 @@ fadeOutGroup:SetScript("OnFinished", function() frame:Hide() end)
 frame.fadeOutGroup = fadeOutGroup
 
 function render.BeginFadeOut(multiplier)
+    if frame.closingInputSuppressed then return end
     ns.SetClosingClickThrough(true)
+    ns.StopAnimationSounds()
+    ns.PlayAnimationSound("fadeOut")
     fadeOut:SetDuration(UI_METRICS.texturedCloseSeconds / Speed() / (multiplier or UI_METRICS.automaticCloseSpeed))
     frame.fadeOutGroup:Play()
 end
@@ -5186,6 +5248,42 @@ local function ShouldSuspendPreview()
     return previewState.active and ns.IsPreviewSuspensionRequested() == true
 end
 
+function ns.HandleLevelUpScreenshotResult(saved)
+    if not render.screenshotSavePending then return end
+    render.screenshotSavePending = nil
+    if not saved then
+        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not save the level-up screenshot."))
+    end
+end
+
+function render.ShouldCaptureLevelUp()
+    return ns.db.screenshotEveryLevel == true or (ns.db.screenshotMilestones == true
+        and ns.IsMilestoneLevel(content.currentReachedLevel, content.levelRangeStart))
+end
+
+function render.QueueLevelUpScreenshot(delay)
+    if previewState.active or not render.ShouldCaptureLevelUp() then return end
+    local request = {}
+    render.screenshotRequest = request
+    -- A capture must still run if the visual driver stops after the entrance.
+    C_Timer.After(delay, function()
+        if render.screenshotRequest ~= request then return end
+        render.screenshotRequest = nil
+        if not render.ShouldCaptureLevelUp() or frame.closingInputSuppressed
+            or not frame:IsShown() or (frame.IsVisible and not frame:IsVisible()) then return end
+
+        render.screenshotSavePending = request
+        local ok, accepted = pcall(Screenshot)
+        if not ok or accepted == false then
+            ns.HandleLevelUpScreenshotResult(false)
+        elseif render.screenshotSavePending == request then
+            C_Timer.After(5, function()
+                if render.screenshotSavePending == request then render.screenshotSavePending = nil end
+            end)
+        end
+    end)
+end
+
 local function IsHovered()
     if frame.IsMouseOver and frame:IsMouseOver() then return true end
     return MouseIsOver and MouseIsOver(frame) or false
@@ -5197,7 +5295,7 @@ local function TryFadeOut(token)
         render.ArmHideTimer(0.15, token, function() TryFadeOut(token) end)
         return
     end
-    if ns.db and ns.db.backgroundMode == "MODERN" then
+    if ns.db and ns.GetEffectiveBackgroundMode() == "MODERN" then
         render.BeginClosing()
     else
         render.BeginFadeOut()
@@ -5250,7 +5348,7 @@ function ns.DismissLevelUp()
     ResetPreviewState(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
-    if ns.db and ns.db.backgroundMode == "MODERN" then
+    if ns.db and ns.GetEffectiveBackgroundMode() == "MODERN" then
         render.BeginClosing(UI_METRICS.manualCloseSpeed)
     else
         render.BeginFadeOut(UI_METRICS.manualCloseSpeed)
@@ -5345,14 +5443,13 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     -- Reset the previous popup's effect clock and portrait alpha before Show.
     local entranceDuration = entranceTimeline.finish
     StartVisualEffects()
-    if db.screenshotMilestones and content.isMilestone and not previewState.active then
-        render.screenshotAt = entranceDuration + .15
-    end
     content:SetAlpha(1)
     frame:Show()
     portraitPreparing = false
+    ns.PlayAnimationSound("fadeIn")
     -- Arm cleanup before optional effects or sound can fail.
-    local lifetime = entranceDuration + (db.duration or 7)
+    local duration = db.duration or 7
+    local lifetime = entranceDuration + (content.portraitLoadTest and math.max(duration, 3) or duration)
     render.popupLifetime = lifetime
     if content.secondaryStatChanges and #content.secondaryStatChanges > 0 then
         local split = ns.GetSecondaryStatStartPercent() / 100
@@ -5365,6 +5462,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
             lastAge = 0}
     end
     ScheduleFadeOut(lifetime)
+    render.QueueLevelUpScreenshot(entranceDuration + .15)
     UpdateVisualEffects()
 
     local soundOK, soundError = pcall(ns.PlayLevelUpSound, false, previewState.active)
@@ -5373,14 +5471,16 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest)
     ns.EnsureDatabase()
+    render.screenshotRequest = nil
     ns.SetClosingClickThrough(false)
     hideToken = hideToken + 1
     render.CancelHideTimer()
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
     content.replayRecord = replayRecord
+    content.portraitLoadTest = isPreview and portraitTest or nil
     --@do-not-package@
     -- SSTEST: local screenshot presentation only.
     ---@type {kind: string, weapons: boolean, grimoires: boolean, costs: boolean}|nil

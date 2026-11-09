@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6 - The Desperation Patch
+(This patch wasn't quite ready yet but I really wanted to fix two major bugs brought to my attention, keep an eye out for custom themes in the near future!) 
+
+##### New Features
+- Added preliminary support for separately installed theme packs. This is a beta feature, not yet fully ready.
+- Added **Use Theme Sounds** to control animation audio separately. This is a beta feature and has not been implemented for default themes.
+- Added an optional **Class-coloured portrait background** under Texture Colours, shown only for 3D portraits. 
+
+##### Bug Fixes and Optimization
+
+- Attempted to fix missing primary stat gains in the level-up popup. GLU retries when reported gains are slow to appear and warns in chat if capture still fails.
+- Attempted to fix blank 3D portraits by showing a 2D portrait or class icon while the model loads.
+- Fixed the brief flash of Blizzard's level-up toast when **Hide Blizzard level-up toast** is enabled.
+- Fixed Milestone Screenshots not firing and added a separate **Screenshot every level** toggle.
+- Fixed language auto-detection loading an incomplete translation dictionary. 
+- Fixed square glyphs in Cyrillic, Korean, Simplified Chinese, and Traditional Chinese. Please make sure Friz (default), Morpheus or Skurri are selected as your font if you use a non-latin character set.
+- Added some missing translations in Cyrillic.
+
 ## 1.5.7
 
 - Added Contributors to Cache Status

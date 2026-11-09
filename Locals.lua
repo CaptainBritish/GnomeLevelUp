@@ -58,7 +58,7 @@ function ns.GetLanguageChoices()
     local choices = { { value = "auto", label = "Auto Detect" } }
     for _, language in ipairs(LANGUAGE_NAMES) do
         if ns.IsLocaleEnabled(language[1]) then
-            choices[#choices + 1] = { value = language[1], label = language[2] }
+            choices[#choices + 1] = { value = language[1], label = language[2], fontLocale = language[1] }
         end
     end
     return choices
@@ -106,6 +106,53 @@ end
 
 function ns.GetLocale()
     return activeLocale
+end
+
+local CYRILLIC_FONTS = {
+    ["FONTS\\FRIZQT__.TTF"] = "Fonts\\FRIZQT___CYR.TTF",
+    ["FONTS\\MORPHEUS.TTF"] = "Fonts\\MORPHEUS_CYR.TTF",
+    ["FONTS\\SKURRI.TTF"] = "Fonts\\SKURRI_CYR.TTF",
+}
+local EAST_ASIAN_FONTS = {
+    koKR = "Fonts\\2002.TTF",
+    zhCN = "Fonts\\ARKai_T.ttf",
+    zhTW = "Fonts\\blei00d.TTF",
+}
+local BUILTIN_LATIN_FONTS = { ["FONTS\\ARIALN.TTF"] = true }
+for path in pairs(CYRILLIC_FONTS) do BUILTIN_LATIN_FONTS[path] = true end
+
+function ns.GetLocaleFontPath(locale)
+    locale = locale or activeLocale
+    return EAST_ASIAN_FONTS[locale] or (locale == "ruRU" and CYRILLIC_FONTS["FONTS\\FRIZQT__.TTF"] or nil)
+end
+
+function ns.GetPopupFontPath(path)
+    if type(path) ~= "string" or path == "" then path = ns.DEFAULT_FONT_PATH end
+    local fontKey = path:gsub("/", "\\"):upper()
+    -- Game-supplied names may use the client script even when GLU is in English.
+    local locale = ns.GetLocaleFontPath(activeLocale) and activeLocale or clientLocale
+    if BUILTIN_LATIN_FONTS[fontKey] then
+        if EAST_ASIAN_FONTS[locale] then return EAST_ASIAN_FONTS[locale] end
+        if locale == "ruRU" then return CYRILLIC_FONTS[fontKey] or path end
+    end
+    return path
+end
+
+-- Keep size and styling from the original widget font, including when the
+-- first-time setup switches languages without a reload.
+function ns.ApplyLocaleFont(text, locale)
+    if not text or not text.GetFont then return end
+    local path = ns.GetLocaleFontPath(locale)
+    if path == text.gluLocaleFont then return end
+    local original, size, flags = text:GetFont()
+    if not original or not size then return end
+    if path then
+        text.gluOriginalFont = text.gluOriginalFont or original
+        if text:SetFont(path, size, flags) ~= false then text.gluLocaleFont = path end
+    elseif text.gluOriginalFont then
+        text:SetFont(text.gluOriginalFont, size, flags)
+        text.gluOriginalFont, text.gluLocaleFont = nil, nil
+    end
 end
 
 function ns.L(source, ...)
@@ -3794,10 +3841,6 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Time for %d levels: %s"] = "%d級用時：%s",
 } end)
 
--- Provisional client language for widgets created during file loading. Core
--- selects the saved override at ADDON_LOADED, before constructing options.
-ns.SetLocale("auto")
-
 -- Optional secondary-stat page. Values come from the selected client flavour.
 RegisterLocaleBuilder("frFR", function() return {
     ["Show secondary stats"] = "Afficher les statistiques secondaires",
@@ -4040,7 +4083,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Choose how high this window sits above other interface elements."] = "Choisissez la priorité d’affichage de cette fenêtre.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Alignez noms, totaux, flèches et gains dans des colonnes communes.",
     ["Use short stat labels, including secondary stats."] = "Utilisez des noms courts, y compris pour les statistiques secondaires.",
-    ["Take a screenshot after a real milestone popup opens."] = "Prenez une capture après l’ouverture d’une véritable fenêtre de palier.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Prenez une capture d’écran lorsqu’un gain de niveau réel correspond à l’intervalle de jalon sélectionné.",
     ["Save available training information when visiting trainers."] = "Enregistrez les formations disponibles lors des visites aux maîtres.",
     ["Include profession training in trainer scans."] = "Incluez les formations de métiers dans les analyses.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Affichez les techniques du niveau atteint plutôt que des niveaux précédents.",
@@ -4097,7 +4140,7 @@ RegisterLocaleBuilder("esES", function() return {
     ["Choose how high this window sits above other interface elements."] = "Elige la prioridad de esta ventana sobre otros elementos de la interfaz.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Alinea nombres, totales, flechas y ganancias en columnas compartidas.",
     ["Use short stat labels, including secondary stats."] = "Usa nombres cortos, también para las estadísticas secundarias.",
-    ["Take a screenshot after a real milestone popup opens."] = "Toma una captura al abrirse un aviso real de hito.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Haz una captura de pantalla cuando una subida de nivel real coincida con el intervalo de hitos seleccionado.",
     ["Save available training information when visiting trainers."] = "Guarda la formación disponible al visitar instructores.",
     ["Include profession training in trainer scans."] = "Incluye la formación de profesiones en los escaneos.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Muestra las facultades del nivel alcanzado en lugar de niveles anteriores.",
@@ -4154,7 +4197,7 @@ RegisterLocaleBuilder("deDE", function() return {
     ["Choose how high this window sits above other interface elements."] = "Wähle die Anzeigeebene über anderen Oberflächenelementen.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Richte Namen, Werte, Pfeile und Gewinne in gemeinsamen Spalten aus.",
     ["Use short stat labels, including secondary stats."] = "Verwende kurze Namen, auch für Sekundärwerte.",
-    ["Take a screenshot after a real milestone popup opens."] = "Erstelle nach einer echten Meilensteinanzeige einen Screenshot.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Erstelle einen Screenshot, wenn ein echter Stufenaufstieg dem gewählten Meilensteinintervall entspricht.",
     ["Save available training information when visiting trainers."] = "Speichere verfügbare Ausbildung beim Lehrerbesuch.",
     ["Include profession training in trainer scans."] = "Berücksichtige Berufsausbildung beim Scannen.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Zeige Freischaltungen der erreichten statt früherer Stufen.",
@@ -4211,7 +4254,7 @@ RegisterLocaleBuilder("itIT", function() return {
     ["Choose how high this window sits above other interface elements."] = "Scegli la priorità della finestra sugli altri elementi dell’interfaccia.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Allinea nomi, totali, frecce e incrementi in colonne comuni.",
     ["Use short stat labels, including secondary stats."] = "Usa nomi brevi anche per le statistiche secondarie.",
-    ["Take a screenshot after a real milestone popup opens."] = "Scatta un’istantanea dopo l’apertura di un vero traguardo.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Cattura una schermata quando un aumento di livello effettivo corrisponde all’intervallo dei traguardi selezionato.",
     ["Save available training information when visiting trainers."] = "Salva gli addestramenti disponibili quando visiti un istruttore.",
     ["Include profession training in trainer scans."] = "Includi le professioni nelle scansioni degli istruttori.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Mostra gli sblocchi del livello raggiunto anziché quelli precedenti.",
@@ -4268,7 +4311,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Choose how high this window sits above other interface elements."] = "Escolha a prioridade da janela sobre outros elementos da interface.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Alinhe nomes, totais, setas e ganhos em colunas compartilhadas.",
     ["Use short stat labels, including secondary stats."] = "Use nomes curtos, inclusive para atributos secundários.",
-    ["Take a screenshot after a real milestone popup opens."] = "Tire uma captura após abrir um marco de nível real.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Tire uma captura de tela quando uma subida de nível real corresponder ao intervalo de marcos selecionado.",
     ["Save available training information when visiting trainers."] = "Salve o treinamento disponível ao visitar instrutores.",
     ["Include profession training in trainer scans."] = "Inclua treinamento de profissões nas varreduras.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Mostre os desbloqueios do nível alcançado em vez dos anteriores.",
@@ -4325,7 +4368,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Choose how high this window sits above other interface elements."] = "Выберите приоритет окна над другими элементами интерфейса.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Выровняйте названия, значения, стрелки и приросты по общим столбцам.",
     ["Use short stat labels, including secondary stats."] = "Используйте короткие названия, включая вторичные характеристики.",
-    ["Take a screenshot after a real milestone popup opens."] = "Сделайте снимок после открытия настоящего юбилейного уровня.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Делать снимок экрана при получении уровня, соответствующего выбранному интервалу этапов.",
     ["Save available training information when visiting trainers."] = "Сохраняйте доступное обучение при посещении учителей.",
     ["Include profession training in trainer scans."] = "Включите обучение профессиям в сканирование.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Показывайте способности достигнутого, а не предыдущих уровней.",
@@ -4382,7 +4425,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Choose how high this window sits above other interface elements."] = "다른 인터페이스 요소 위에 표시될 우선순위를 선택합니다.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "이름, 수치, 화살표와 증가량을 공통 열에 정렬합니다.",
     ["Use short stat labels, including secondary stats."] = "보조 능력치를 포함해 짧은 이름을 사용합니다.",
-    ["Take a screenshot after a real milestone popup opens."] = "실제 이정표 팝업이 나타난 후 스크린샷을 찍습니다.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "실제 레벨 상승이 선택한 이정표 간격에 해당할 때 스크린샷을 찍습니다.",
     ["Save available training information when visiting trainers."] = "상급자를 방문할 때 가능한 훈련 정보를 저장합니다.",
     ["Include profession training in trainer scans."] = "상급자 검색에 전문 기술 훈련을 포함합니다.",
     ["Show unlocks from the gained level instead of earlier levels."] = "이전 레벨 대신 방금 오른 레벨의 기술을 표시합니다.",
@@ -4439,7 +4482,7 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Choose how high this window sits above other interface elements."] = "选择此窗口在其他界面元素之上的显示层级。",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "将名称、数值、箭头和增量对齐到共用列。",
     ["Use short stat labels, including secondary stats."] = "使用简短名称，包括次要属性。",
-    ["Take a screenshot after a real milestone popup opens."] = "真正的里程碑弹窗出现后截取屏幕。",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "实际升级符合所选里程碑间隔时截取屏幕截图。",
     ["Save available training information when visiting trainers."] = "拜访训练师时保存可用训练信息。",
     ["Include profession training in trainer scans."] = "将专业训练加入训练师扫描。",
     ["Show unlocks from the gained level instead of earlier levels."] = "显示刚达到等级解锁的技能，而非之前等级。",
@@ -4496,7 +4539,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Choose how high this window sits above other interface elements."] = "選擇此視窗在其他介面元素之上的顯示層級。",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "將名稱、數值、箭頭與增量對齊到共用欄。",
     ["Use short stat labels, including secondary stats."] = "使用簡短名稱，包括次要屬性。",
-    ["Take a screenshot after a real milestone popup opens."] = "真正的里程碑視窗出現後擷取畫面。",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "實際升級符合所選里程碑間隔時擷取螢幕畫面。",
     ["Save available training information when visiting trainers."] = "拜訪訓練師時儲存可用訓練資訊。",
     ["Include profession training in trainer scans."] = "將專業訓練加入訓練師掃描。",
     ["Show unlocks from the gained level instead of earlier levels."] = "顯示剛達到等級解鎖的技能，而非先前等級。",
@@ -4553,7 +4596,7 @@ RegisterLocaleBuilder("esMX", function() return {
     ["Choose how high this window sits above other interface elements."] = "Elige la prioridad de esta ventana sobre otros elementos de la interfaz.",
     ["Align stat labels, totals, arrows and gains in shared columns."] = "Alinea nombres, totales, flechas y ganancias en columnas compartidas.",
     ["Use short stat labels, including secondary stats."] = "Usa nombres cortos, también para las estadísticas secundarias.",
-    ["Take a screenshot after a real milestone popup opens."] = "Toma una captura al abrirse un aviso real de hito.",
+    ["Take a screenshot when a real level-up matches the selected milestone interval."] = "Toma una captura de pantalla cuando una subida de nivel real coincida con el intervalo de hitos seleccionado.",
     ["Save available training information when visiting trainers."] = "Guarda la formación disponible al visitar instructores.",
     ["Include profession training in trainer scans."] = "Incluye la formación de profesiones en los escaneos.",
     ["Show unlocks from the gained level instead of earlier levels."] = "Muestra las facultades del nivel alcanzado en lugar de niveles anteriores.",
@@ -5335,16 +5378,16 @@ RegisterLocaleBuilder("zhTW", function() return { ["Level History"] = "等級歷
 RegisterLocaleBuilder("esMX", function() return { ["Level History"] = "Historial de niveles", ["Compare account-wide bests"] = "Comparar récords de la cuenta", ["Compare new level times with your fastest recorded level across characters in the same game mode."] = "Compara los nuevos tiempos con el nivel más rápido registrado entre tus personajes del mismo modo de juego.", ["Character"] = "Personaje", ["Choose a character whose recorded level times you want to view."] = "Elige el personaje cuyos tiempos quieres consultar.", ["History mode"] = "Modo del historial", ["View Retail or Forever history. Records are kept separate."] = "Consulta el historial de Retail o Forever. Los registros se mantienen separados.", ["Reset this character's times"] = "Reiniciar tiempos de este personaje", ["Clear this character's recorded times and bests in both game modes. Other characters are kept."] = "Borra los tiempos y récords de este personaje en ambos modos. Conserva los demás personajes.", ["Fill sample times (20h)"] = "Tiempos de prueba (20 h)", ["Fill every level with temporary 20-hour times. New records replace the samples; existing history is not overwritten."] = "Llena cada nivel con tiempos temporales de 20 horas. Los nuevos récords reemplazan las muestras sin sobrescribir el historial existente.", ["Clear sample history"] = "Borrar historial de prueba", ["Remove the temporary sample times and show real records again."] = "Elimina los tiempos temporales y vuelve a mostrar los registros reales.", ["Only characters with recorded level times are listed. Missing levels are shown as a dash."] = "Solo aparecen personajes con tiempos de nivel registrados. Los niveles sin datos muestran un guion.", ["Sample history (not saved)"] = "Historial de prueba (sin guardar)", ["Recorded: %d / %d"] = "Registrados: %d / %d", ["Total: %s"] = "Total: %s", ["Recorded time"] = "Tiempo registrado", ["Personal best"] = "Récord personal", ["Account best"] = "Récord de cuenta", ["Review recorded level times and your best times across characters. Hover a row to see which character set the personal best."] = "Consulta los tiempos registrados y tus mejores tiempos entre personajes. Pasa el ratón por una fila para ver qué personaje logró el récord personal." } end)
 
 -- Configurable milestone intervals.
-RegisterLocaleBuilder("frFR", function() return { ["Milestone interval"] = "Intervalle des paliers", ["Every 5 levels"] = "Tous les 5 niveaux", ["Every 10 levels"] = "Tous les 10 niveaux", ["Every 20 levels"] = "Tous les 20 niveaux", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Célébrer tous les 5, 10 ou 20 niveaux. Le niveau maximum possède sa propre option.", ["Add celebration effects at the selected milestone interval."] = "Ajouter des effets aux paliers sélectionnés.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Célébrer les paliers sélectionnés avec anticipation du portrait, accents lumineux et effets de statistiques. Le mode classique désactive ces effets.", ["Choose a level up to 1000 that is a multiple of %d."] = "Choisissez un niveau jusqu’à 1000 qui soit un multiple de %d." } end)
-RegisterLocaleBuilder("esES", function() return { ["Milestone interval"] = "Intervalo de hitos", ["Every 5 levels"] = "Cada 5 niveles", ["Every 10 levels"] = "Cada 10 niveles", ["Every 20 levels"] = "Cada 20 niveles", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Celebra cada 5, 10 o 20 niveles. El nivel máximo tiene su propia opción.", ["Add celebration effects at the selected milestone interval."] = "Añade efectos en el intervalo de hitos seleccionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra los hitos seleccionados con anticipación del retrato, detalles más brillantes y efectos de estadísticas. El modo clásico desactiva estos efectos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Elige un nivel de hasta 1000 que sea múltiplo de %d." } end)
-RegisterLocaleBuilder("deDE", function() return { ["Milestone interval"] = "Meilensteinintervall", ["Every 5 levels"] = "Alle 5 Stufen", ["Every 10 levels"] = "Alle 10 Stufen", ["Every 20 levels"] = "Alle 20 Stufen", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Feiert alle 5, 10 oder 20 Stufen. Die Höchststufe hat einen eigenen Schalter.", ["Add celebration effects at the selected milestone interval."] = "Fügt Feiereffekte im gewählten Meilensteinintervall hinzu.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Feiert das gewählte Intervall mit Porträtvorbereitung, helleren Akzenten und zusätzlichen Werteffekten. Der klassische Modus deaktiviert diese Effekte.", ["Choose a level up to 1000 that is a multiple of %d."] = "Wähle eine Stufe bis 1000, die ein Vielfaches von %d ist." } end)
-RegisterLocaleBuilder("itIT", function() return { ["Milestone interval"] = "Intervallo traguardi", ["Every 5 levels"] = "Ogni 5 livelli", ["Every 10 levels"] = "Ogni 10 livelli", ["Every 20 levels"] = "Ogni 20 livelli", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Festeggia ogni 5, 10 o 20 livelli. Il livello massimo ha un’opzione separata.", ["Add celebration effects at the selected milestone interval."] = "Aggiunge effetti ai traguardi selezionati.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Festeggia i traguardi selezionati con anticipazione del ritratto, accenti più luminosi ed effetti delle statistiche. La modalità classica disattiva questi effetti.", ["Choose a level up to 1000 that is a multiple of %d."] = "Scegli un livello fino a 1000 che sia multiplo di %d." } end)
-RegisterLocaleBuilder("ptBR", function() return { ["Milestone interval"] = "Intervalo dos marcos", ["Every 5 levels"] = "A cada 5 níveis", ["Every 10 levels"] = "A cada 10 níveis", ["Every 20 levels"] = "A cada 20 níveis", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Celebra a cada 5, 10 ou 20 níveis. O nível máximo tem sua própria opção.", ["Add celebration effects at the selected milestone interval."] = "Adiciona efeitos no intervalo de marcos selecionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra os marcos selecionados com antecipação do retrato, detalhes mais brilhantes e efeitos de atributos. O modo clássico desativa esses efeitos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Escolha um nível até 1000 que seja múltiplo de %d." } end)
-RegisterLocaleBuilder("ruRU", function() return { ["Milestone interval"] = "Интервал этапов", ["Every 5 levels"] = "Каждые 5 уровней", ["Every 10 levels"] = "Каждые 10 уровней", ["Every 20 levels"] = "Каждые 20 уровней", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Праздновать каждые 5, 10 или 20 уровней. Максимальный уровень настраивается отдельно.", ["Add celebration effects at the selected milestone interval."] = "Добавить эффекты на выбранных этапах.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Отмечать выбранные этапы подготовкой портрета, яркими акцентами и эффектами характеристик. Классический режим отключает эти эффекты.", ["Choose a level up to 1000 that is a multiple of %d."] = "Выберите уровень до 1000, кратный %d." } end)
-RegisterLocaleBuilder("koKR", function() return { ["Milestone interval"] = "기념 레벨 간격", ["Every 5 levels"] = "5레벨마다", ["Every 10 levels"] = "10레벨마다", ["Every 20 levels"] = "20레벨마다", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "5, 10 또는 20레벨마다 축하합니다. 최고 레벨 축하는 별도 설정을 사용합니다.", ["Add celebration effects at the selected milestone interval."] = "선택한 레벨 간격에 축하 효과를 추가합니다.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "선택한 간격마다 초상화 예고, 밝은 장식 및 추가 능력치 효과로 축하합니다. 클래식 모드에서는 이 효과가 꺼집니다.", ["Choose a level up to 1000 that is a multiple of %d."] = "%d의 배수인 1000 이하 레벨을 선택하세요." } end)
-RegisterLocaleBuilder("zhCN", function() return { ["Milestone interval"] = "里程碑间隔", ["Every 5 levels"] = "每5级", ["Every 10 levels"] = "每10级", ["Every 20 levels"] = "每20级", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "每5、10或20级庆祝一次，满级庆祝使用单独开关。", ["Add celebration effects at the selected milestone interval."] = "在所选里程碑间隔添加庆祝效果。", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "在所选间隔使用头像预备效果、更明亮的装饰和额外属性效果庆祝。经典模式禁用这些效果。", ["Choose a level up to 1000 that is a multiple of %d."] = "选择不超过1000且为%d的倍数的等级。" } end)
-RegisterLocaleBuilder("zhTW", function() return { ["Milestone interval"] = "里程碑間隔", ["Every 5 levels"] = "每5級", ["Every 10 levels"] = "每10級", ["Every 20 levels"] = "每20級", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "每5、10或20級慶祝一次，滿級慶祝使用獨立開關。", ["Add celebration effects at the selected milestone interval."] = "在所選里程碑間隔加入慶祝效果。", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "在所選間隔使用頭像預備效果、更明亮的裝飾和額外屬性效果慶祝。經典模式停用這些效果。", ["Choose a level up to 1000 that is a multiple of %d."] = "選擇不超過1000且為%d的倍數的等級。" } end)
-RegisterLocaleBuilder("esMX", function() return { ["Milestone interval"] = "Intervalo de hitos", ["Every 5 levels"] = "Cada 5 niveles", ["Every 10 levels"] = "Cada 10 niveles", ["Every 20 levels"] = "Cada 20 niveles", ["Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle."] = "Celebra cada 5, 10 o 20 niveles. El nivel máximo tiene su propia opción.", ["Add celebration effects at the selected milestone interval."] = "Añade efectos en el intervalo de hitos seleccionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra los hitos seleccionados con anticipación del retrato, detalles más brillantes y efectos de estadísticas. El modo clásico desactiva estos efectos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Elige un nivel de hasta 1000 que sea múltiplo de %d." } end)
+RegisterLocaleBuilder("frFR", function() return { ["Milestone interval"] = "Intervalle des paliers", ["Every 5 levels"] = "Tous les 5 niveaux", ["Every 10 levels"] = "Tous les 10 niveaux", ["Every 20 levels"] = "Tous les 20 niveaux", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Choisissez la fréquence des animations et des captures d’écran de jalon. Les animations de niveau maximum ont leur propre option.", ["Add celebration effects at the selected milestone interval."] = "Ajouter des effets aux paliers sélectionnés.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Célébrer les paliers sélectionnés avec anticipation du portrait, accents lumineux et effets de statistiques. Le mode classique désactive ces effets.", ["Choose a level up to 1000 that is a multiple of %d."] = "Choisissez un niveau jusqu’à 1000 qui soit un multiple de %d." } end)
+RegisterLocaleBuilder("esES", function() return { ["Milestone interval"] = "Intervalo de hitos", ["Every 5 levels"] = "Cada 5 niveles", ["Every 10 levels"] = "Cada 10 niveles", ["Every 20 levels"] = "Cada 20 niveles", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Elige la frecuencia de las animaciones y capturas de pantalla de hitos. Las animaciones de nivel máximo tienen su propia opción.", ["Add celebration effects at the selected milestone interval."] = "Añade efectos en el intervalo de hitos seleccionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra los hitos seleccionados con anticipación del retrato, detalles más brillantes y efectos de estadísticas. El modo clásico desactiva estos efectos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Elige un nivel de hasta 1000 que sea múltiplo de %d." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Milestone interval"] = "Meilensteinintervall", ["Every 5 levels"] = "Alle 5 Stufen", ["Every 10 levels"] = "Alle 10 Stufen", ["Every 20 levels"] = "Alle 20 Stufen", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Wähle, wie oft Meilensteinanimationen und Screenshots ausgelöst werden. Animationen für die Maximalstufe haben eine eigene Option.", ["Add celebration effects at the selected milestone interval."] = "Fügt Feiereffekte im gewählten Meilensteinintervall hinzu.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Feiert das gewählte Intervall mit Porträtvorbereitung, helleren Akzenten und zusätzlichen Werteffekten. Der klassische Modus deaktiviert diese Effekte.", ["Choose a level up to 1000 that is a multiple of %d."] = "Wähle eine Stufe bis 1000, die ein Vielfaches von %d ist." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Milestone interval"] = "Intervallo traguardi", ["Every 5 levels"] = "Ogni 5 livelli", ["Every 10 levels"] = "Ogni 10 livelli", ["Every 20 levels"] = "Ogni 20 livelli", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Scegli la frequenza delle animazioni e delle schermate dei traguardi. Le animazioni del livello massimo hanno un’opzione separata.", ["Add celebration effects at the selected milestone interval."] = "Aggiunge effetti ai traguardi selezionati.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Festeggia i traguardi selezionati con anticipazione del ritratto, accenti più luminosi ed effetti delle statistiche. La modalità classica disattiva questi effetti.", ["Choose a level up to 1000 that is a multiple of %d."] = "Scegli un livello fino a 1000 che sia multiplo di %d." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Milestone interval"] = "Intervalo dos marcos", ["Every 5 levels"] = "A cada 5 níveis", ["Every 10 levels"] = "A cada 10 níveis", ["Every 20 levels"] = "A cada 20 níveis", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Escolha a frequência das animações e capturas de tela de marcos. As animações de nível máximo têm uma opção própria.", ["Add celebration effects at the selected milestone interval."] = "Adiciona efeitos no intervalo de marcos selecionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra os marcos selecionados com antecipação do retrato, detalhes mais brilhantes e efeitos de atributos. O modo clássico desativa esses efeitos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Escolha um nível até 1000 que seja múltiplo de %d." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Milestone interval"] = "Интервал этапов", ["Every 5 levels"] = "Каждые 5 уровней", ["Every 10 levels"] = "Каждые 10 уровней", ["Every 20 levels"] = "Каждые 20 уровней", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Выберите, как часто запускаются анимации и делаются снимки экрана для этапов. Анимации максимального уровня имеют отдельную настройку.", ["Add celebration effects at the selected milestone interval."] = "Добавить эффекты на выбранных этапах.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Отмечать выбранные этапы подготовкой портрета, яркими акцентами и эффектами характеристик. Классический режим отключает эти эффекты.", ["Choose a level up to 1000 that is a multiple of %d."] = "Выберите уровень до 1000, кратный %d." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Milestone interval"] = "기념 레벨 간격", ["Every 5 levels"] = "5레벨마다", ["Every 10 levels"] = "10레벨마다", ["Every 20 levels"] = "20레벨마다", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "이정표 애니메이션과 스크린샷의 실행 간격을 선택합니다. 최고 레벨 애니메이션에는 별도 설정이 있습니다.", ["Add celebration effects at the selected milestone interval."] = "선택한 레벨 간격에 축하 효과를 추가합니다.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "선택한 간격마다 초상화 예고, 밝은 장식 및 추가 능력치 효과로 축하합니다. 클래식 모드에서는 이 효과가 꺼집니다.", ["Choose a level up to 1000 that is a multiple of %d."] = "%d의 배수인 1000 이하 레벨을 선택하세요." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Milestone interval"] = "里程碑间隔", ["Every 5 levels"] = "每5级", ["Every 10 levels"] = "每10级", ["Every 20 levels"] = "每20级", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "选择里程碑动画和截图的触发频率。满级动画有独立的开关。", ["Add celebration effects at the selected milestone interval."] = "在所选里程碑间隔添加庆祝效果。", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "在所选间隔使用头像预备效果、更明亮的装饰和额外属性效果庆祝。经典模式禁用这些效果。", ["Choose a level up to 1000 that is a multiple of %d."] = "选择不超过1000且为%d的倍数的等级。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Milestone interval"] = "里程碑間隔", ["Every 5 levels"] = "每5級", ["Every 10 levels"] = "每10級", ["Every 20 levels"] = "每20級", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "選擇里程碑動畫和螢幕擷取的觸發頻率。滿級動畫有獨立的開關。", ["Add celebration effects at the selected milestone interval."] = "在所選里程碑間隔加入慶祝效果。", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "在所選間隔使用頭像預備效果、更明亮的裝飾和額外屬性效果慶祝。經典模式停用這些效果。", ["Choose a level up to 1000 that is a multiple of %d."] = "選擇不超過1000且為%d的倍數的等級。" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Milestone interval"] = "Intervalo de hitos", ["Every 5 levels"] = "Cada 5 niveles", ["Every 10 levels"] = "Cada 10 niveles", ["Every 20 levels"] = "Cada 20 niveles", ["Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle."] = "Elige la frecuencia de las animaciones y capturas de pantalla de hitos. Las animaciones de nivel máximo tienen su propia opción.", ["Add celebration effects at the selected milestone interval."] = "Añade efectos en el intervalo de hitos seleccionado.", ["Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair."] = "Celebra los hitos seleccionados con anticipación del retrato, detalles más brillantes y efectos de estadísticas. El modo clásico desactiva estos efectos.", ["Choose a level up to 1000 that is a multiple of %d."] = "Elige un nivel de hasta 1000 que sea múltiplo de %d." } end)
 
 -- Recovery instructions for popup, audio and profile-sharing failures.
 RegisterLocaleBuilder("frFR", function() return { ["Could not prepare the level-up popup. Try /reload. If it happens again, report this error: %s"] = "Impossible de préparer la fenêtre de niveau. Essayez /reload. Si cela se reproduit, signalez cette erreur : %s", ["Could not play the selected sound. Choose another sound in Options > Sound. Details: %s"] = "Impossible de jouer le son choisi. Choisissez-en un autre dans Options > Son. Détails : %s", ["The level-up popup could not be shown. Try /reload. If it happens again, report the error above."] = "La fenêtre de niveau n’a pas pu s’afficher. Essayez /reload. Si cela se reproduit, signalez l’erreur ci-dessus.", ["The level cap is unavailable. Wait for loading to finish, then try /glu maxlevel again."] = "Le niveau maximum est indisponible. Attendez la fin du chargement, puis réessayez /glu maxlevel.", ["Paste the complete GLU profile export, then try again."] = "Collez l’exportation complète du profil GLU, puis réessayez.", ["Export the profile again from an up-to-date GLU installation."] = "Exportez à nouveau le profil depuis une installation GLU à jour." } end)
@@ -5401,3 +5444,284 @@ RegisterLocaleBuilder("ruRU", function() return { ["Contributors"] = "Участ
 RegisterLocaleBuilder("koKR", function() return { ["Contributors"] = "기여자" } end)
 RegisterLocaleBuilder("zhCN", function() return { ["Contributors"] = "贡献者" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Contributors"] = "貢獻者" } end)
+
+RegisterLocaleBuilder("frFR", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Échec de la capture des caractéristiques : Les changements attendus manquaient encore après plusieurs tentatives.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Échec de l’affichage du portrait 3D : Le modèle du personnage ne s’est pas chargé à temps.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Échec de l’affichage du portrait 3D : Impossible d’assigner le modèle du personnage.",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Error al capturar estadísticas: Los cambios esperados seguían sin aparecer tras varios intentos.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Error al mostrar el retrato 3D: El modelo del personaje no se cargó a tiempo.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Error al mostrar el retrato 3D: No se pudo asignar el modelo del personaje.",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Error al capturar estadísticas: Los cambios esperados seguían sin aparecer tras varios intentos.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Error al mostrar el retrato 3D: El modelo del personaje no se cargó a tiempo.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Error al mostrar el retrato 3D: No se pudo asignar el modelo del personaje.",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Attributserfassung fehlgeschlagen: Die erwarteten Attributsänderungen fehlten auch nach mehreren Versuchen.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Darstellung des 3D-Porträts fehlgeschlagen: Das Charaktermodell wurde nicht rechtzeitig geladen.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Darstellung des 3D-Porträts fehlgeschlagen: Das Charaktermodell konnte nicht zugewiesen werden.",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Acquisizione delle statistiche non riuscita: Le variazioni attese mancavano ancora dopo vari tentativi.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Visualizzazione del ritratto 3D non riuscita: Il modello del personaggio non si è caricato in tempo.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Visualizzazione del ritratto 3D non riuscita: Impossibile assegnare il modello del personaggio.",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Falha ao capturar atributos: As alterações esperadas ainda não apareceram após várias tentativas.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Falha ao exibir o retrato 3D: O modelo do personagem não carregou a tempo.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Falha ao exibir o retrato 3D: Não foi possível atribuir o modelo do personagem.",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Сбой при считывании характеристик: Ожидаемые изменения не появились после повторных попыток.",
+    ["3D Portrait render failed: The player model did not load in time."] = "Сбой отрисовки 3D-портрета: Модель персонажа не загрузилась вовремя.",
+    ["3D Portrait render failed: Could not assign the player model."] = "Сбой отрисовки 3D-портрета: Не удалось назначить модель персонажа.",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "능력치 수집 실패: 다시 시도한 후에도 예상된 능력치 변화가 확인되지 않았습니다.",
+    ["3D Portrait render failed: The player model did not load in time."] = "3D 초상화 표시 실패: 캐릭터 모델을 제때 불러오지 못했습니다.",
+    ["3D Portrait render failed: Could not assign the player model."] = "3D 초상화 표시 실패: 캐릭터 모델을 지정하지 못했습니다.",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "属性采集失败：重试后仍未检测到预期的属性变化。",
+    ["3D Portrait render failed: The player model did not load in time."] = "3D头像渲染失败：角色模型未能及时加载。",
+    ["3D Portrait render failed: Could not assign the player model."] = "3D头像渲染失败：无法设置角色模型。",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Stat capture failed: Expected stat changes were still missing after retrying."] = "屬性擷取失敗：重試後仍未偵測到預期的屬性變化。",
+    ["3D Portrait render failed: The player model did not load in time."] = "3D頭像繪製失敗：角色模型未能及時載入。",
+    ["3D Portrait render failed: Could not assign the player model."] = "3D頭像繪製失敗：無法設定角色模型。",
+} end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Theme sound"] = "Son du thème" } end)
+RegisterLocaleBuilder("esES", function() return { ["Theme sound"] = "Sonido del tema" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Theme sound"] = "Sonido del tema" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Theme sound"] = "Designsound" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Theme sound"] = "Suono del tema" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Theme sound"] = "Som do tema" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Theme sound"] = "Звук темы" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Theme sound"] = "테마 소리" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Theme sound"] = "主题音效" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Theme sound"] = "主題音效" } end)
+
+RegisterLocaleBuilder("frFR", function() return {
+    ["Idle motes sound"] = "Son des particules ambiantes",
+    ["Fireworks sound"] = "Son des feux d’artifice",
+    ["Fade-in sound"] = "Son du fondu d’ouverture",
+    ["Fade-out sound"] = "Son du fondu de fermeture",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Saisissez un identifiant de fichier audio de WoW pour remplacer ce son. Saisissez 0 pour annuler le remplacement.",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Idle motes sound"] = "Sonido de partículas ambientales",
+    ["Fireworks sound"] = "Sonido de fuegos artificiales",
+    ["Fade-in sound"] = "Sonido de entrada gradual",
+    ["Fade-out sound"] = "Sonido de salida gradual",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Introduce un ID de archivo de sonido de WoW para sustituir este sonido. Introduce 0 para quitar la sustitución.",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Idle motes sound"] = "Sonido de partículas ambientales",
+    ["Fireworks sound"] = "Sonido de fuegos artificiales",
+    ["Fade-in sound"] = "Sonido de entrada gradual",
+    ["Fade-out sound"] = "Sonido de salida gradual",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Ingresa un ID de archivo de sonido de WoW para sustituir este sonido. Ingresa 0 para quitar la sustitución.",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Idle motes sound"] = "Klang der Umgebungspartikel",
+    ["Fireworks sound"] = "Feuerwerksklang",
+    ["Fade-in sound"] = "Einblendklang",
+    ["Fade-out sound"] = "Ausblendklang",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Gib eine WoW-Sounddatei-ID ein, um diesen Klang zu ersetzen. Mit 0 entfernst du die Überschreibung.",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Idle motes sound"] = "Suono delle particelle ambientali",
+    ["Fireworks sound"] = "Suono dei fuochi d’artificio",
+    ["Fade-in sound"] = "Suono della dissolvenza in entrata",
+    ["Fade-out sound"] = "Suono della dissolvenza in uscita",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Inserisci l’ID di un file audio di WoW per sostituire questo suono. Inserisci 0 per annullare la sostituzione.",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Idle motes sound"] = "Som de partículas ambientes",
+    ["Fireworks sound"] = "Som de fogos de artifício",
+    ["Fade-in sound"] = "Som da transição de entrada",
+    ["Fade-out sound"] = "Som da transição de saída",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Informe um ID de arquivo de som do WoW para substituir este som. Informe 0 para remover a substituição.",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Idle motes sound"] = "Звук фоновых частиц",
+    ["Fireworks sound"] = "Звук фейерверков",
+    ["Fade-in sound"] = "Звук появления",
+    ["Fade-out sound"] = "Звук исчезновения",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "Введите ID звукового файла WoW, чтобы заменить этот звук. Введите 0, чтобы отменить замену.",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Idle motes sound"] = "주변 입자 소리",
+    ["Fireworks sound"] = "불꽃놀이 소리",
+    ["Fade-in sound"] = "페이드 인 소리",
+    ["Fade-out sound"] = "페이드 아웃 소리",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "이 효과음을 바꾸려면 WoW 소리 파일 ID를 입력하세요. 0을 입력하면 설정을 지웁니다.",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Idle motes sound"] = "环境微粒音效",
+    ["Fireworks sound"] = "烟花音效",
+    ["Fade-in sound"] = "淡入音效",
+    ["Fade-out sound"] = "淡出音效",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "输入 WoW 音频文件 ID 来替换此音效。输入 0 清除替换。",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Idle motes sound"] = "環境微粒音效",
+    ["Fireworks sound"] = "煙火音效",
+    ["Fade-in sound"] = "淡入音效",
+    ["Fade-out sound"] = "淡出音效",
+    ["Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."] = "輸入 WoW 音訊檔案 ID 以替換此音效。輸入 0 清除替換。",
+} end)
+
+RegisterLocaleBuilder("frFR", function() return {
+    ["Use Theme Sounds"] = "Utiliser les sons du thème",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Joue les sons d’animation du thème sans modifier le son de montée de niveau.",
+    ["Class-coloured portrait background"] = "Fond du portrait aux couleurs de classe",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Colore le fond derrière le portrait 3D du personnage avec la couleur de votre classe.",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Use Theme Sounds"] = "Usar sonidos del tema",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Reproduce los sonidos de animación del tema sin cambiar tu sonido de subida de nivel.",
+    ["Class-coloured portrait background"] = "Fondo del retrato con color de clase",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Rellena el fondo del retrato 3D del personaje con el color de tu clase.",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Use Theme Sounds"] = "Usar sonidos del tema",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Reproduce los sonidos de animación del tema sin cambiar tu sonido al subir de nivel.",
+    ["Class-coloured portrait background"] = "Fondo del retrato con color de clase",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Rellena el fondo del retrato 3D del personaje con el color de tu clase.",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Use Theme Sounds"] = "Designsounds verwenden",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Spielt die Animationsklänge des Designs ab, ohne den Stufenaufstiegssound zu ändern.",
+    ["Class-coloured portrait background"] = "Porträthintergrund in Klassenfarbe",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Färbt den Hintergrund hinter dem 3D-Spielerporträt in deiner Klassenfarbe.",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Use Theme Sounds"] = "Usa i suoni del tema",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Riproduce i suoni delle animazioni del tema senza cambiare il suono dell’avanzamento di livello.",
+    ["Class-coloured portrait background"] = "Sfondo del ritratto con colore di classe",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Colora lo sfondo dietro il ritratto 3D del personaggio con il colore della tua classe.",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Use Theme Sounds"] = "Usar sons do tema",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Reproduz os sons das animações do tema sem alterar o som de subida de nível.",
+    ["Class-coloured portrait background"] = "Fundo do retrato na cor da classe",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Preenche o fundo atrás do retrato 3D do personagem com a cor da sua classe.",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Use Theme Sounds"] = "Использовать звуки темы",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "Воспроизводит звуки анимации темы без изменения звука повышения уровня.",
+    ["Class-coloured portrait background"] = "Фон портрета цвета класса",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "Окрашивает фон за 3D-портретом персонажа в цвет вашего класса.",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Use Theme Sounds"] = "테마 소리 사용",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "레벨 상승 소리를 바꾸지 않고 테마의 애니메이션 소리를 재생합니다.",
+    ["Class-coloured portrait background"] = "직업 색상 초상화 배경",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "플레이어 3D 초상화 뒤의 배경을 직업 색상으로 채웁니다.",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Use Theme Sounds"] = "使用主题音效",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "播放主题的动画音效，不更改升级音效。",
+    ["Class-coloured portrait background"] = "职业颜色头像背景",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "使用职业颜色填充玩家3D头像后的背景。",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Use Theme Sounds"] = "使用主題音效",
+    ["Play the theme's animation sounds without changing your level-up sound."] = "播放主題的動畫音效，不更改升級音效。",
+    ["Class-coloured portrait background"] = "職業顏色頭像背景",
+    ["Fill the background behind the 3D player portrait with your class colour."] = "使用職業顏色填滿玩家3D頭像後方的背景。",
+} end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Stat glint sound"] = "Son d’éclat des caractéristiques" } end)
+RegisterLocaleBuilder("esES", function() return { ["Stat glint sound"] = "Sonido del destello de estadísticas" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Stat glint sound"] = "Sonido del destello de estadísticas" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Stat glint sound"] = "Klang beim Attributsaufblitzen" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Stat glint sound"] = "Suono del bagliore delle statistiche" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Stat glint sound"] = "Som do brilho de atributos" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Stat glint sound"] = "Звук вспышки характеристики" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Stat glint sound"] = "능력치 반짝임 소리" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Stat glint sound"] = "属性闪光音效" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Stat glint sound"] = "屬性閃光音效" } end)
+RegisterLocaleBuilder("frFR", function() return { ["Screenshot every level"] = "Capture d’écran à chaque niveau", ["Take a screenshot after every real level-up."] = "Prenez une capture d’écran à chaque gain de niveau réel.", ["Could not save the level-up screenshot."] = "Impossible d’enregistrer la capture d’écran de la montée de niveau." } end)
+RegisterLocaleBuilder("esES", function() return { ["Screenshot every level"] = "Captura de pantalla en cada nivel", ["Take a screenshot after every real level-up."] = "Haz una captura de pantalla después de cada subida de nivel real.", ["Could not save the level-up screenshot."] = "No se pudo guardar la captura de pantalla de la subida de nivel." } end)
+RegisterLocaleBuilder("esMX", function() return { ["Screenshot every level"] = "Captura de pantalla en cada nivel", ["Take a screenshot after every real level-up."] = "Toma una captura de pantalla después de cada subida de nivel real.", ["Could not save the level-up screenshot."] = "No se pudo guardar la captura de pantalla de la subida de nivel." } end)
+RegisterLocaleBuilder("deDE", function() return { ["Screenshot every level"] = "Screenshot bei jeder Stufe", ["Take a screenshot after every real level-up."] = "Erstelle bei jedem echten Stufenaufstieg einen Screenshot.", ["Could not save the level-up screenshot."] = "Der Screenshot des Stufenaufstiegs konnte nicht gespeichert werden." } end)
+RegisterLocaleBuilder("itIT", function() return { ["Screenshot every level"] = "Schermata a ogni livello", ["Take a screenshot after every real level-up."] = "Cattura una schermata dopo ogni aumento di livello effettivo.", ["Could not save the level-up screenshot."] = "Impossibile salvare la schermata dell’aumento di livello." } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Screenshot every level"] = "Captura de tela a cada nível", ["Take a screenshot after every real level-up."] = "Tire uma captura de tela após cada subida de nível real.", ["Could not save the level-up screenshot."] = "Não foi possível salvar a captura de tela da subida de nível." } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Screenshot every level"] = "Снимок при каждом повышении уровня", ["Take a screenshot after every real level-up."] = "Делать снимок экрана при каждом получении уровня.", ["Could not save the level-up screenshot."] = "Не удалось сохранить снимок экрана повышения уровня." } end)
+RegisterLocaleBuilder("koKR", function() return { ["Screenshot every level"] = "레벨이 오를 때마다 스크린샷", ["Take a screenshot after every real level-up."] = "실제 레벨이 오를 때마다 스크린샷을 찍습니다.", ["Could not save the level-up screenshot."] = "레벨 상승 스크린샷을 저장하지 못했습니다." } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Screenshot every level"] = "每次升级时截图", ["Take a screenshot after every real level-up."] = "每次实际升级后截取屏幕截图。", ["Could not save the level-up screenshot."] = "无法保存升级截图。" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Screenshot every level"] = "每次升級時擷取畫面", ["Take a screenshot after every real level-up."] = "每次實際升級後擷取螢幕畫面。", ["Could not save the level-up screenshot."] = "無法儲存升級螢幕擷取。" } end)
+
+-- Core stat names and shared option values.
+RegisterLocaleBuilder("frFR", function() return {
+    ["Strength"] = "Force", ["Agility"] = "Agilité", ["Stamina"] = "Endurance", ["Intellect"] = "Intelligence", ["Spirit"] = "Esprit",
+    ["Level"] = "Niveau",
+    ["Health"] = "Points de vie", ["Mana"] = "Mana", ["Default"] = "Par défaut", ["%d pt"] = "%d pt",
+    ["Rage"] = "Rage", ["Energy"] = "Énergie", ["Focus"] = "Focalisation", ["Runic Power"] = "Puissance runique", ["Power"] = "Ressource",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["Strength"] = "Fuerza", ["Agility"] = "Agilidad", ["Stamina"] = "Aguante", ["Intellect"] = "Intelecto", ["Spirit"] = "Espíritu",
+    ["Level"] = "Nivel",
+    ["Health"] = "Salud", ["Mana"] = "Maná", ["Default"] = "Predeterminado", ["%d pt"] = "%d pt",
+    ["Rage"] = "Ira", ["Energy"] = "Energía", ["Focus"] = "Enfoque", ["Runic Power"] = "Poder rúnico", ["Power"] = "Recurso",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["Strength"] = "Fuerza", ["Agility"] = "Agilidad", ["Stamina"] = "Aguante", ["Intellect"] = "Intelecto", ["Spirit"] = "Espíritu",
+    ["Level"] = "Nivel",
+    ["Health"] = "Salud", ["Mana"] = "Maná", ["Default"] = "Predeterminado", ["%d pt"] = "%d pt",
+    ["Rage"] = "Ira", ["Energy"] = "Energía", ["Focus"] = "Enfoque", ["Runic Power"] = "Poder rúnico", ["Power"] = "Recurso",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["Strength"] = "Stärke", ["Agility"] = "Beweglichkeit", ["Stamina"] = "Ausdauer", ["Intellect"] = "Intelligenz", ["Spirit"] = "Willenskraft",
+    ["Level"] = "Stufe",
+    ["Health"] = "Gesundheit", ["Mana"] = "Mana", ["Default"] = "Standard", ["%d pt"] = "%d Pkt.",
+    ["Rage"] = "Wut", ["Energy"] = "Energie", ["Focus"] = "Fokus", ["Runic Power"] = "Runenmacht", ["Power"] = "Ressource",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["Strength"] = "Forza", ["Agility"] = "Agilità", ["Stamina"] = "Tempra", ["Intellect"] = "Intelletto", ["Spirit"] = "Spirito",
+    ["Level"] = "Livello",
+    ["Health"] = "Salute", ["Mana"] = "Mana", ["Default"] = "Predefinito", ["%d pt"] = "%d pt",
+    ["Rage"] = "Rabbia", ["Energy"] = "Energia", ["Focus"] = "Focus", ["Runic Power"] = "Potenza runica", ["Power"] = "Risorsa",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["Strength"] = "Força", ["Agility"] = "Agilidade", ["Stamina"] = "Vigor", ["Intellect"] = "Intelecto", ["Spirit"] = "Espírito",
+    ["Level"] = "Nível",
+    ["Health"] = "Vida", ["Mana"] = "Mana", ["Default"] = "Padrão", ["%d pt"] = "%d pt",
+    ["Rage"] = "Raiva", ["Energy"] = "Energia", ["Focus"] = "Concentração", ["Runic Power"] = "Poder Rúnico", ["Power"] = "Recurso",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["Strength"] = "Сила", ["Agility"] = "Ловкость", ["Stamina"] = "Выносливость", ["Intellect"] = "Интеллект", ["Spirit"] = "Дух",
+    ["Level"] = "Уровень",
+    ["Health"] = "Здоровье", ["Mana"] = "Мана", ["Default"] = "По умолчанию", ["%d pt"] = "%d пт",
+    ["Rage"] = "Ярость", ["Energy"] = "Энергия", ["Focus"] = "Концентрация", ["Runic Power"] = "Сила рун", ["Power"] = "Ресурс",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["Strength"] = "힘", ["Agility"] = "민첩성", ["Stamina"] = "체력", ["Intellect"] = "지능", ["Spirit"] = "정신력",
+    ["Level"] = "레벨",
+    ["Health"] = "생명력", ["Mana"] = "마나", ["Default"] = "기본값", ["%d pt"] = "%d pt",
+    ["Rage"] = "분노", ["Energy"] = "기력", ["Focus"] = "집중", ["Runic Power"] = "룬 마력", ["Power"] = "자원",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["Strength"] = "力量", ["Agility"] = "敏捷", ["Stamina"] = "耐力", ["Intellect"] = "智力", ["Spirit"] = "精神",
+    ["Level"] = "等级",
+    ["Health"] = "生命值", ["Mana"] = "法力值", ["Default"] = "默认", ["%d pt"] = "%d 磅",
+    ["Rage"] = "怒气", ["Energy"] = "能量", ["Focus"] = "集中值", ["Runic Power"] = "符文能量", ["Power"] = "资源",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["Strength"] = "力量", ["Agility"] = "敏捷", ["Stamina"] = "耐力", ["Intellect"] = "智力", ["Spirit"] = "精神",
+    ["Level"] = "等級",
+    ["Health"] = "生命力", ["Mana"] = "法力", ["Default"] = "預設", ["%d pt"] = "%d 點",
+    ["Rage"] = "怒氣", ["Energy"] = "能量", ["Focus"] = "集中值", ["Runic Power"] = "符能", ["Power"] = "資源",
+} end)
+
+-- Load the client language only after registering every translation above.
+-- Core applies the saved override at ADDON_LOADED, before building Options.
+ns.SetLocale("auto")

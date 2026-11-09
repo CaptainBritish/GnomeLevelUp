@@ -11,6 +11,7 @@ local defaults = {
     schemaVersion = DATABASE_SCHEMA_VERSION,
     enabled = true,
     playSound = true,
+    useThemeSounds = true,
     muteNativeDing = true,
     duration = 7,       -- seconds the cinematic stays up before auto-hiding
     scale = 1.0,
@@ -20,6 +21,8 @@ local defaults = {
     introShown = false,
     waitForCombatEnd = true, -- delay showing the screen until combat ends
     soundChoice = "LEVELUP",  -- key into ns.SOUND_CHOICES
+    useThemeLevelUpSound = false,
+    levelUpSoundCustomized = false,
     soundChannel = "Master",  -- "Master" | "SFX" | "Music" | "Ambience" | "Dialog"
     soundVolume = 1.0,         -- per-addon volume override where the client API supports it
     customSoundFile = nil,    -- e.g. "Interface\\AddOns\\GnomeLevelUp\\Sounds\\MyJingle.ogg"
@@ -74,6 +77,7 @@ local defaults = {
     milestoneInterval = 10,
     maxLevelCelebration = true,
     screenshotMilestones = false,
+    screenshotEveryLevel = false,
     portraitRingGlint = true,
 
     portraitAnimation = true,
@@ -117,6 +121,7 @@ local defaults = {
     playerPortraitScale = 1.0,                 -- theme-controlled multiplier for the player portrait
     portraitRingEnabled = false,
     portraitRingTexture = nil,
+    classColourPortraitBackground = false,
     portraitRingChoice = "NONE",
     portraitRingScale = 1.10,
     portraitModelRotation = 0,
@@ -179,35 +184,39 @@ local defaults = {
 }
 ns.defaults = defaults
 
--- A zero file ID leaves an optional animation cue silent.
+-- These debug file IDs override only the matching animation sound.
 ns.ANIMATION_SOUND_SETTINGS = {
-    { cue="portraitPulse", label="Portrait pulse and starburst" },
     { cue="portraitImpact", label="Portrait impact sound" },
     { cue="starburst", label="Starburst sound" },
-    { cue="ringGlint", label="Portrait ring glint" },
-    { cue="glintSpark", label="Glint finishing spark" },
-    { cue="ringSettle", label="Portrait and ring settle" },
-    { cue="statCount", label="Emphasize stat gains" },
-    { cue="statImpact", label="Stat impact sparks" },
-    { cue="abilityReveal", label="Highlight new abilities" },
-    { cue="abilityShine", label="Ability reveal shine" },
-    { cue="portraitMotes", label="Portrait motes" },
-    { cue="backgroundMotes", label="Background motes" },
-    { cue="frameEdge", label="Frame edge glow" },
-    { cue="dividers", label="Reveal dividers" },
-    { cue="depth", label="Background depth" },
-    { cue="closing", label="Closing animation" },
-    { cue="anticipation", label="Milestone anticipation" },
-    { cue="milestoneTint", label="Milestone color transition" },
-    { cue="milestone", label="Milestone Animations" },
-    { cue="maxFireworks", label="Max Level Celebration" },
-    { cue="portraitShine", label="Portrait shine" },
-    { cue="ringSurges", label="Ring surges" },
-    { cue="maxSparks", label="Max-level portrait sparks" },
+    { cue="statGlint", label="Stat glint sound", key="animationSound_statImpact" },
+    { cue="idleMotes", label="Idle motes sound" },
+    { cue="fireworks", label="Fireworks sound", key="animationSound_maxFireworks" },
+    { cue="fadeIn", label="Fade-in sound" },
+    { cue="fadeOut", label="Fade-out sound", key="animationSound_closing" },
 }
+local animationSoundKeys = {}
 for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
-    spec.key = "animationSound_" .. spec.cue
-    defaults[spec.key] = spec.default or 0
+    spec.key = spec.key or "animationSound_" .. spec.cue
+    animationSoundKeys[spec.cue] = spec.key
+    defaults[spec.key] = 0
+end
+
+function ns.RemoveObsoleteAnimationSounds(settings)
+    for key in pairs(settings) do
+        if type(key) == "string" and key:match("^animationSound_") and defaults[key] == nil then settings[key] = nil end
+    end
+end
+
+function ns.MigrateLevelUpSoundPreference(settings)
+    local choice = settings.soundChoice
+    if choice == "THEME" then
+        settings.soundChoice = defaults.soundChoice
+        settings.useThemeLevelUpSound = true
+    end
+    if settings.levelUpSoundCustomized ~= nil then return end
+    settings.levelUpSoundCustomized = (type(choice) == "string" and choice ~= "" and choice ~= "LEVELUP")
+        or (type(settings.customSoundFile) == "string" and settings.customSoundFile ~= "")
+        or (type(settings.customSoundChoice) == "string" and settings.customSoundChoice ~= "")
 end
 
 ns.TEXT_SIZE_SETTINGS = {
@@ -238,20 +247,42 @@ function ns.GetSecondaryStatStartPercent()
     return math.max(25, math.min(75, value))
 end
 
--- Use the same interval for live events, combined gains and milestone previews.
-ns.MILESTONE_INTERVAL_CHOICES = {
+-- Use the same interval for live events, screenshots and milestone previews.
+local MILESTONE_INTERVAL_CHOICES = {
     { value = 5, label = "Every 5 levels" },
     { value = 10, label = "Every 10 levels" },
     { value = 20, label = "Every 20 levels" },
 }
-function ns.GetMilestoneInterval()
-    local value = ns.db and ns.db.milestoneInterval
-    return (value == 5 or value == 10 or value == 20) and value or 10
+local function IsMilestonePreset(value)
+    return value == 5 or value == 10 or value == 20
 end
+
+local function IsDebugMilestoneInterval(value)
+    return type(value) == "number" and value >= 1 and value <= 1000 and value % 1 == 0
+end
+
+function ns.GetMilestoneInterval()
+    local override = ns.db and ns.db.debugMilestoneInterval
+    if ns.IsDebugEnabled() and IsDebugMilestoneInterval(override) then return override end
+    local value = ns.db and ns.db.milestoneInterval
+    return IsMilestonePreset(value) and value or defaults.milestoneInterval
+end
+
+function ns.GetMilestoneIntervalChoices()
+    local interval = ns.GetMilestoneInterval()
+    if IsMilestonePreset(interval) then return MILESTONE_INTERVAL_CHOICES end
+
+    local choices = {}
+    for index, choice in ipairs(MILESTONE_INTERVAL_CHOICES) do choices[index] = choice end
+    choices[#choices + 1] = { value = interval, label = tostring(interval), literal = true }
+    return choices
+end
+
 function ns.SetMilestoneInterval(value)
     ns.EnsureDatabase()
-    if value ~= 5 and value ~= 10 and value ~= 20 then return false end
+    if not IsMilestonePreset(value) then return false end
     ns.db.milestoneInterval = value
+    ns.db.debugMilestoneInterval = nil
     return true
 end
 function ns.IsMilestoneLevel(level, previousLevel)
@@ -260,6 +291,14 @@ function ns.IsMilestoneLevel(level, previousLevel)
     if level % interval == 0 then return true end
     return type(previousLevel) == "number" and previousLevel >= 1 and previousLevel < level
         and math.floor(level / interval) > math.floor(previousLevel / interval)
+end
+
+function ns.NormalizeScreenshotSettings(settings)
+    if settings.milestoneInterval == 1 then
+        if settings.screenshotMilestones == true then settings.screenshotEveryLevel = true end
+        settings.milestoneInterval = defaults.milestoneInterval
+    end
+    if settings.screenshotEveryLevel == true then settings.screenshotMilestones = false end
 end
 
 -- Rendering and menus share these rules; callers retain their layout and pools.
@@ -353,6 +392,14 @@ end
 SharedToggle("showTrainerCosts", "Show learning costs", RefreshTrainerCosts, nil, ns.SupportsTrainerData)
 SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshTrainerCosts,
     "Show full learning costs when hovering over abilities.", ns.SupportsTrainerData)
+SharedToggle("screenshotMilestones", "Screenshot milestones", function(enabled)
+    if enabled then ns.db.screenshotEveryLevel = false end
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end)
+SharedToggle("screenshotEveryLevel", "Screenshot every level", function(enabled)
+    if enabled then ns.db.screenshotMilestones = false end
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end)
 SharedToggle("horizontalMode", "Horizontal layout", function(value)
     ns.SetHorizontalMode(value); ns.RefreshPopupLayout()
 end, "Arrange portrait, stats and abilities side by side.")
@@ -388,6 +435,14 @@ SharedToggle("showSecondaryStats", "Show secondary stats", function()
     if ns.RefreshBaseline then ns.RefreshBaseline() end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end, "Replace primary stats with secondary stats during the popup.")
+SharedToggle("useThemeSounds", "Use Theme Sounds", function(value)
+    if not value then ns.StopAnimationSounds() end
+    if ns.levelUpFrame and ns.levelUpFrame:IsShown() then ns.RefreshVisualEffects() end
+end, "Play the theme's animation sounds without changing your level-up sound.")
+SharedToggle("classColourPortraitBackground", "Class-coloured portrait background", function()
+    ns.RefreshPortraitRing()
+end, "Fill the background behind the 3D player portrait with your class colour.",
+    function() return ns.db.portraitMode == "player3d" end)
 
 ns.OPTION_SETTINGS_BY_LABEL = {}
 for _, setting in pairs(ns.OPTION_SETTINGS) do ns.OPTION_SETTINGS_BY_LABEL[setting.label] = setting end
@@ -437,16 +492,18 @@ ns.RESETTABLE_SETTING_KEYS = {
     "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize",
     "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity", "fireworkSize", "fireworkOpacity", "frameInset",
     "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
-    "milestoneAnimations", "milestoneInterval", "screenshotMilestones", "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
+    "milestoneAnimations", "milestoneInterval", "screenshotMilestones", "screenshotEveryLevel",
+    "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
-    "playSound", "muteNativeDing", "soundChoice", "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
+    "playSound", "useThemeSounds", "muteNativeDing", "soundChoice", "useThemeLevelUpSound", "levelUpSoundCustomized",
+    "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
     "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
-    "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "horizontalPortraitRingScale", "horizontalPortraitRingOffset", "controllerGlyphStyle", "controllerMenuFrameStrata",
+    "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "horizontalPortraitRingScale", "horizontalPortraitRingOffset", "classColourPortraitBackground", "controllerGlyphStyle", "controllerMenuFrameStrata",
 }
 
 for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
@@ -523,12 +580,22 @@ local function ApplyAppearanceNow()
     if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry() end
     if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
     if ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
+    ns.ApplyAddonState(false)
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
 -- Combine appearance changes from one click into a single render pass.
 local appearanceRefreshQueued = false
-local function RefreshAppearanceAfterThemeChange()
+local function RefreshAppearanceAfterThemeChange(selectionChanged)
+    -- Only a player changing the theme should clear the override. On login
+    -- a saved pack may still be registering when GLU first reads its settings.
+    if selectionChanged and ns.db.useThemeLevelUpSound then
+        local choice = ns.GetLevelUpSoundChoice()
+        if choice ~= "THEME" then
+            ns.db.useThemeLevelUpSound = false
+            ns.db.soundChoice = choice
+        end
+    end
     if appearanceRefreshQueued then return end
     appearanceRefreshQueued = true
     local function apply()
@@ -626,10 +693,12 @@ local function LoadThemeHue(kind, choice, reset)
     local preferences = HuePreferences()[kind]
     if reset then preferences[choice] = nil end
     local saved = preferences[choice]
-    local background = kind == "background" and ns.GetBackgroundReference(choice)
+    local asset = kind == "background" and ns.GetBackgroundReference(choice)
+        or kind == "frame" and ns.GetFrameReference(choice)
+        or kind == "ring" and ns.PORTRAIT_RING_TEXTURES[choice]
     ns.db[spec.color] = CopySetting(saved and saved.color
-        or background and background.defaultHue or defaults[spec.color])
-    if kind == "background" then ns.db.backgroundHueOpacity = saved and saved.opacity or 1 end
+        or asset and asset.defaultHue or defaults[spec.color])
+    if kind == "background" then ns.db.backgroundHueOpacity = saved and saved.opacity or asset and asset.defaultOpacity or 1 end
 end
 local function LoadSelectedThemeHues(reset)
     for kind, choice in pairs(HueChoices()) do LoadThemeHue(kind, choice, reset) end
@@ -650,6 +719,7 @@ function ns.ApplyPortraitRingChoice(value)
     ns.db.portraitRingTexture = ns.GetPortraitRingReference(value)
     ns.db.portraitRingEnabled = ns.db.portraitRingTexture ~= nil
     LoadThemeHue("ring", value)
+    if ns.RefreshPortraitGeometry then ns.RefreshPortraitGeometry(true) end
     if ns.RefreshPortraitRing then ns.RefreshPortraitRing() end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
@@ -668,7 +738,7 @@ function ns.RestoreModernAppearance()
     ns.db.portraitRingTexture = nil
     ns.db.portraitRingChoice = "NONE"
     LoadSelectedThemeHues()
-    RefreshAppearanceAfterThemeChange()
+    RefreshAppearanceAfterThemeChange(true)
 end
 
 local function BackgroundDefaultStyle(choice)
@@ -727,7 +797,7 @@ function ns.ApplyBackgroundTheme(value)
     ns.db.frameChoice = theme.frameName or theme.backgroundName
     LoadSelectedThemeHues()
     ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
-    RefreshAppearanceAfterThemeChange()
+    RefreshAppearanceAfterThemeChange(true)
     return true
 end
 
@@ -764,7 +834,7 @@ function ns.ApplyBackgroundPreset(value)
     LoadThemeHue("background", ns.db.backgroundChoice)
     LoadThemeHue("frame", ns.db.frameChoice)
     ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
-    RefreshAppearanceAfterThemeChange()
+    RefreshAppearanceAfterThemeChange(true)
     return true
 end
 
@@ -790,7 +860,7 @@ function ns.ApplyBackgroundChoice(value)
     end
     ns.db.backgroundMode = "CUSTOM"
     ns.db.backgroundTheme = nil
-    RefreshAppearanceAfterThemeChange()
+    RefreshAppearanceAfterThemeChange(true)
     return true
 end
 
@@ -853,6 +923,8 @@ local function InitDB()
     defaults.controllerGlyphStyle = ns.GetDefaultControllerGlyphStyle()
     -- Load saved settings and fill in anything that is missing.
     GnomeLevelUpDB = GnomeLevelUpDB or {}
+    ns.RemoveObsoleteAnimationSounds(GnomeLevelUpDB)
+    ns.MigrateLevelUpSoundPreference(GnomeLevelUpDB)
     ns.MigrateTrainerPriceSettings(GnomeLevelUpDB)
     local savedSchemaVersion = tonumber(GnomeLevelUpDB.schemaVersion) or 0
     -- Capture the pre-1.3.2 selectors before defaults add the new independent
@@ -982,12 +1054,14 @@ local function InitDB()
     ns.RetireHordeBackground(GnomeLevelUpDB)
     if GnomeLevelUpDB.backgroundChoice ~= "NONE"
         and ns.BACKGROUND_TEXTURES
-        and not ns.BACKGROUND_TEXTURES[GnomeLevelUpDB.backgroundChoice] then
+        and not ns.BACKGROUND_TEXTURES[GnomeLevelUpDB.backgroundChoice]
+        and not ns.IsThemePackKey(GnomeLevelUpDB.backgroundChoice) then
         GnomeLevelUpDB.backgroundChoice = "NONE"
         GnomeLevelUpDB.backgroundMode = "MODERN"
         GnomeLevelUpDB.backgroundTheme = nil
     end
-    if ns.FRAME_TEXTURES and not ns.FRAME_TEXTURES[GnomeLevelUpDB.frameChoice] then
+    if ns.FRAME_TEXTURES and not ns.FRAME_TEXTURES[GnomeLevelUpDB.frameChoice]
+        and not ns.IsThemePackKey(GnomeLevelUpDB.frameChoice) then
         GnomeLevelUpDB.frameChoice = "BLACK_METAL"
     end
     -- Older profiles only stored the center fill mode. Preserve that choice
@@ -1038,7 +1112,8 @@ local function InitDB()
     GnomeLevelUpDB.persistentOptionsPreview = nil
     GnomeLevelUpDB.themePreview = nil
     ns.db = GnomeLevelUpDB
-    ns.db.milestoneInterval = ns.GetMilestoneInterval()
+    ns.NormalizeScreenshotSettings(ns.db)
+    if not IsMilestonePreset(ns.db.milestoneInterval) then ns.db.milestoneInterval = defaults.milestoneInterval end
 
     -- Retire the deleted placeholder in profiles saved by older theme builds.
     local savedRingTexture = ns.db.portraitRingTexture
@@ -1186,6 +1261,7 @@ end
 function ns.ResetAppearanceToDefaults()
     ns.InvalidateColorPicker()
     ResetSettingKeys(ns.APPEARANCE_SETTING_KEYS)
+    ns.db.classColourPortraitBackground = defaults.classColourPortraitBackground
     -- Explicitly clear legacy and composed-theme selectors so old texture
     -- pieces cannot remain active after the reset.
     ns.db.backgroundMode = defaults.backgroundMode
@@ -1199,7 +1275,7 @@ function ns.ResetAppearanceToDefaults()
     ns.db.classColorBackup = nil
     ns.db.classColorOverrides = nil
 
-    if ns.ApplyCurrentAppearance then ns.ApplyCurrentAppearance() end
+    RefreshAppearanceAfterThemeChange(true)
     if ns.ApplyColors then ns.ApplyColors() end
     if ns.ApplyTextShadow then ns.ApplyTextShadow(ns.db.showTextShadow) end
 end
@@ -1306,8 +1382,78 @@ function ns.IsAddonEnabled()
     return not ns.db or ns.db.enabled ~= false
 end
 
+local SHARED_SOUND_PREFIX = "LSM_SOUND_"
+local function GetSoundMedia()
+    return LibStub and LibStub("LibSharedMedia-3.0", true)
+end
+
+local function SharedSound(name)
+    local media = GetSoundMedia()
+    local sounds = media and media:HashTable("sound")
+    local reference = sounds and sounds[name]
+    if reference ~= "" then return reference end
+end
+
+local function SharedSoundName(choice)
+    if type(choice) == "string" and choice:sub(1, #SHARED_SOUND_PREFIX) == SHARED_SOUND_PREFIX then
+        return choice:sub(#SHARED_SOUND_PREFIX + 1)
+    end
+end
+
+local function GetThemeSound(cue)
+    if ns.GetEffectiveBackgroundMode() ~= "CUSTOM" then return nil end
+    local theme = ns.GetThemeDefinition(ns.db.backgroundTheme)
+    local sound = theme and theme.sounds and theme.sounds[cue]
+    if sound and (sound.soundKit or SharedSound(sound.media)) then return sound end
+end
+
+local function PlayThemeSound(sound, channel)
+    if sound.volume == 0 then return false end
+    if not sound.soundKit then return PlaySoundFile(SharedSound(sound.media), channel) end
+    if C_Sound and C_Sound.PlaySound then
+        local ok, success, handle = pcall(C_Sound.PlaySound, sound.soundKit, channel, false, false, nil, sound.volume)
+        if ok and success ~= nil then return success, handle end
+    end
+    if type(PlaySound) == "function" then return PlaySound(sound.soundKit, channel, false) end
+end
+
+function ns.GetLevelUpSoundChoice()
+    local db = ns.db or defaults
+    local choice = db.soundChoice or defaults.soundChoice
+    if db.useThemeLevelUpSound or (choice == defaults.soundChoice and not db.levelUpSoundCustomized) then
+        if GetThemeSound("levelUp") then return "THEME" end
+    end
+    if db.useThemeLevelUpSound then
+        local sharedName = SharedSoundName(choice)
+        if sharedName then return SharedSound(sharedName) and choice or defaults.soundChoice end
+        if choice == "CUSTOM" then
+            local file = db.customSoundFile
+            return type(file) == "string" and file ~= "" and choice or defaults.soundChoice
+        end
+        for _, preset in ipairs(ns.SOUND_CHOICES) do
+            if preset.value == choice then return choice end
+        end
+        return defaults.soundChoice
+    end
+    return choice
+end
+
+function ns.SetLevelUpSoundChoice(choice)
+    if choice == "THEME" then
+        if GetThemeSound("levelUp") then ns.db.useThemeLevelUpSound = true end
+        return
+    end
+    ns.db.useThemeLevelUpSound = false
+    ns.db.levelUpSoundCustomized = true
+    ns.db.soundChoice = choice
+    if choice ~= "CUSTOM" then ns.db.customSoundFile = nil end
+end
+
 function ns.UsesNativeLevelUpSound()
-    return not ns.db or (ns.db.soundChoice or "LEVELUP") == "LEVELUP"
+    local choice = ns.GetLevelUpSoundChoice()
+    if choice == "LEVELUP" then return true end
+    local sharedName = SharedSoundName(choice)
+    return sharedName ~= nil and not SharedSound(sharedName)
 end
 
 function ns.ApplyAddonState(updateBanner)
@@ -1338,6 +1484,7 @@ end
 
 function ns.ResetOptionsToDefaults()
     if GnomeLevelUpCharacterDB then GnomeLevelUpCharacterDB.portraitModelTuning = nil end
+    ns.db.debugMilestoneInterval = nil
     -- Restore the settings page to the default values.
     ns.InvalidateColorPicker()
     ResetSettingKeys(ns.RESETTABLE_SETTING_KEYS)
@@ -1370,6 +1517,23 @@ ns.SOUND_CHOICES = {
     { value = "ALARM",   label = "Alarm Clock",         id = (SOUNDKIT and SOUNDKIT.ALARM_CLOCK_WARNING_3) or 18871 },
     { value = "CUSTOM",  label = "Custom sound" },
 }
+
+function ns.GetSoundChoices()
+    local choices = {}
+    for _, choice in ipairs(ns.SOUND_CHOICES) do choices[#choices + 1] = choice end
+    if GetThemeSound("levelUp") then
+        choices[#choices + 1] = { value = "THEME", label = "Theme sound" }
+    end
+    local media = GetSoundMedia()
+    local sounds = media and media:HashTable("sound")
+    for _, name in ipairs(media and media:List("sound") or {}) do
+        if sounds and sounds[name] and sounds[name] ~= "" then
+            choices[#choices + 1] = { value = SHARED_SOUND_PREFIX .. name, label = name, literal = true }
+        end
+    end
+    return choices
+end
+
 ns.SOUND_CHANNELS = {
     { value = "Master",   label = "Master" },
     { value = "SFX",      label = "Sound Effects" },
@@ -1666,8 +1830,9 @@ function ns.CanAdjustSoundVolume()
     if ns.UsesNativeLevelUpSound() or ns.GetCurrentFlavor() ~= "retail"
         or not C_Sound or type(C_Sound.PlaySound) ~= "function" then return false end
     if ns.db.customSoundFile and ns.db.customSoundFile ~= "" then return false end
+    local selected = ns.GetLevelUpSoundChoice()
     for _, choice in ipairs(ns.SOUND_CHOICES) do
-        if choice.value == ns.db.soundChoice then return choice.id ~= nil end
+        if choice.value == selected then return choice.id ~= nil end
     end
     return false
 end
@@ -1727,12 +1892,18 @@ function ns.PlayLevelUpSound(force, isLevelUpPreview)
 
     local function PlaySelectedSound()
         local channel = db.soundChannel or "Master"
-        if db.customSoundFile and db.customSoundFile ~= "" then
+        local wanted = ns.GetLevelUpSoundChoice()
+        if wanted == "THEME" then return PlayThemeSound(GetThemeSound("levelUp"), channel) end
+        local sharedName = SharedSoundName(wanted)
+        local sharedReference = sharedName and SharedSound(sharedName)
+        if sharedReference then
+            local ok, success, handle = pcall(PlaySoundFile, sharedReference, channel)
+            if ok and success then return success, handle end
+        elseif db.customSoundFile and db.customSoundFile ~= "" then
             local ok, success, handle = pcall(PlaySoundFile, db.customSoundFile, channel)
             if ok and success then return success, handle end
         end
 
-        local wanted = db.soundChoice or "LEVELUP"
         for _, choice in ipairs(ns.SOUND_CHOICES) do
             if choice.value == wanted then
                 local ok, success, handle
@@ -1755,8 +1926,9 @@ end
 
 
 local animationSoundHandles = {}
+local fireworkSoundHandles = {}
 function ns.GetAnimationSoundID(cue)
-    local key = "animationSound_" .. cue
+    local key = animationSoundKeys[cue]
     local value = ns.db and ns.db[key]
     if type(value) ~= "number" or value ~= value or value < 0 or value > 2147483647 or value % 1 ~= 0 then
         return defaults[key] or 0
@@ -1765,7 +1937,7 @@ function ns.GetAnimationSoundID(cue)
 end
 
 function ns.SetAnimationSoundID(cue, value)
-    local key = "animationSound_" .. cue
+    local key = animationSoundKeys[cue]
     value = tonumber(value)
     if defaults[key] == nil or not value or value ~= value or value < 0 or value > 2147483647 or value % 1 ~= 0 then return false end
     ns.StopAnimationSound(cue)
@@ -1777,10 +1949,19 @@ function ns.StopAnimationSound(cue)
     local handle = animationSoundHandles[cue]
     if handle and type(StopSound) == "function" then pcall(StopSound, handle) end
     animationSoundHandles[cue] = nil
+    if cue == "fireworks" then
+        for index, fireworkHandle in ipairs(fireworkSoundHandles) do
+            if type(StopSound) == "function" then pcall(StopSound, fireworkHandle) end
+            fireworkSoundHandles[index] = nil
+        end
+    end
 end
 
-function ns.StopAnimationSounds()
-    for cue in pairs(animationSoundHandles) do ns.StopAnimationSound(cue) end
+function ns.StopAnimationSounds(keepFadeOut)
+    for cue in pairs(animationSoundHandles) do
+        if cue ~= "fadeOut" or not keepFadeOut then ns.StopAnimationSound(cue) end
+    end
+    ns.StopAnimationSound("fireworks")
 end
 
 -- Classic Mode is an override; saved per-effect choices resume when it is off.
@@ -1794,22 +1975,30 @@ ns.CLASSIC_FLAIR_SETTINGS = {
 }
 for _, spec in ipairs(ns.EXTRA_EFFECTS) do ns.CLASSIC_FLAIR_SETTINGS[spec.key] = spec.label end
 
-function ns.PlayAnimationSound(cue)
-    local id = ns.GetAnimationSoundID(cue)
-    if id == 0 or not ns.db or ns.db.enabled == false or ns.db.reducedMotion
-        or ns.db.backgroundAnimations == false or type(PlaySoundFile) ~= "function" then return end
-    ns.StopAnimationSound(cue)
-    local ok, success, handle = pcall(PlaySoundFile, id, ns.db.soundChannel or "Master")
-    if ok and success then animationSoundHandles[cue] = handle end
+local function GetThemeAnimationSound(cue)
+    if ns.db and ns.db.useThemeSounds ~= false then return GetThemeSound(cue) end
 end
 
-function ns.StopPortraitImpactSound() ns.StopAnimationSound("portraitImpact") end
-function ns.PlayPortraitImpactSound()
-    ns.PlayAnimationSound("portraitImpact")
+function ns.GetIdleMoteSoundInterval()
+    if ns.GetAnimationSoundID("idleMotes") > 0 then return 2 end
+    local sound = GetThemeAnimationSound("idleMotes")
+    if sound and sound.volume ~= 0 then return sound.loopSeconds end
 end
-function ns.StopStarburstSound() ns.StopAnimationSound("starburst") end
-function ns.PlayStarburstSound()
-    ns.PlayAnimationSound("starburst")
+
+function ns.PlayAnimationSound(cue)
+    if not ns.db or ns.db.enabled == false then return end
+    if cue ~= "fadeIn" and cue ~= "fadeOut" and not ns.DecorativeAnimationsEnabled() then return end
+    local id = ns.GetAnimationSoundID(cue)
+    local channel = ns.db.soundChannel or "Master"
+    local sound = id == 0 and GetThemeAnimationSound(cue)
+    if id == 0 and (not sound or sound.volume == 0) then return end
+    if cue ~= "fireworks" then ns.StopAnimationSound(cue) end
+    local ok, success, handle
+    if id > 0 then ok, success, handle = pcall(PlaySoundFile, id, channel)
+    else ok, success, handle = pcall(PlayThemeSound, sound, channel) end
+    if not ok or not success then return end
+    if cue == "fireworks" then fireworkSoundHandles[#fireworkSoundHandles + 1] = handle
+    else animationSoundHandles[cue] = handle end
 end
 
 local function AddPreviewEntries(target, source, limit)
@@ -1969,7 +2158,7 @@ local function BuildPreviewStatChanges(maxLevelPreview)
     return previewStats
 end
 
-function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart)
+function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest)
     EnsureDatabase()
     local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or UnitLevel("player")
 
@@ -2008,8 +2197,10 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
         seconds = 110
         previous = paceScenario == "slower" and 90 or paceScenario == "best" and 140 or nil
     end
+    local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
-        true, milestoneLevel ~= nil or maxLevelPreview == true, previous, maxLevelPreview, paceScenario ~= nil, rangeStart, ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil)
+        true, milestoneLevel ~= nil or maxLevelPreview == true, previous, maxLevelPreview, paceScenario ~= nil,
+        rangeStart, secondaryStats, nil, portraitTest)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -2039,6 +2230,8 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("LOADING_SCREEN_ENABLED")
 frame:RegisterEvent("LOADING_SCREEN_DISABLED")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
+frame:RegisterEvent("SCREENSHOT_SUCCEEDED")
+frame:RegisterEvent("SCREENSHOT_FAILED")
 
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -2099,6 +2292,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if ns.HandleLevelUp then
             ns.HandleLevelUp(...)
         end
+    elseif event == "SCREENSHOT_SUCCEEDED" or event == "SCREENSHOT_FAILED" then
+        if ns.HandleLevelUpScreenshotResult then ns.HandleLevelUpScreenshotResult(event == "SCREENSHOT_SUCCEEDED") end
     end
 end)
 
@@ -2143,6 +2338,33 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         else
             print("|cff3fe0ffGnomeLevelUp|r: /glu debugtime <new|slower|best>")
         end
+    elseif msg == "debugportrait" or msg:match("^debugportrait%s") then
+        local scenario = msg:match("^debugportrait%s+(%a+)$")
+        if not ns.IsDebugEnabled() then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+        elseif scenario ~= "delay" and scenario ~= "fail" then
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail>")
+        elseif ns.db.portraitMode ~= "player3d" then
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
+        else
+            ns.PreviewLevelUp(false, nil, nil, 3, nil, nil, scenario)
+        end
+    elseif msg == "debugmilestone" or msg:match("^debugmilestone%s") then
+        if not ns.IsDebugEnabled() then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+            return
+        end
+        local interval = tonumber(msg:match("^debugmilestone%s+(%d+)$"))
+        if msg == "debugmilestone reset" then
+            ns.db.debugMilestoneInterval = nil
+        elseif IsDebugMilestoneInterval(interval) then
+            ns.db.debugMilestoneInterval = interval
+        else
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugmilestone <1-1000> or /glu debugmilestone reset")
+            return
+        end
+        if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Milestone interval") .. ": " .. ns.GetMilestoneInterval())
     elseif msg == "debugstats" or msg:match("^debugstats%s") then
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
@@ -2196,6 +2418,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         end
     elseif msg == "sound" then
         ns.db.playSound = not ns.db.playSound
+        ns.SoundSelectionChanged()
         PrintSettingStatus("Play sound on level up", ns.db.playSound)
     elseif msg:match("^duration") then
         local n = tonumber(msg:match("(%d+)"))
@@ -2302,7 +2525,9 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu dumpskills    - print Skills-tab, equipped, and trainable weapon data")
         print("  /glu testtrainer   - print the current unlearned skill list")
         print("  /glu debugtime <new|slower|best> - preview level-time scenarios (debug mode)")
+        print("  /glu debugportrait <delay|fail> - simulate a slow or rejected 3D portrait load (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
+        print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")
         print("  /glu resettimers - clear this character's recorded level timers and best times")
         print("  /glu memory        - print current addon memory usage")
         print(ns.L("  /glu perf on|off   - start or stop performance profiling (off after reload)"))

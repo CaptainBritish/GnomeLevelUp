@@ -233,12 +233,8 @@ local PREVIEW_CLASS_COORDS = {
 local function RefreshPortraitPreview()
     if not portraitPreview then return end
     local db = ns.db or {}
-    local reference = db.portraitRingTexture
-    if (type(reference) ~= "string" or reference == "")
-        and db.portraitRingChoice and ns.GetPortraitRingReference then
-        reference = ns.GetPortraitRingReference(db.portraitRingChoice)
-    end
-    local enabled = db.portraitRingEnabled == true
+    local reference = ns.GetSelectedPortraitRingReference()
+    local enabled = ns.HasPortraitRingArtwork()
         and ((type(reference) == "string" and reference ~= "")
             or (type(reference) == "table" and reference.atlas))
     if not enabled or db.portraitMode == "none" then
@@ -308,8 +304,9 @@ end
 
 local function ChoiceLabel(value, choices)
     for _, choice in ipairs(choices or {}) do
-        if choice.value == value then return ns.LocalizeChoiceLabel(choice) end
+        if choice.value == value then return ns.LocalizeChoiceLabel(choice), choice.fontLocale end
     end
+    if value == "NONE" then return ns.L("None") end
     return tostring(value or "")
 end
 
@@ -347,7 +344,7 @@ local function Toggle(label, key, after)
         if key == "muteNativeDing" or key == "playSound" then return not ns.UsesNativeLevelUpSound() end
         if key == "showWeaponSkills" then return ns.WeaponTrainingAvailable() end
         if key == "compactMode" then return not ns.db.horizontalMode end
-        if key == "frameEdgeGlow" then return ns.db.backgroundMode ~= "MODERN" end
+        if key == "frameEdgeGlow" then return ns.GetEffectiveBackgroundMode() ~= "MODERN" end
         return key ~= "autoScanTrainers" or ns.CanCaptureTrainerData()
     end
     return {
@@ -389,7 +386,7 @@ local function NumericOption(key)
 end
 
 local function TexturedAppearanceAvailable()
-    return ns.db.backgroundMode ~= "MODERN"
+    return ns.GetEffectiveBackgroundMode() ~= "MODERN"
 end
 
 local function BuildEntries(key)
@@ -400,8 +397,9 @@ local function BuildEntries(key)
                     ns.db.language = v
                     ns.SetLocale(v)
                     if ns.RefreshLocalizedPopupText then ns.RefreshLocalizedPopupText() end
+                    if ns.ApplyFont then ns.ApplyFont(ns.db.customFontPath) end
                 end, ns.GetLanguageChoices),
-            CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
+            CycleChoice("Theme", function() return ns.GetEffectiveBackgroundMode() == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
                 function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
             Toggle("Horizontal layout", "horizontalMode"),
             CycleChoice("Portrait", function() return ns.db.portraitMode or "player" end,
@@ -440,7 +438,7 @@ local function BuildEntries(key)
         return entries
     elseif key == "appearance" then
         local entries = {
-            CycleChoice("Theme", function() return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
+            CycleChoice("Theme", function() return ns.GetEffectiveBackgroundMode() == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN") end,
                 function(v) ns.ApplyBackgroundTheme(v) end, ns.THEME_CHOICES or {}),
             CycleChoice("Portrait", function() return ns.db.portraitMode or "class" end,
                 function(v) ns.db.portraitMode = v; ns.RefreshClassIcon(); ns.RefreshPopupLayout() end, ns.PORTRAIT_CHOICES),
@@ -482,6 +480,7 @@ local function BuildEntries(key)
     elseif key == "mode" then
         local options = {
             Toggle("Screenshot milestones", "screenshotMilestones"),
+            Toggle("Screenshot every level", "screenshotEveryLevel"),
             { label = "Enable addon", get = function() return ns.db.enabled ~= false and "On" or "Off" end,
                 activate = function() ns.SetAddonEnabled(not (ns.db.enabled ~= false)) end },
             { label = "Hide Blizzard level-up toast", get = function() return ns.db.hideBlizzardLevelUp ~= false and "On" or "Off" end,
@@ -517,7 +516,7 @@ local function BuildEntries(key)
                 function(v) ns.db.controllerGlyphStyle = v; ns.RefreshControllerGlyph() end,
                 { { value = "none", label = "None" }, { value = "xbox", label = "Xbox" },
                   { value = "playstation", label = "Playstation" }, { value = "nintendo", label = "Nintendo" } })
-        options[#options + 1] = CycleChoice("Milestone interval", ns.GetMilestoneInterval, ns.SetMilestoneInterval, ns.MILESTONE_INTERVAL_CHOICES)
+        options[#options + 1] = CycleChoice("Milestone interval", ns.GetMilestoneInterval, ns.SetMilestoneInterval, ns.GetMilestoneIntervalChoices)
         return options
     elseif key == "trainer" then
         if ns.GetCurrentFlavor() == "retail" then
@@ -542,15 +541,14 @@ local function BuildEntries(key)
         end
         return options
     elseif key == "sound" then
-        return {
-            Toggle("Play sound on level up", "playSound"),
+        local options = {
+            Toggle("Play sound on level up", "playSound", ns.SoundSelectionChanged),
             Toggle("Mute Blizzard level-up sound", "muteNativeDing", function() ns.ApplyAddonState(false) end),
-            CycleChoice("Sound", function() return ns.db.soundChoice or "LEVELUP" end,
+            CycleChoice("Sound", ns.GetLevelUpSoundChoice,
                 function(v)
-                    ns.db.soundChoice = v
-                    if v ~= "CUSTOM" then ns.db.customSoundFile = nil end
+                    ns.SetLevelUpSoundChoice(v)
                     ns.SoundSelectionChanged()
-                end, ns.SOUND_CHOICES or {}),
+                end, ns.GetSoundChoices),
             CycleChoice("Sound channel", function() return ns.db.soundChannel or "Master" end,
                 function(v) ns.db.soundChannel = v end, ns.SOUND_CHANNELS or {}),
             { label = "Sound volume", isAvailable = ns.CanAdjustSoundVolume,
@@ -563,6 +561,10 @@ local function BuildEntries(key)
             { label = "Play sound", get = function() return "A to play" end,
                 activate = function() ns.PlayLevelUpSound(true) end },
         }
+        if ns.IsDebugEnabled() then
+            table.insert(options, 3, Toggle("Use Theme Sounds", "useThemeSounds"))
+        end
+        return options
     elseif key == "animation" then
         local classic = Toggle("Classic Mode", "reducedMotion")
         classic.bottomGap = 12
@@ -589,12 +591,16 @@ local function BuildEntries(key)
         end
         return entries
     elseif key == "colors" then
-        return {
+        local entries = {
             { label = "Reset Theme Hues", get = function() return "" end,
                 activate = function() ns.ResetThemeHues() end },
             Toggle("Use class colors", "useClassColors", function(v) ns.SetClassColorsEnabled(v) end),
             Toggle("Show text shadows", "showTextShadow", function(v) ns.ApplyTextShadow(v) end),
         }
+        if ns.OPTION_SETTINGS.classColourPortraitBackground.isAvailable() then
+            table.insert(entries, 2, Toggle("Class-coloured portrait background", "classColourPortraitBackground"))
+        end
+        return entries
     elseif key == "profile" then
         local options = {
             { label = "Save per Character", get = function() return ns.L(ns.GetSavePerCharacter() and "On" or "Off") end,
@@ -722,7 +728,7 @@ local SetControllerTexture = ns.PaintThemePiece
 local function SkinControllerWindow()
     if not window then return end
     local skin = MakeControllerSkin()
-    if ns.db and ns.db.backgroundMode == "MODERN" then
+    if ns.db and ns.GetEffectiveBackgroundMode() == "MODERN" then
         if window.SetBackdrop then window:SetBackdrop(nil) end
         for _, texture in pairs(skin.pieces) do texture:Hide() end
         skin.backing:Hide()
@@ -853,6 +859,7 @@ local function LayoutControllerChrome()
         window.finishButton:ClearAllPoints()
         window.finishButton:SetPoint("BOTTOM", window, "BOTTOM", 0, footerTop + 8)
         window.finishButton.text:SetText(ns.L("Finish setup"))
+        ns.ApplyLocaleFont(window.finishButton.text)
         local focused = selected == #window.entries + 1
         window.finishButton.text:SetTextColor(1, focused and 0.82 or 1, focused and 0.15 or 1)
     end
@@ -912,8 +919,10 @@ local function Render()
             row:Hide()
             if entry then
                 row.text:SetText(ns.L(entry.label))
-                local value = entry.get and tostring(entry.get()) or ""
-                row.value:SetText(ns.L(value))
+                local value, fontLocale
+                if entry.get then value, fontLocale = entry.get() end
+                row.value.gluTextLocale = fontLocale
+                row.value:SetText(ns.L(tostring(value or "")))
                 local height = math.max(ROW_HEIGHT, math.max(ns.WrapOptionsText(row.text, labelWidth), ns.WrapOptionsText(row.value, valueWidth, "RIGHT")) + 12)
                 if cursor + height > bottom then break end
                 row:SetSize(width, height)

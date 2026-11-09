@@ -11,22 +11,39 @@ local STAT_NAMES = {
 
 local STAT_ENGLISH = { "Strength", "Agility", "Stamina", "Intellect", "Spirit" }
 local STAT_ABBREVIATIONS = { "STR", "AGI", "STA", "INT", "SPI" }
+local POWER_LABELS = { MANA = "Mana", RAGE = "Rage", FOCUS = "Focus", ENERGY = "Energy", RUNIC_POWER = "Runic Power" }
 local SECONDARY_ABBREVIATIONS = { crit = "Crit", mastery = "Mast", haste = "Haste", versatility = "Versa" }
+local SECONDARY_LABELS = {
+    crit = "Crit. Strike", haste = "Haste", mastery = "Mastery", versatility = "Versatility",
+    hit = "Hit Chance", expertise = "Expertise", attackPower = "Attack Power", rangedPower = "Ranged Attack Power",
+    spellPower = "Spell Power", healing = "Healing Power", armor = "Armor", defense = "Defense",
+    dodge = "Dodge", parry = "Parry", block = "Block", armorPen = "Armor Penetration", manaRegen = "Mana per 5 sec",
+}
+local STAT_INDEX_BY_NAME = {}
+for index, name in ipairs(STAT_ENGLISH) do
+    STAT_INDEX_BY_NAME[name], STAT_INDEX_BY_NAME[STAT_NAMES[index]] = index, index
+end
 
 -- Compact labels are fixed acronyms in equal-width mode on every locale.
 function ns.GetStatDisplayLabel(stat)
-    if not ns.db or not ns.db.abbreviateStatNames then return stat.name end
-    if stat.kind == "secondary" then return SECONDARY_ABBREVIATIONS[stat.key] or stat.name end
-    if not ns.db.equalStatWidths then return stat.name end
-    if stat.kind == "health" or stat.name == "Health" or stat.name == _G["HEALTH"] then return "HP" end
-    if stat.kind == "mana" or stat.name == "Mana" or stat.name == _G["MANA"] then return "MP" end
-    local index = stat.statIndex
-    if not index then
-        for i, name in ipairs(STAT_NAMES) do
-            if stat.name == name or stat.name == STAT_ENGLISH[i] or ns.L and stat.name == ns.L(STAT_ENGLISH[i]) then index = i; break end
+    local abbreviate = ns.db and ns.db.abbreviateStatNames
+    if stat.kind == "secondary" then
+        return (abbreviate and SECONDARY_ABBREVIATIONS[stat.key]) or ns.L(SECONDARY_LABELS[stat.key] or stat.name)
+    end
+    local abbreviatePrimary = abbreviate and ns.db.equalStatWidths
+    if stat.kind == "health" or stat.name == "Health" or stat.name == _G.HEALTH then
+        return abbreviatePrimary and "HP" or ns.L("Health")
+    end
+    if stat.kind == "mana" or stat.name == "Mana" or stat.name == _G.MANA then
+        return abbreviatePrimary and "MP" or ns.L("Mana")
+    end
+    local index = stat.statIndex or STAT_INDEX_BY_NAME[stat.name]
+    if abbreviatePrimary and not index then
+        for i, name in ipairs(STAT_ENGLISH) do
+            if stat.name == ns.L(name) then index = i; break end
         end
     end
-    return STAT_ABBREVIATIONS[index] or stat.name
+    return (abbreviatePrimary and STAT_ABBREVIATIONS[index]) or ns.L(STAT_ENGLISH[index] or stat.name)
 end
 
 local CLASS_PRIMARY_STAT = {
@@ -80,12 +97,7 @@ function ns.FilterRelevantStats(changes)
     if not primary then return changes end
     local filtered = {}
     for _, stat in ipairs(changes) do
-        local index = stat.statIndex
-        if not index then
-            for i, name in ipairs(STAT_NAMES) do
-                if stat.name == name then index = i; break end
-            end
-        end
+        local index = stat.statIndex or STAT_INDEX_BY_NAME[stat.name]
         if stat.kind == "secondary" or index == 3 or index == primary or stat.kind == "health" or stat.kind == "mana" or stat.kind == "power"
             or stat.name == "Health" or stat.name == (_G["HEALTH"] or "Health")
             or stat.name == "Mana" or stat.name == (_G["MANA"] or "Mana") then
@@ -168,11 +180,11 @@ local function SecondaryMaximum(...)
 end
 
 -- Shared writers avoid new closures/upvalues on every idle baseline refresh.
-local function AddSecondaryStat(stats, count, key, label, value, percent, positiveOnly)
+local function AddSecondaryStat(stats, count, key, value, percent, positiveOnly)
     if value == nil or positiveOnly and value <= 0 then return count end
     count = count + 1
     local stat = stats[count] or {}
-    stat.key, stat.name = key, ns.L(label)
+    stat.key, stat.name = key, ns.L(SECONDARY_LABELS[key])
     stat.value = math.floor(value * (percent and 100 or 1) + .5)
     stat.unit, stat.kind = percent and "percent" or nil, "secondary"
     stats[count] = stat
@@ -189,38 +201,38 @@ function ns.SnapshotSecondaryStats(reuse)
     local stats, count = reuse or {}, 0
     local spellCrit
     for school = 2, 7 do spellCrit = SecondaryMaximum(spellCrit, ReadSecondaryAPI("GetSpellCritChance", 1, school)) end
-    count = AddSecondaryStat(stats, count, "crit", "Crit. Strike", SecondaryMaximum(ReadSecondaryAPI("GetCritChance"),
+    count = AddSecondaryStat(stats, count, "crit", SecondaryMaximum(ReadSecondaryAPI("GetCritChance"),
         ReadSecondaryAPI("GetRangedCritChance"), spellCrit), true)
     local rangedHaste = SecondarySum("GetRangedHaste", 2)
         or ReadSecondaryAPI("GetRangedHaste")
-    count = AddSecondaryStat(stats, count, "haste", "Haste", SecondaryMaximum(ReadSecondaryAPI("GetHaste"), ReadSecondaryAPI("GetMeleeHaste"),
+    count = AddSecondaryStat(stats, count, "haste", SecondaryMaximum(ReadSecondaryAPI("GetHaste"), ReadSecondaryAPI("GetMeleeHaste"),
         rangedHaste, ReadSecondaryAPI("UnitSpellHaste", 1, "player")), true)
     if ns.GetCurrentFlavor() == "retail" then
-        count = AddSecondaryStat(stats, count, "mastery", "Mastery", ReadSecondaryAPI("GetMasteryEffect"), true)
+        count = AddSecondaryStat(stats, count, "mastery", ReadSecondaryAPI("GetMasteryEffect"), true)
         local rating = ReadSecondaryAPI("GetCombatRatingBonus", 1, rawget(_G, "CR_VERSATILITY_DAMAGE_DONE") or 29)
         local bonus = ReadSecondaryAPI("GetVersatilityBonus", 1, rawget(_G, "CR_VERSATILITY_DAMAGE_DONE") or 29)
-        count = AddSecondaryStat(stats, count, "versatility", "Versatility", rating and bonus and rating + bonus or rating or bonus, true)
+        count = AddSecondaryStat(stats, count, "versatility", rating and bonus and rating + bonus or rating or bonus, true)
     else
-        count = AddSecondaryStat(stats, count, "hit", "Hit Chance", SecondaryMaximum(SecondaryHit("GetHitModifier", rawget(_G, "CR_HIT_MELEE") or 6),
+        count = AddSecondaryStat(stats, count, "hit", SecondaryMaximum(SecondaryHit("GetHitModifier", rawget(_G, "CR_HIT_MELEE") or 6),
             SecondaryHit("GetRangedHitModifier", rawget(_G, "CR_HIT_RANGED") or 7), SecondaryHit("GetSpellHitModifier", rawget(_G, "CR_HIT_SPELL") or 8)), true)
-        count = AddSecondaryStat(stats, count, "expertise", "Expertise", SecondaryMaximum(ReadSecondaryAPI("GetExpertise",1),
+        count = AddSecondaryStat(stats, count, "expertise", SecondaryMaximum(ReadSecondaryAPI("GetExpertise",1),
             ReadSecondaryAPI("GetExpertise",2), ReadSecondaryAPI("GetExpertise",3)), true)
-        count = AddSecondaryStat(stats, count, "attackPower", "Attack Power", SecondarySum("UnitAttackPower", 3, "player"), false, true)
+        count = AddSecondaryStat(stats, count, "attackPower", SecondarySum("UnitAttackPower", 3, "player"), false, true)
         local _, class = UnitClass("player")
-        if class == "HUNTER" then count = AddSecondaryStat(stats, count, "rangedPower", "Ranged Attack Power", SecondarySum("UnitRangedAttackPower", 3, "player"), false, true) end
+        if class == "HUNTER" then count = AddSecondaryStat(stats, count, "rangedPower", SecondarySum("UnitRangedAttackPower", 3, "player"), false, true) end
         local spellPower
         for school = 2, 7 do spellPower = SecondaryMaximum(spellPower, ReadSecondaryAPI("GetSpellBonusDamage",1,school)) end
-        count = AddSecondaryStat(stats, count, "spellPower", "Spell Power", spellPower, false, true)
-        count = AddSecondaryStat(stats, count, "healing", "Healing Power", ReadSecondaryAPI("GetSpellBonusHealing"), false, true)
-        count = AddSecondaryStat(stats, count, "armor", "Armor", ReadSecondaryAPI("UnitArmor", 2, "player"))
-        count = AddSecondaryStat(stats, count, "defense", "Defense", SecondarySum("UnitDefenseSkill", 2, "player"))
-        count = AddSecondaryStat(stats, count, "dodge", "Dodge", ReadSecondaryAPI("GetDodgeChance"), true)
-        count = AddSecondaryStat(stats, count, "parry", "Parry", ReadSecondaryAPI("GetParryChance"), true, true)
-        count = AddSecondaryStat(stats, count, "block", "Block", ReadSecondaryAPI("GetBlockChance"), true, true)
-        count = AddSecondaryStat(stats, count, "armorPen", "Armor Penetration", ReadSecondaryAPI("GetArmorPenetration"), false, true)
+        count = AddSecondaryStat(stats, count, "spellPower", spellPower, false, true)
+        count = AddSecondaryStat(stats, count, "healing", ReadSecondaryAPI("GetSpellBonusHealing"), false, true)
+        count = AddSecondaryStat(stats, count, "armor", ReadSecondaryAPI("UnitArmor", 2, "player"))
+        count = AddSecondaryStat(stats, count, "defense", SecondarySum("UnitDefenseSkill", 2, "player"))
+        count = AddSecondaryStat(stats, count, "dodge", ReadSecondaryAPI("GetDodgeChance"), true)
+        count = AddSecondaryStat(stats, count, "parry", ReadSecondaryAPI("GetParryChance"), true, true)
+        count = AddSecondaryStat(stats, count, "block", ReadSecondaryAPI("GetBlockChance"), true, true)
+        count = AddSecondaryStat(stats, count, "armorPen", ReadSecondaryAPI("GetArmorPenetration"), false, true)
         if ns.PlayerUsesMana() then
             local regen = ReadSecondaryAPI("GetManaRegen", 2)
-            count = AddSecondaryStat(stats, count, "manaRegen", "Mana per 5 sec", regen and regen * 5, false, true)
+            count = AddSecondaryStat(stats, count, "manaRegen", regen and regen * 5, false, true)
         end
     end
     for index = #stats, count + 1, -1 do stats[index] = nil end
@@ -247,9 +259,9 @@ end
 function ns.SnapshotStats(reuse)
     -- Store raw values here; DiffStats rejects protected values before comparing them.
     local _, powerToken = UnitPowerType("player")
-    local powerLabel = "Power"
-    if type(powerToken) == "string" and type(_G[powerToken]) == "string" then
-        powerLabel = _G[powerToken]
+    local powerLabel = POWER_LABELS[powerToken]
+    if not powerLabel then
+        powerLabel = type(powerToken) == "string" and type(_G[powerToken]) == "string" and _G[powerToken] or "Power"
     end
     local snap = reuse or {}
     snap.level = UnitLevel("player")
@@ -276,6 +288,19 @@ local function GetVisibleNumber(value)
         return nil
     end
     return value
+end
+
+function ns.HasMissingLevelUpStats(before, after, expectedGains)
+    for _, index in ipairs(GetDisplayedStatIndexes()) do
+        if expectedGains[index] then
+            local old = GetVisibleNumber(before.stats[index])
+            local new = GetVisibleNumber(after.stats[index])
+            if type(old) ~= "number" or type(new) ~= "number" or not (new > old) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 function ns.BuildMaxLevelPreviewStats()

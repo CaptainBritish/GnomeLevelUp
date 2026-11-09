@@ -17,11 +17,14 @@ local optional = {
 
 local function NormalizeSettings(settings)
     ns.MigrateTrainerPriceSettings(settings)
+    ns.RemoveObsoleteAnimationSounds(settings)
+    ns.NormalizeScreenshotSettings(settings)
     -- Older themes serialized an unset optional path as false. Keep accepting
     -- those exports, but store and export the ordinary nil representation.
     for key in pairs(optional) do
         if settings[key] == false then settings[key] = nil end
     end
+    ns.MigrateLevelUpSoundPreference(settings)
     -- Old exports may contain the separate effect switches. The grouped
     -- settings now control those effects; accept and discard old booleans.
     for _, key in ipairs({ "portraitImpactSound", "starburstSound", "showLevelPace", "statTickerSounds", "newAbilitySparkles", "abilityRevealShine", "backgroundDepth", "milestoneAnticipation", "statImpactSparks", "milestoneColorTransition", "popupClosingAnimation" }) do
@@ -151,7 +154,9 @@ end
 function ns.GetProfileChoices()
     EnsureProfiles()
     local choices = {}
-    for name in pairs(store.profiles) do choices[#choices + 1] = { value = name, label = name, literal = true } end
+    for name in pairs(store.profiles) do
+        choices[#choices + 1] = { value = name, label = name == "Default" and ns.L("Default") or name, literal = true }
+    end
     table.sort(choices, function(a, b) return a.value < b.value end)
     return choices
 end

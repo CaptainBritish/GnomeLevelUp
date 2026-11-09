@@ -3,6 +3,7 @@ local ADDON_NAME, ns = ...
 -- Width comes first: measuring text before assigning its column width gives a
 -- single-line height and lets long translations collide with the next row.
 function ns.WrapOptionsText(text, width, alignment)
+    ns.ApplyLocaleFont(text, text.gluTextLocale)
     text:SetWidth(math.max(1, width))
     text:SetWordWrap(true)
     if text.SetNonSpaceWrap then text:SetNonSpaceWrap(true) end

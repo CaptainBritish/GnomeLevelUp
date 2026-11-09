@@ -71,6 +71,12 @@ function ns.SetOptionsWatermarkTest(fileName)
     return true
 end
 
+local function SetMenuItemFont(item, name, path)
+    if not path then return end
+    local font = _G[name] or CreateFont(name)
+    if font:SetFont(path, 13, "") ~= false then item.fontObject = font end
+end
+
 local function BuildOptions()
     if panel.gluOptionsBuilt then return end
 
@@ -88,13 +94,10 @@ local function BuildOptions()
     }
 
     -- LibSharedMedia is optional; use it when another addon has registered fonts.
-    local sharedMedia
     local function AddSharedMediaFonts()
         if not LibStub then return end
         local ok, media = pcall(LibStub, "LibSharedMedia-3.0", true)
         if not ok or not media or not media.List or not media.Fetch then return end
-        sharedMedia = media
-
         for _, name in ipairs(media:List("font") or {}) do
             local path = media:Fetch("font", name)
             if path and path ~= "" then
@@ -107,24 +110,6 @@ local function BuildOptions()
         end
     end
     AddSharedMediaFonts()
-
-    -- Treat LibSharedMedia sounds like named custom sounds in the sound dropdown.
-    local function AddSharedMediaSounds()
-        if not sharedMedia then return end
-        ns.CUSTOM_SOUND_CHOICES = ns.CUSTOM_SOUND_CHOICES or {}
-        for _, name in ipairs(sharedMedia:List("sound") or {}) do
-            local path = sharedMedia:Fetch("sound", name)
-            if path and path ~= "" then
-                local choice = {
-                    value = "LSM_SOUND_" .. name,
-                    label = name,
-                    path = path,
-                }
-                ns.SOUND_CHOICES[#ns.SOUND_CHOICES + 1] = choice
-            end
-        end
-    end
-    AddSharedMediaSounds()
 
     -- The panel is registered with either the modern or legacy settings API below.
 
@@ -472,9 +457,17 @@ local function BuildOptions()
         local function GetChoiceLabel(value)
             local menuChoices = type(choices) == "function" and choices() or choices
             for i, c in ipairs(menuChoices) do
-                if c.value == value then return ns.LocalizeChoiceLabel(c) end
+                if c.value == value then return ns.LocalizeChoiceLabel(c), c.fontLocale end
             end
+            if value == "NONE" then return ns.L("None") end
             return menuChoices[1] and ns.LocalizeChoiceLabel(menuChoices[1]) or ns.L("None")
+        end
+
+        local function refresh()
+            local text, locale = GetChoiceLabel(getCurrent())
+            local caption = dd.Text or _G[dd:GetName() .. "Text"]
+            if caption then caption.gluTextLocale = locale end
+            UIDropDownMenu_SetText(dd, text)
         end
 
         UIDropDownMenu_Initialize(dd, function(_, level)
@@ -484,14 +477,12 @@ local function BuildOptions()
                 local menuItem = UIDropDownMenu_CreateInfo()
                 menuItem.text = ns.LocalizeChoiceLabel(c)
                 menuItem.checked = (getCurrent() == c.value)
-                if c.previewFont then
-                    c.fontObject = c.fontObject or CreateFont("GnomeLevelUpFontChoice" .. dropdownCount .. "_" .. i)
-                    c.fontObject:SetFont(c.previewFont, 13, "")
-                    menuItem.fontObject = c.fontObject
-                end
+                local fontPath = c.previewFont and ns.GetPopupFontPath(c.previewFont)
+                    or ns.GetLocaleFontPath(c.fontLocale)
+                SetMenuItemFont(menuItem, dd:GetName() .. "FontChoice" .. i, fontPath)
                 menuItem.func = function()
                     onSelect(c.value)
-                    UIDropDownMenu_SetText(dd, ns.LocalizeChoiceLabel(c))
+                    refresh()
                     CloseDropDownMenus()
                     ReflowSections()
                 end
@@ -501,7 +492,6 @@ local function BuildOptions()
 
         LayoutCell("dropdown", rowY, labelX, label, dd, { label, dd }, debugOnly,
             { preferredWidth = widthOverride or 180, optionLabel = labelText })
-        local function refresh() UIDropDownMenu_SetText(dd, GetChoiceLabel(getCurrent())) end
         refreshers[#refreshers + 1] = refresh
         if not rowYOverride then y = y - 36 end
         return refresh, dd, label
@@ -595,8 +585,9 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.5.7"
-    version:SetText(ns.L("Version %s", tostring(addonVersion or "1.5.7")))
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6"
+    version:SetText(ns.L("Version %s", tostring(addonVersion)))
+    ns.ApplyLocaleFont(version)
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
     byline:SetText(ns.L("by %s", "Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU RP-PVE)"))
@@ -635,7 +626,7 @@ local function BuildOptions()
     local appearanceThemeRow = y
     local refreshTheme, themeDropdown = AddDropdown("Theme", ns.THEME_CHOICES or {},
         function()
-            return ns.db.backgroundMode == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN")
+            return ns.GetEffectiveBackgroundMode() == "MODERN" and "MODERN" or (ns.db.backgroundTheme or "MODERN")
         end,
         function(value)
             ns.ApplyBackgroundTheme(value)
@@ -669,7 +660,7 @@ local function BuildOptions()
     y = appearanceFrameRow - 36
 
     local function RefreshThemeAvailability()
-        local modern = ns.db and ns.db.backgroundMode == "MODERN"
+        local modern = ns.db and ns.GetEffectiveBackgroundMode() == "MODERN"
         local controls = { backgroundDropdown, frameDropdown, backgroundTextureDropdown }
         for _, control in ipairs(controls) do
             if control then
@@ -780,6 +771,8 @@ local function BuildOptions()
         y = y - 38
 
         AddButton("Reset Theme Hues", 170, LEFT, y, function() ns.ResetThemeHues() end)
+        local portraitBackgroundCheck = AddSettingCheckbox("classColourPortraitBackground", LEFT + 270, y)
+        portraitBackgroundCheck.gluOptionsCell.isVisible = ns.OPTION_SETTINGS.classColourPortraitBackground.isAvailable
         y = y - 34
 
         AddSmallSectionLabel("Text")
@@ -1035,6 +1028,7 @@ local function BuildOptions()
                 for _, count in ipairs(previewCounts) do
                     local item = UIDropDownMenu_CreateInfo()
                     item.text = ns.L("%d abilities", count)
+                    SetMenuItemFont(item, "GnomeLevelUpPreviewMenuFont", ns.GetLocaleFontPath())
                     item.notCheckable = true
                     item.func = function()
                         CloseDropDownMenus()
@@ -1081,7 +1075,7 @@ local function BuildOptions()
         EffectToggle("Background motes", "backgroundEmbers"))
     local _, _, edgeCheck, edgeLabel = AddCheckboxPair(EffectToggle("Portrait and ring settle", "portraitRingSettle"),
         EffectToggle("Frame edge glow", "frameEdgeGlow"))
-    AddAvailabilityRefresh(edgeCheck, edgeLabel, function() return ns.db.backgroundMode ~= "MODERN" end)
+    AddAvailabilityRefresh(edgeCheck, edgeLabel, function() return ns.GetEffectiveBackgroundMode() ~= "MODERN" end)
     AddCheckboxPair(EffectToggle("Reveal dividers", "dividerReveal"),
         EffectToggle("Portrait ring glint", "portraitRingGlint"))
 
@@ -1105,16 +1099,7 @@ local function BuildOptions()
 
     AddSectionHeader("Mode", "mode")
 
-    local modeRowY = y
-    AddCheckbox("Show minimap button",
-        function() return ns.db.minimapButtonShown end,
-        function(v)
-            ns.db.minimapButtonShown = v
-            ns.SetMinimapButtonShown(v)
-        end, LEFT, modeRowY)
-    AddCheckbox("Screenshot milestones", function() return ns.db.screenshotMilestones end,
-        function(v) ns.db.screenshotMilestones = v end, LEFT + 270, modeRowY)
-    y = modeRowY - 32
+    AddSettingCheckboxPair("screenshotMilestones", "screenshotEveryLevel")
 
     local shortStatsCheck, _, relevantStatsCheck = AddSettingCheckboxPair("shortenRetailStatTotals", "relevantRetailStatsOnly")
     shortStatsCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() == "retail" end
@@ -1139,6 +1124,12 @@ local function BuildOptions()
     AddSettingCheckbox("showSecondaryStats", LEFT, secondaryRow)
     AddNumericOption("secondaryStatStartPercent", LEFT + 270, CONTROL_X + 270, secondaryRow)
     y = secondaryRow - 34
+    AddCheckbox("Show minimap button",
+        function() return ns.db.minimapButtonShown end,
+        function(v)
+            ns.db.minimapButtonShown = v
+            ns.SetMinimapButtonShown(v)
+        end, LEFT, y)
     AddCheckbox("Don't show until combat ends",
         function() return ns.db.waitForCombatEnd end,
         function(v) ns.db.waitForCombatEnd = v end, LEFT + 270, y)
@@ -1349,7 +1340,7 @@ local function BuildOptions()
             ns.db.controllerGlyphStyle = value
             ns.RefreshControllerGlyph()
         end, modeFooterRow, 130, LEFT, CONTROL_X)
-    AddDropdown("Milestone interval", ns.MILESTONE_INTERVAL_CHOICES, ns.GetMilestoneInterval, ns.SetMilestoneInterval,
+    AddDropdown("Milestone interval", ns.GetMilestoneIntervalChoices, ns.GetMilestoneInterval, ns.SetMilestoneInterval,
         modeFooterRow, 180, LEFT + 270, CONTROL_X + 270)
     y = modeFooterRow - 36
 
@@ -1480,7 +1471,7 @@ local function BuildOptions()
     local playCheck, playLabel, muteCheck, muteLabel = AddCheckboxPair({
         "Play sound on level up",
         function() return not ns.UsesNativeLevelUpSound() and ns.db.playSound end,
-        function(v) ns.db.playSound = v end,
+        function(v) ns.db.playSound = v; ns.SoundSelectionChanged() end,
     }, {
         "Mute Blizzard level-up sound",
         function() return not ns.UsesNativeLevelUpSound() and ns.db.muteNativeDing ~= false end,
@@ -1492,6 +1483,8 @@ local function BuildOptions()
     })
     AddAvailabilityRefresh(playCheck, playLabel, function() return not ns.UsesNativeLevelUpSound() end)
     AddAvailabilityRefresh(muteCheck, muteLabel, function() return not ns.UsesNativeLevelUpSound() end)
+    local themeSoundsCheck = AddSettingCheckbox("useThemeSounds")
+    themeSoundsCheck.gluOptionsCell.isVisible = ns.IsDebugEnabled
 
     local refreshCustomSound -- assigned below
     local refreshSoundChoice
@@ -1519,19 +1512,10 @@ local function BuildOptions()
     end
 
     local soundRow = y
-    refreshSoundChoice = AddDropdown("Sound", ns.SOUND_CHOICES,
-        function() return ns.db.soundChoice end,
+    refreshSoundChoice = AddDropdown("Sound", ns.GetSoundChoices,
+        ns.GetLevelUpSoundChoice,
         function(value)
-            ns.db.soundChoice = value
-            local selected
-            for _, choice in ipairs(ns.SOUND_CHOICES) do
-                if choice.value == value then selected = choice break end
-            end
-            if selected and selected.path then
-                ns.db.customSoundFile = selected.path
-            elseif value ~= "CUSTOM" then
-                ns.db.customSoundFile = nil -- picking a built-in sound replaces any custom file
-            end
+            ns.SetLevelUpSoundChoice(value)
             if refreshCustomSound then refreshCustomSound() end
             if refreshCustomSoundChoice then refreshCustomSoundChoice() end
             ns.SoundSelectionChanged()
@@ -1587,7 +1571,7 @@ local function BuildOptions()
                     if choice.value == value then
                         ns.db.customSoundChoice = value
                         ns.db.customSoundFile = choice.path
-                        ns.db.soundChoice = "CUSTOM"
+                        ns.SetLevelUpSoundChoice("CUSTOM")
                         if refreshSoundChoice then refreshSoundChoice() end
                         if refreshCustomSound then refreshCustomSound() end
                         ns.SoundSelectionChanged()
@@ -1621,23 +1605,20 @@ local function BuildOptions()
         edit:SetAutoFocus(false)
         edit:SetMaxLetters(240)
         local function commit(self)
+            -- Disabling this field can end focus after the dropdown selected another sound.
+            if ns.GetLevelUpSoundChoice() ~= "CUSTOM" then return end
             local text = self:GetText():match("^%s*(.-)%s*$")
             ns.db.customSoundFile = (text ~= "") and text or nil
-            ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
+            ns.SetLevelUpSoundChoice((text ~= "") and "CUSTOM" or "LEVELUP")
             if refreshSoundChoice then refreshSoundChoice() end
             if refreshCustomSound then refreshCustomSound() end
             ns.SoundSelectionChanged()
-            self:ClearFocus()
         end
-        edit:SetScript("OnEnterPressed", commit)
-        edit:SetScript("OnEditFocusLost", function(self)
-            local text = self:GetText():match("^%s*(.-)%s*$")
-            ns.db.customSoundFile = (text ~= "") and text or nil
-            ns.db.soundChoice = (text ~= "") and "CUSTOM" or "LEVELUP"
-            if refreshSoundChoice then refreshSoundChoice() end
-            if refreshCustomSound then refreshCustomSound() end
-            ns.SoundSelectionChanged()
+        edit:SetScript("OnEnterPressed", function(self)
+            commit(self)
+            self:ClearFocus()
         end)
+        edit:SetScript("OnEditFocusLost", commit)
         edit:SetScript("OnEscapePressed", function(self)
             self:SetText(ns.db.customSoundFile or "")
             self:ClearFocus()
@@ -1646,7 +1627,7 @@ local function BuildOptions()
         LayoutCell("edit", rowY, LEFT, customSoundLabel, edit, { customSoundLabel, edit })
         refreshCustomSound = function()
             edit:SetText(ns.db.customSoundFile or "")
-            local enabled = ns.db.soundChoice == "CUSTOM"
+            local enabled = ns.GetLevelUpSoundChoice() == "CUSTOM"
             if enabled then
                 edit:Enable()
                 customSoundLabel:SetTextColor(1, 1, 1)

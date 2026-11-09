@@ -150,6 +150,10 @@ function ns.CreatePopupDecorationUpdater(context)
         for _, row in ipairs(content.statLinePool) do
             local age = row.countFinishAt and effectAge-row.countFinishAt or -1
             local visible = enabled and row:IsShown() and age>=0 and age<.65/speed
+            if visible and not row.statGlintSoundPlayed then
+                row.statGlintSoundPlayed = true
+                ns.PlayAnimationSound("statGlint")
+            end
             if visible and not effects.impacts[row] then
                 effects.impacts[row] = {}
                 for i=1,3 do effects.impacts[row][i]=render.TrialSpark(row.slideFrame) end

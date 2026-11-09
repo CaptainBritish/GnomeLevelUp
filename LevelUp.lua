@@ -7,6 +7,8 @@ local pendingSinceCombat = false -- true while a level-up is waiting for combat 
 local levelUpPending = false
 local pendingStart, pendingEnd, pendingFutureSpells, pendingElapsed
 local pendingTimes = {}
+local expectedStatGains = {}
+local STAT_RETRY_DELAY, STAT_RETRY_LIMIT = .15, 4
 local displayToken, displayTimer = 0, nil
 local requestedTimeLevel
 local cachedTimeLevel
@@ -75,12 +77,14 @@ function ns.ResetLevelTimers()
 end
 
 function ns.RefreshBaseline()
+    if levelUpPending then return end
     baselineStats = ns.SnapshotStats(baselineStats)
 end
 
 local function RunBaselineRefresh()
     baselineRefreshScheduled = false
-    if not levelUpPending then ns.RefreshBaseline() end
+    -- A stat event can arrive before the corresponding level-up event.
+    if not baselineStats or UnitLevel("player") == baselineStats.level then ns.RefreshBaseline() end
 end
 
 local function QueueBaselineRefresh()
@@ -92,6 +96,7 @@ end
 local function ClearPendingBatch()
     pendingStart, pendingEnd, pendingFutureSpells, pendingElapsed = nil, nil, nil, nil
     pendingTimes = {}
+    expectedStatGains = {}
 end
 
 local function UniqueAbilities(abilities)
@@ -104,17 +109,16 @@ local function UniqueAbilities(abilities)
     return result
 end
 
-local function DisplayLevelUp()
+local function DisplayLevelUp(afterStats)
     if not levelUpPending then return end
     pendingSinceCombat = false
     if not baselineStats then
-        ns.RefreshBaseline()
         levelUpPending = false
+        ns.RefreshBaseline()
         ClearPendingBatch()
         return
     end
 
-    local afterStats = ns.SnapshotStats()
     levelUpPending = false
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
     local afterSpells = ns.SnapshotSpellBook()
@@ -166,7 +170,7 @@ local function DisplayLevelUp()
     ClearPendingBatch()
 end
 
-local function ScheduleDisplay()
+local function ScheduleDisplay(delay, retryCount)
     -- Delay the panel until combat and other level-up UI settle down.
     displayToken = displayToken + 1
     local token = displayToken
@@ -178,12 +182,21 @@ local function ScheduleDisplay()
             pendingSinceCombat = true
             return
         end
-        DisplayLevelUp()
+        local afterStats = ns.SnapshotStats()
+        if baselineStats and next(expectedStatGains)
+            and ns.HasMissingLevelUpStats(baselineStats, afterStats, expectedStatGains) then
+            if (retryCount or 0) < STAT_RETRY_LIMIT then
+                ScheduleDisplay(STAT_RETRY_DELAY, (retryCount or 0) + 1)
+                return
+            end
+            print("|cffff4040GnomeLevelUp|r: " .. ns.L("Stat capture failed: Expected stat changes were still missing after retrying."))
+        end
+        DisplayLevelUp(afterStats)
     end
     if type(C_Timer.NewTimer) == "function" then
-        displayTimer = C_Timer.NewTimer(.75, DisplayWhenReady)
+        displayTimer = C_Timer.NewTimer(delay or .75, DisplayWhenReady)
     else
-        C_Timer.After(.75, DisplayWhenReady)
+        C_Timer.After(delay or .75, DisplayWhenReady)
     end
 end
 
@@ -232,7 +245,7 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
     end
 end)
 
-function ns.HandleLevelUp(newLevel)
+function ns.HandleLevelUp(newLevel, ...)
     local reachedLevel = tonumber(newLevel) or tonumber(UnitLevel("player"))
     if not reachedLevel or reachedLevel ~= reachedLevel or reachedLevel == math.huge or reachedLevel % 1 ~= 0 then return end
     if levelUpPending and pendingEnd and reachedLevel <= pendingEnd then return end
@@ -241,6 +254,13 @@ function ns.HandleLevelUp(newLevel)
         ClearPendingBatch()
         pendingStart = baselineStats and tonumber(baselineStats.level) or reachedLevel - 1
         pendingFutureSpells = ns.GetRetailFutureSpellsBeforeLevel and ns.GetRetailFutureSpellsBeforeLevel() or nil
+    end
+    -- The event supplies four fields after the level before the primary stat gains.
+    for index = 1, math.min(5, select("#", ...) - 4) do
+        local gain = select(index + 4, ...)
+        if type(gain) == "number" and (not issecretvalue or not issecretvalue(gain)) and gain > 0 then
+            expectedStatGains[index] = true
+        end
     end
     local previousReached = pendingEnd or pendingStart
     levelUpPending = true

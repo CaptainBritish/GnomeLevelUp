@@ -40,7 +40,8 @@ ns.OPTION_DESCRIPTIONS = {
     ["Equal-width stat text"] = "Align stat labels, totals, arrows and gains in shared columns.",
     ["Switch to secondary stats at"] = "Choose the percentage of display time spent on primary stats.",
     ["Abbreviate stat names"] = "Use short stat labels, including secondary stats.",
-    ["Screenshot milestones"] = "Take a screenshot after a real milestone popup opens.",
+    ["Screenshot milestones"] = "Take a screenshot when a real level-up matches the selected milestone interval.",
+    ["Screenshot every level"] = "Take a screenshot after every real level-up.",
     ["Automatically save trainer data"] = "Save available training information when visiting trainers.",
     ["Include profession trainers"] = "Include profession training in trainer scans.",
     ["Only skills unlocked at this level"] = "Show unlocks from the gained level instead of earlier levels.",
@@ -55,7 +56,7 @@ ns.OPTION_DESCRIPTIONS = {
     ["Sound channel"] = "Choose which game audio channel plays GLU sounds.",
     ["Sound volume"] = "Adjust GLU sound volume where the client supports it.",
     ["Play sound"] = "Preview the selected sound.",
-    ["Milestone interval"] = "Celebrate every 5, 10 or 20 levels. Max-level celebrations use their own toggle.",
+    ["Milestone interval"] = "Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle.",
     ["Milestone Animations"] = "Add celebration effects at the selected milestone interval.",
     ["Max Level Celebration"] = "Add celebration effects when reaching the level cap.",
     ["Portrait pulse and starburst"] = "Play the portrait pulse and starburst during the entrance.",
@@ -142,7 +143,7 @@ for _, spec in ipairs(ns.EFFECT_OPACITY_SETTINGS) do
     ns.OPTION_DESCRIPTIONS[spec.opacityLabel] = "Set the opacity of the named animation. Zero makes it invisible."
 end
 for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
-    ns.OPTION_DESCRIPTIONS[spec.label .. " (ID)"] = "Play a sound when this animation fires. Enter a WoW sound file ID; 0 silences this cue."
+    ns.OPTION_DESCRIPTIONS[spec.label .. " (ID)"] = "Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."
 end
 local animationDescriptions = {
     ["Milestone Animations"] = "Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair.",
@@ -210,6 +211,16 @@ local function ClampOptionTooltip(tooltip)
     tooltip:SetClampedToScreen(true)
 end
 
+local function ApplyOptionTooltipFont(tooltip, locale)
+    local name = tooltip:GetName()
+    if not name or not tooltip.NumLines then return end
+    local count = math.max(tooltip.gluOptionFontLines or 0, tooltip:NumLines())
+    if locale then tooltip.gluOptionFontLines = nil else tooltip.gluOptionFontLines = count end
+    for line = 1, count do
+        ns.ApplyLocaleFont(_G[name .. "TextLeft" .. line], locale)
+    end
+end
+
 function ns.ShowOptionTooltip(owner, label, description)
     local shared, key = ns.GetOptionDescription(label)
     description = description or shared
@@ -220,6 +231,13 @@ function ns.ShowOptionTooltip(owner, label, description)
     GameTooltip:AddLine(ns.L(description), 1, 1, 1, true)
     if (key or label) == "Portrait" then
         GameTooltip:AddLine(ns.L(ns.PORTRAIT_MEMORY_WARNING), 1, .2, .2, true)
+    end
+    if ns.GetLocaleFontPath() then
+        if not GameTooltip.gluOptionFontHook then
+            GameTooltip.gluOptionFontHook = true
+            GameTooltip:HookScript("OnHide", function(tooltip) ApplyOptionTooltipFont(tooltip, "enUS") end)
+        end
+        ApplyOptionTooltipFont(GameTooltip)
     end
     GameTooltip:Show()
 end

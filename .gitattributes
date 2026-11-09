@@ -1,0 +1,7 @@
+# Keep source archive exclusions in sync with .pkgmeta.
+**/.* export-ignore
+/changes.txt export-ignore
+/Tools export-ignore
+/Examples export-ignore
+/CONTRIBUTING.md export-ignore
+/LOCALIZATION.md export-ignore

@@ -9,5 +9,6 @@ ignore:
   - .git
   - changes.txt
   - Tools
+  - Examples
   - CONTRIBUTING.md
   - LOCALIZATION.md

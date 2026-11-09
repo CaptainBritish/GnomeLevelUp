@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.5.7**
+**Development version: 1.6**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -88,7 +88,9 @@ account-wide comparison for new level times. Characters with recorded times appe
 log into them; Retail and Forever records stay separate. Reset this character's
 times there or use `/glu resettimers`.
 
-Milestone celebrations can run every 5, 10 or 20 levels. Max level has its own
+Milestone celebrations can run every 5, 10 or 20 levels.
+**Screenshot milestones** follows that interval. Enable **Screenshot every level**
+to capture all real level-ups instead. Max-level animations have their own
 toggle. Horizontal and vertical layouts remember separate popup positions. Rapid or
 combat-delayed level gains combine into one popup. Right-click or use the X to
 close early; **Classic Mode** retains simple opening and closing transitions.
@@ -184,7 +186,9 @@ settings changed by commands are saved as usual.
 | `/glu debugskills` | Preview an expanded skill list; Forever includes pet-training examples and Retail shows new abilities | No |
 | `/glu debugstats <old> <new>` | Set exact Strength old/new totals; randomize other stats from 1 up to each entered limit, keeping new at least old; whole numbers from 0–9007199254740991, new at least old | Yes |
 | `/glu debugtime <new\|slower\|best>` | Preview a level time with no previous best, a faster old time (without an extra comparison line), or a new best; uses sample times, shows the timing section and leaves real history untouched | Yes |
+| `/glu debugportrait <delay\|fail>` | With Player 3D portrait selected, preview a delayed 3D reveal or a rejected model assignment. Both exercise the portrait fallback and chat warning for that preview. | Yes |
 | `/glu debugstats reset` | Restore ordinary preview totals and open a preview | Yes |
+| `/glu debugmilestone <1-1000>` or `/glu debugmilestone reset` | Save a custom milestone interval for real level-ups, milestone screenshots and previews while debug mode is on. Reset or select a preset to clear the override. | Yes |
 | `/glu dumptraining` | Print cached trainer skills and learned state | Yes |
 | `/glu testtrainer` | Print the current unlearned trainer/ability list | Yes |
 | `/glu dumpskills` | Print Skills-tab, equipped and trainable weapon diagnostics | Yes |
