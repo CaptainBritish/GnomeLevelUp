@@ -1,0 +1,11 @@
+## Interface: 16001, 120007, 120105, 120100
+## Title: GnomeLevelUp - Example Theme Pack
+## Notes: Moonstone and Emberstone themes for GnomeLevelUp.
+## Version: 1.0.0
+## Dependencies: GnomeLevelUp
+
+Textures\Moonstone\Theme.lua
+Sounds\Moonstone\SoundList.lua
+Textures\Emberstone\Theme.lua
+Sounds\Emberstone\SoundList.lua
+Register.lua
