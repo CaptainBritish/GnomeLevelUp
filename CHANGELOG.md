@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.2
+
+- Attempted another blank 3D portraits fix in WoW Forever
+- Improved 2D fallback recovery when the model or camera fails.
+- Tried again to fix Blizzard's level-up banner showing (This one is tricky, sorry.)
+- Improved stat capture for rapid level-ups by checking the combined gains.
+- Swapped the minimap shortcuts. People kept getting mixed up so it must have been confusing.
+- Updated the WoW Forever Druid trainer catalogue for Ferocious Bite, Lacerate, Poised, and Primal Bite.
+- Added regression checks to prevent the Hidden Gnome from returning.
+
 ## 1.6.1
 
 - Added a workaround for a case where entering combat around a level-up could cause missing stat gains. (This was meant to be in 1.6 but I forgot it, sorry for the double update.)

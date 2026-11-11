@@ -6,6 +6,7 @@ local baselineStats
 local pendingSinceCombat = false -- true while a level-up is waiting for combat to end
 local levelUpPending = false
 local pendingStart, pendingEnd, pendingFutureSpells, pendingElapsed
+local pendingCombatSeen, pendingDialogueSeen
 local pendingTimes = {}
 local expectedStatGains = {}
 local STAT_RETRY_DELAY, STAT_RETRY_LIMIT = .15, 4
@@ -76,9 +77,18 @@ function ns.ResetLevelTimers()
     RequestPlayedTime()
 end
 
+local function SnapshotBaseline()
+    return ns.SnapshotStats(baselineStats)
+end
+
 function ns.RefreshBaseline()
     if levelUpPending then return end
-    baselineStats = ns.SnapshotStats(baselineStats)
+    local ok, snapshot = xpcall(SnapshotBaseline, ns.CaptureErrorTrace)
+    if ok then
+        baselineStats = snapshot
+    else
+        ns.RecordError("stats", "baseline_snapshot_failed", { source = "baseline" }, snapshot)
+    end
 end
 
 local function RunBaselineRefresh()
@@ -95,8 +105,17 @@ end
 
 local function ClearPendingBatch()
     pendingStart, pendingEnd, pendingFutureSpells, pendingElapsed = nil, nil, nil, nil
+    pendingCombatSeen, pendingDialogueSeen = nil, nil
     pendingTimes = {}
     expectedStatGains = {}
+end
+
+local function ReportLevelUpError(code, reason, afterStats, retries, failure)
+    ns.RecordError(code, reason, {
+        source = "level_up", level = pendingEnd, fromLevel = pendingStart, retries = retries,
+        before = baselineStats, after = afterStats, expectedStatGains = expectedStatGains,
+        combatDuringCapture = pendingCombatSeen, dialogueDuringCapture = pendingDialogueSeen,
+    }, failure)
 end
 
 local function UniqueAbilities(abilities)
@@ -113,6 +132,7 @@ local function DisplayLevelUp(afterStats)
     if not levelUpPending then return end
     pendingSinceCombat = false
     if not baselineStats then
+        ReportLevelUpError("stats", "baseline_missing", afterStats)
         levelUpPending = false
         ns.RefreshBaseline()
         ClearPendingBatch()
@@ -121,14 +141,14 @@ local function DisplayLevelUp(afterStats)
 
     levelUpPending = false
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
-    local afterSpells = ns.SnapshotSpellBook()
     local startLevel = tonumber(pendingStart) or tonumber(baselineStats.level)
     local combinedGain = startLevel and afterStats.level > startLevel + 1
     local rangeStart = combinedGain and startLevel or nil
     local retailFutureSpells = pendingFutureSpells or (ns.GetRetailFutureSpellsBeforeLevel
         and ns.GetRetailFutureSpellsBeforeLevel() or nil)
 
-    local ok, err = pcall(function()
+    local ok, err = xpcall(function()
+        local afterSpells = ns.SnapshotSpellBook()
         local statDiff = ns.DiffStats(baselineStats, afterStats)
         local trainerAbilities
         if flavor == "retail" then
@@ -161,9 +181,9 @@ local function DisplayLevelUp(afterStats)
         if flavor == "retail" and ns.CaptureRetailFutureSpells then
             ns.CaptureRetailFutureSpells()
         end
-    end)
+    end, ns.CaptureErrorTrace)
     if not ok then
-        print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Could not prepare the level-up popup. Try /reload. If it happens again, report this error: %s", tostring(err)))
+        ReportLevelUpError("popup", "prepare_failed", afterStats, nil, err)
     end
 
     baselineStats = afterStats
@@ -179,11 +199,20 @@ local function ScheduleDisplay(delay, retryCount)
         if token ~= displayToken then return end
         displayTimer = nil
         local inCombat = UnitAffectingCombat("player")
+        if inCombat then pendingCombatSeen = true end
+        if ns.IsDialogueUIVisible() then pendingDialogueSeen = true end
         if inCombat and (not ns.db or ns.db.waitForCombatEnd ~= false) then
             pendingSinceCombat = true
             return
         end
-        local afterStats = ns.SnapshotStats()
+        local snapshotOK, afterStats = xpcall(ns.SnapshotStats, ns.CaptureErrorTrace)
+        if not snapshotOK then
+            ReportLevelUpError("stats", "level_up_snapshot_failed", nil, retryCount or 0, afterStats)
+            levelUpPending, pendingSinceCombat, baselineStats = false, false, nil
+            ClearPendingBatch()
+            QueueBaselineRefresh()
+            return
+        end
         if baselineStats and next(expectedStatGains)
             and ns.HasMissingLevelUpStats(baselineStats, afterStats, expectedStatGains) then
             if (retryCount or 0) < STAT_RETRY_LIMIT then
@@ -195,6 +224,7 @@ local function ScheduleDisplay(delay, retryCount)
                 return
             end
             print("|cffff4040GnomeLevelUp|r: " .. ns.L("Stat capture failed: Expected stat changes were still missing after retrying."))
+            ReportLevelUpError("stats", "expected_gains_missing", afterStats, retryCount or 0)
         end
         DisplayLevelUp(afterStats)
     end
@@ -208,6 +238,7 @@ end
 local combatWaitFrame = CreateFrame("Frame")
 combatWaitFrame:RegisterEvent("PLAYER_LOGIN")
 combatWaitFrame:RegisterEvent("TIME_PLAYED_MSG")
+combatWaitFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 combatWaitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatWaitFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 combatWaitFrame:RegisterEvent("UNIT_AURA")
@@ -240,6 +271,8 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
         requestedTimeLevel = nil
         -- Restore after the response has finished dispatching to all frames.
         C_Timer.After(0, RestorePlayedTimeChat)
+    elseif event == "PLAYER_REGEN_DISABLED" and levelUpPending then
+        pendingCombatSeen = true
     elseif event == "PLAYER_REGEN_ENABLED" and pendingSinceCombat then
         pendingSinceCombat = false
         ScheduleDisplay()
@@ -258,6 +291,7 @@ function ns.HandleLevelUp(newLevel, ...)
     if not levelUpPending and baselineStats and reachedLevel <= baselineStats.level then return end
     if not levelUpPending then
         ClearPendingBatch()
+        pendingCombatSeen, pendingDialogueSeen = false, false
         pendingStart = baselineStats and tonumber(baselineStats.level) or reachedLevel - 1
         pendingFutureSpells = ns.GetRetailFutureSpellsBeforeLevel and ns.GetRetailFutureSpellsBeforeLevel() or nil
     end
@@ -265,11 +299,12 @@ function ns.HandleLevelUp(newLevel, ...)
     for index = 1, math.min(5, select("#", ...) - 4) do
         local gain = select(index + 4, ...)
         if type(gain) == "number" and (not issecretvalue or not issecretvalue(gain)) and gain > 0 then
-            expectedStatGains[index] = true
+            expectedStatGains[index] = (expectedStatGains[index] or 0) + gain
         end
     end
     local previousReached = pendingEnd or pendingStart
     levelUpPending = true
+    if ns.IsDialogueUIVisible() then pendingDialogueSeen = true end
     levelTimeForDisplay = nil
     local elapsed
     if previousReached and cachedTimeLevel == previousReached and cachedTimeSeconds then
@@ -286,9 +321,12 @@ function ns.HandleLevelUp(newLevel, ...)
     pendingEnd = reachedLevel
     cachedTimeLevel, cachedTimeSeconds, cachedTimeReceivedAt = reachedLevel, 0, GetTime()
     local waitForCombat = not ns.db or ns.db.waitForCombatEnd ~= false
-    if waitForCombat and UnitAffectingCombat("player") then
-        pendingSinceCombat = true
-        return
+    if UnitAffectingCombat("player") then
+        pendingCombatSeen = true
+        if waitForCombat then
+            pendingSinceCombat = true
+            return
+        end
     end
     ScheduleDisplay()
 end

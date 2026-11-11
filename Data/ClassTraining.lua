@@ -2,11 +2,9 @@ local ADDON_NAME, ns = ...
 
 -- The bundled Forever catalogue is loaded before this shared query layer.
 
--- Decide which trainer data path is active.
-function ns.GetCurrentFlavor()
-    local override = ns.db and ns.db.forceFlavor
-    if override == "retail" or override == "forever" then
-        return override
+function ns.GetClientFlavor()
+    if WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT then
+        return "forever"
     end
 
     if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
@@ -20,6 +18,13 @@ function ns.GetCurrentFlavor()
         return "forever"
     end
     return "retail"
+end
+
+-- Decide which trainer data path is active.
+function ns.GetCurrentFlavor()
+    local override = ns.db and ns.db.forceFlavor
+    if override == "retail" or override == "forever" then return override end
+    return ns.GetClientFlavor()
 end
 
 local function GetTrainingName(entry)

@@ -1,7 +1,5 @@
 local ADDON_NAME, ns = ...
 
--- Temporarily hide Blizzard's shared event-toast container while our own
--- level-up panel is visible. Other Blizzard toasts return afterward.
 local CANDIDATE_BANNER_NAMES = {
     "LevelUpDisplay",
     "LevelUpDisplayAlertFrame",
@@ -14,6 +12,7 @@ local eventToastFrameName = "EventToastManagerFrame"
 
 local hookedFrames = {}
 local savedAlpha = {}
+local dedicatedAlpha = {}
 local suppressionToken = 0
 local suppressionActive = false
 local suppressionQueueToken = 0
@@ -69,21 +68,40 @@ local function GetFrameAlpha(frame)
     return ok and tonumber(alpha) or 1
 end
 
-local function HideToastArtwork(frame)
-    if savedAlpha[frame] == nil then savedAlpha[frame] = GetFrameAlpha(frame) end
+local function ShouldHideBanner()
+    return ns.db and ns.db.hideBlizzardLevelUp ~= false and (not ns.IsAddonEnabled or ns.IsAddonEnabled())
+end
+
+local function HideToastArtwork(frame, originalAlpha)
+    if not frame then return end
+    if originalAlpha[frame] == nil then originalAlpha[frame] = GetFrameAlpha(frame) end
     SetFrameAlpha(frame, 0)
 end
 
--- Keep native toast execution intact when Blizzard owns sound playback.
--- Replacement sounds can retain the existing StopToasting suppression path.
-local function StopEventToastManager()
-    local frame = _G[eventToastFrameName]
-    if not frame then return end
-    HideToastArtwork(frame)
-    if not ns.UsesNativeLevelUpSound() and type(frame.StopToasting) == "function" then
-        pcall(frame.StopToasting, frame)
-        SetFrameAlpha(frame, 0)
+local function RestoreArtwork(originalAlpha)
+    for frame, alpha in pairs(originalAlpha) do
+        SetFrameAlpha(frame, alpha)
+        originalAlpha[frame] = nil
     end
+end
+
+local function HideEventToastArtwork(frame)
+    HideToastArtwork(frame, savedAlpha)
+    -- Blizzard animates the manager separately from its shadow and gold lines.
+    -- Hide the textures too so they stay invisible through a native fade.
+    HideToastArtwork(frame.BlackBG, savedAlpha)
+    HideToastArtwork(frame.GLine, savedAlpha)
+    HideToastArtwork(frame.GLine2, savedAlpha)
+end
+
+local function GetLevelUpToastStatus(frame)
+    local eventTypes = Enum and Enum.EventToastEventType
+    local toast = frame.currentDisplayingToast
+    local info = toast and toast.toastInfo
+    if not eventTypes or eventTypes.LevelUp == nil then return nil end
+    if not info then return false end
+    if info.eventType == nil then return nil end
+    return info.eventType == eventTypes.LevelUp
 end
 
 function ns.FindBlizzardLevelUpFrame()
@@ -97,57 +115,63 @@ end
 local function HookBlizzardFrame(frame)
     if not frame or hookedFrames[frame] or not frame.HookScript then return end
     hookedFrames[frame] = true
-    pcall(function()
-        frame:HookScript("OnShow", function(self)
-            if ns.db and ns.db.hideBlizzardLevelUp == false then return end
-            if suppressionActive then
-                SetFrameAlpha(self, 0)
-            end
-        end)
+    pcall(frame.HookScript, frame, "OnShow", function(self)
+        if ShouldHideBanner() then HideToastArtwork(self, dedicatedAlpha) end
     end)
 end
 
-local function HideIfSuppressed(frame)
-    if suppressionActive and (not ns.db or ns.db.hideBlizzardLevelUp ~= false) then
-        HideToastArtwork(frame)
+local function UpdateEventToastArtwork(frame)
+    local levelUp = GetLevelUpToastStatus(frame)
+    if ShouldHideBanner() and (levelUp or (levelUp == nil and suppressionActive)) then
+        HideEventToastArtwork(frame)
+    else
+        RestoreArtwork(savedAlpha)
     end
 end
 
 local function HookEventToastManager(frame)
     if not frame or hookedFrames[frame] or not frame.HookScript then return end
     hookedFrames[frame] = true
-    pcall(frame.HookScript, frame, "OnShow", HideIfSuppressed)
-    -- A new toast can reuse the already shown manager and reset its alpha.
-    -- Hide after native setup, before the next render, without stopping it here.
+    pcall(frame.HookScript, frame, "OnShow", UpdateEventToastArtwork)
+    -- SetupButton runs after Blizzard assigns the toast type and before it shows
+    -- the manager. PlayAnim can reveal the artwork again during the native fade.
     if type(hooksecurefunc) == "function" then
-        if type(frame.SetupButton) == "function" then pcall(hooksecurefunc, frame, "SetupButton", HideIfSuppressed) end
-        if type(frame.DisplayToast) == "function" then pcall(hooksecurefunc, frame, "DisplayToast", HideIfSuppressed) end
+        for _, method in ipairs({ "SetupButton", "DisplayToast", "SetupBlackBGAtlas", "PlayAnim" }) do
+            if type(frame[method]) == "function" then pcall(hooksecurefunc, frame, method, UpdateEventToastArtwork) end
+        end
+        if type(frame.Reset) == "function" then
+            pcall(hooksecurefunc, frame, "Reset", function() RestoreArtwork(savedAlpha) end)
+        end
     end
 end
 
-local function RestoreSuppressedFrames()
-    for frame, alpha in pairs(savedAlpha) do
-        SetFrameAlpha(frame, alpha)
+function ns.UpdateBlizzardBannerVisibility()
+    local manager = _G[eventToastFrameName]
+    HookEventToastManager(manager)
+    if manager then UpdateEventToastArtwork(manager) end
+    if not ShouldHideBanner() then
+        RestoreArtwork(dedicatedAlpha)
+        return
     end
-    savedAlpha = {}
-    suppressionActive = false
-end
-
-function ns.HideBlizzardBannerNow()
-    if ns.IsAddonEnabled and not ns.IsAddonEnabled() then return end
-    if ns.db and ns.db.hideBlizzardLevelUp == false then return end
-    suppressionActive = true
-    HookEventToastManager(_G[eventToastFrameName])
-    StopEventToastManager()
     for _, name in ipairs(CANDIDATE_BANNER_NAMES) do
         local frame = _G[name]
         if frame then
-            if savedAlpha[frame] == nil then
-                savedAlpha[frame] = GetFrameAlpha(frame)
-            end
             HookBlizzardFrame(frame)
-            SetFrameAlpha(frame, 0)
+            HideToastArtwork(frame, dedicatedAlpha)
         end
+    end
+end
+
+function ns.HideBlizzardBannerNow()
+    if not ShouldHideBanner() then return end
+    suppressionActive = true
+    ns.UpdateBlizzardBannerVisibility()
+    local manager = _G[eventToastFrameName]
+    -- Older clients may omit the type. Retain their event-based fallback.
+    if manager and GetLevelUpToastStatus(manager) == nil and not ns.UsesNativeLevelUpSound()
+        and type(manager.StopToasting) == "function" then
+        pcall(manager.StopToasting, manager)
+        SetFrameAlpha(manager, 0)
     end
 end
 
@@ -155,7 +179,9 @@ function ns.RestoreBlizzardBanner()
     CancelSuppressionTimers()
     suppressionToken = suppressionToken + 1
     suppressionQueueToken = suppressionQueueToken + 1
-    RestoreSuppressedFrames()
+    suppressionActive = false
+    RestoreArtwork(savedAlpha)
+    RestoreArtwork(dedicatedAlpha)
 end
 
 function ns.SuppressBlizzardBanner()
@@ -169,7 +195,9 @@ function ns.SuppressBlizzardBanner()
     local duration = math.max(15, (ns.db and tonumber(ns.db.duration)) or 7)
     ScheduleSuppressionTimer("restore", duration + 1.0, function()
         if token == suppressionToken then
-            RestoreSuppressedFrames()
+            suppressionActive = false
+            local manager = _G[eventToastFrameName]
+            if manager then UpdateEventToastArtwork(manager) else RestoreArtwork(savedAlpha) end
         end
     end)
 end
@@ -201,17 +229,11 @@ end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
-if not _G[eventToastFrameName] then eventFrame:RegisterEvent("ADDON_LOADED") end
-eventFrame:SetScript("OnEvent", function(self, event, addonName)
+eventFrame:RegisterEvent("ADDON_LOADED")
+HookEventToastManager(_G[eventToastFrameName])
+eventFrame:SetScript("OnEvent", function(_, event)
     if event == "ADDON_LOADED" then
-        if addonName == "Blizzard_EventToast" then
-            local manager = _G[eventToastFrameName]
-            if manager then
-                HookEventToastManager(manager)
-                HideIfSuppressed(manager)
-                self:UnregisterEvent("ADDON_LOADED")
-            end
-        end
+        ns.UpdateBlizzardBannerVisibility()
         return
     end
     ns.HideBlizzardBannerNow()

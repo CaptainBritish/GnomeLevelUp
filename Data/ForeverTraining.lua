@@ -2,7 +2,7 @@ local ADDON_NAME, ns = ...
 
 -- GnomeLevelUp custom Forever class-trainer catalogue.
 -- Names and icons resolve from the game client.
-ns.ForeverTrainingRevision = "1.5.6-custom-2026-11-08-paladin"
+ns.ForeverTrainingRevision = "1.6.1-custom-2026-11-10-druid"
 ns.ClassTrainingForever = {
     DRUID = {
         [1] = {
@@ -67,6 +67,7 @@ ns.ClassTrainingForever = {
             { spellID = 5179, cost = 3300, familyID = 5176, rank = 4, requiredIds = { 5178 } },
         },
         [24] = {
+            { spellID = 1328618, cost = 4300, familyID = 1328618, rank = 1, requiredIds = { 768 }, replacedBy = { 22568, 22827, 22828, 22829, 31018 } },
             { spellID = 1822, cost = 4300, familyID = 1822, rank = 1, requiredIds = { 768 }, replacedBy = { 1823, 1824, 9904 } },
             { spellID = 8939, cost = 4300, familyID = 8936, rank = 3, requiredIds = { 8938 } },
             { spellID = 2782, cost = 4300, familyID = 2782, rank = 1 },
@@ -105,12 +106,14 @@ ns.ClassTrainingForever = {
         },
         [32] = {
             { spellID = 9490, cost = 6000, familyID = 99, rank = 3, requiredIds = { 1735 }, replacedBy = { 9747, 9898 } },
-            { spellID = 22568, cost = 6000, familyID = 22568, rank = 1, requiredIds = { 768 }, replacedBy = { 22827, 22828, 22829 } },
+            { spellID = 22568, cost = 6000, familyID = 1328618, rank = 2, requiredIds = { 1328618 }, replacedBy = { 22827, 22828, 22829, 31018 } },
+            { spellID = 1328829, cost = 6000, familyID = 1328829, rank = 1 },
             { spellID = 6778, cost = 6000, familyID = 5185, rank = 6, requiredIds = { 5189 } },
             { spellID = 6785, cost = 6000, familyID = 6785, rank = 1, requiredIds = { 768 }, replacedBy = { 6787, 9866, 9867 } },
             { spellID = 5225, cost = 6000, familyID = 768, rank = 2, requiredIds = { 768 } },
         },
         [34] = {
+            { spellID = 1328616, cost = 7000, familyID = 1328617, rank = 2, requiredIds = { 1328617 }, requiredTalentId = 1328617, replacedBy = { 414644, 1235826, 1235827 } },
             { spellID = 8972, cost = 7000, familyID = 6807, rank = 4, requiredIds = { 6809 }, replacedBy = { 9745, 9880, 9881 } },
             { spellID = 8928, cost = 7000, familyID = 8921, rank = 6, requiredIds = { 8927 } },
             { spellID = 1823, cost = 7000, familyID = 1822, rank = 2, requiredIds = { 1822 }, replacedBy = { 1824, 9904 } },
@@ -122,7 +125,6 @@ ns.ClassTrainingForever = {
         [36] = {
             { spellID = 22842, cost = 8000, familyID = 5487, rank = 2, requiredIds = { 5487 } },
             { spellID = 9005, cost = 8000, familyID = 9005, rank = 1, requiredIds = { 768 }, replacedBy = { 9823, 9827 } },
-            { spellID = 1238069, cost = 8000, familyID = 407995, rank = 2, requiredIds = { 407995 }, requiredTalentId = 407995, replacedBy = { 1238070, 1238073 } },
             { spellID = 8941, cost = 8000, familyID = 8936, rank = 5, requiredIds = { 8940 } },
             { spellID = 1237949, cost = 8000, familyID = 437138, rank = 3, requiredIds = { 1237948 } },
             { spellID = 9493, cost = 8000, familyID = 1079, rank = 3, requiredIds = { 9492 }, replacedBy = { 9752, 9894, 9896 } },
@@ -141,7 +143,7 @@ ns.ClassTrainingForever = {
             { spellID = 9000, cost = 10000, familyID = 8998, rank = 2, requiredIds = { 8998 }, replacedBy = { 9892 } },
             { spellID = 9634, cost = 10000, familyID = 5487, rank = 2, requiredIds = { 5487 } },
             { spellID = 20719, cost = 10000, familyID = 768, rank = 2, requiredIds = { 768 } },
-            { spellID = 22827, cost = 10000, familyID = 22568, rank = 2, requiredIds = { 22568 }, replacedBy = { 22828, 22829 } },
+            { spellID = 22827, cost = 10000, familyID = 1328618, rank = 3, requiredIds = { 22568 }, replacedBy = { 22828, 22829, 31018 } },
             { spellID = 16914, cost = 10000, familyID = 16914, rank = 1 },
             { spellID = 29166, cost = 10000, familyID = 29166, rank = 1 },
             { spellID = 24975, cost = 10000, familyID = 5570, rank = 3, requiredIds = { 24974 }, requiredTalentId = 5570 },
@@ -155,7 +157,7 @@ ns.ClassTrainingForever = {
         [42] = {
             { spellID = 9747, cost = 13000, familyID = 99, rank = 4, requiredIds = { 9490 }, replacedBy = { 9898 } },
             { spellID = 9749, cost = 13000, familyID = 770, rank = 3, requiredIds = { 778 } },
-            { spellID = 414644, cost = 13000, familyID = 5487, rank = 3, requiredIds = { 9634 } },
+            { spellID = 414644, cost = 13000, familyID = 1328617, rank = 3, requiredIds = { 1328616 }, requiredTalentId = 1328617, replacedBy = { 1235826, 1235827 } },
             { spellID = 9745, cost = 13000, familyID = 6807, rank = 5, requiredIds = { 8972 }, replacedBy = { 9880, 9881 } },
             { spellID = 6787, cost = 13000, familyID = 6785, rank = 2, requiredIds = { 6785 }, replacedBy = { 9866, 9867 } },
             { spellID = 9750, cost = 13000, familyID = 8936, rank = 6, requiredIds = { 8941 } },
@@ -181,9 +183,8 @@ ns.ClassTrainingForever = {
         [48] = {
             { spellID = 9849, cost = 17000, familyID = 16942, rank = 4, requiredIds = { 5201 }, requiredTalentId = 16942, replacedBy = { 9850 } },
             { spellID = 9852, cost = 17000, familyID = 339, rank = 5, requiredIds = { 5196 } },
-            { spellID = 22828, cost = 17000, familyID = 22568, rank = 3, requiredIds = { 22827 }, replacedBy = { 22829 } },
+            { spellID = 22828, cost = 17000, familyID = 1328618, rank = 4, requiredIds = { 22827 }, replacedBy = { 22829, 31018 } },
             { spellID = 16813, cost = 17000, familyID = 16813, rank = 1, requiredIds = { 16812, 9852 } },
-            { spellID = 1238070, cost = 17000, familyID = 407995, rank = 3, requiredIds = { 1238069 }, requiredTalentId = 407995, replacedBy = { 1238073 } },
             { spellID = 9856, cost = 17000, familyID = 8936, rank = 7, requiredIds = { 9750 } },
             { spellID = 1237950, cost = 17000, familyID = 437138, rank = 4, requiredIds = { 1237949 } },
         },
@@ -191,7 +192,8 @@ ns.ClassTrainingForever = {
             { spellID = 9888, cost = 18000, familyID = 5185, rank = 9, requiredIds = { 9758 } },
             { spellID = 17401, cost = 18000, familyID = 16914, rank = 2, requiredIds = { 16914 } },
             { spellID = 24976, cost = 18000, familyID = 5570, rank = 4, requiredIds = { 24975 }, requiredTalentId = 5570 },
-            { spellID = 1235826, cost = 18000, familyID = 5487, rank = 4, requiredIds = { 414644 } },
+            { spellID = 1235826, cost = 18000, familyID = 1328617, rank = 4, requiredIds = { 414644 }, requiredTalentId = 1328617, replacedBy = { 1235827 } },
+            { spellID = 1238069, cost = 8000, familyID = 407995, rank = 2, requiredIds = { 407995 }, requiredTalentId = 407995, replacedBy = { 1238070 } },
             { spellID = 9884, cost = 18000, familyID = 1126, rank = 6, requiredIds = { 8907 } },
             { spellID = 9880, cost = 18000, familyID = 6807, rank = 6, requiredIds = { 9745 }, replacedBy = { 9881 } },
             { spellID = 9866, cost = 18000, familyID = 6785, rank = 3, requiredIds = { 6787 }, replacedBy = { 9867 } },
@@ -218,7 +220,7 @@ ns.ClassTrainingForever = {
             { spellID = 9912, cost = 24000, familyID = 5176, rank = 8, requiredIds = { 8905 } },
         },
         [56] = {
-            { spellID = 22829, cost = 25000, familyID = 22568, rank = 4, requiredIds = { 22828 } },
+            { spellID = 22829, cost = 25000, familyID = 1328618, rank = 5, requiredIds = { 22828 }, replacedBy = { 31018 } },
             { spellID = 9889, cost = 25000, familyID = 5185, rank = 10, requiredIds = { 9888 } },
             { spellID = 9827, cost = 25000, familyID = 9005, rank = 3, requiredIds = { 9823 } },
         },
@@ -226,7 +228,7 @@ ns.ClassTrainingForever = {
             { spellID = 9850, cost = 26000, familyID = 16942, rank = 5, requiredIds = { 9849 }, requiredTalentId = 16942 },
             { spellID = 9853, cost = 26000, familyID = 339, rank = 6, requiredIds = { 9852 } },
             { spellID = 18658, cost = 26000, familyID = 2637, rank = 3, requiredIds = { 18657 } },
-            { spellID = 1235827, cost = 26000, familyID = 5487, rank = 5, requiredIds = { 1235826 } },
+            { spellID = 1235827, cost = 26000, familyID = 1328617, rank = 5, requiredIds = { 1235826 }, requiredTalentId = 1328617 },
             { spellID = 9881, cost = 26000, familyID = 6807, rank = 7, requiredIds = { 9880 } },
             { spellID = 9835, cost = 26000, familyID = 8921, rank = 10, requiredIds = { 9834 } },
             { spellID = 17329, cost = 26000, familyID = 17329, rank = 1, requiredIds = { 16813, 9853 } },
@@ -238,7 +240,7 @@ ns.ClassTrainingForever = {
             { spellID = 17402, cost = 28000, familyID = 16914, rank = 3, requiredIds = { 17401 } },
             { spellID = 24977, cost = 28000, familyID = 5570, rank = 5, requiredIds = { 24976 }, requiredTalentId = 5570 },
             { spellID = 9885, cost = 28000, familyID = 1126, rank = 7, requiredIds = { 9884 } },
-            { spellID = 1238073, cost = 28000, familyID = 407995, rank = 4, requiredIds = { 1238070 }, requiredTalentId = 407995 },
+            { spellID = 1238070, cost = 17000, familyID = 407995, rank = 3, requiredIds = { 1238069 }, requiredTalentId = 407995 },
             { spellID = 9913, cost = 28000, familyID = 5215, rank = 3, requiredIds = { 6783 } },
             { spellID = 20748, cost = 28000, familyID = 20484, rank = 5, requiredIds = { 20747 } },
             { spellID = 9858, cost = 28000, familyID = 8936, rank = 9, requiredIds = { 9857 } },

@@ -4636,86 +4636,86 @@ RegisterLocaleBuilder("esMX", function() return {
 } end)
 
 -- Minimap preview shortcut.
-RegisterLocaleBuilder("frFR", function() return { ["Right-click: Preview Level-Up"] = "Clic droit : aperçu de l’alerte" } end)
-RegisterLocaleBuilder("esES", function() return { ["Right-click: Preview Level-Up"] = "Clic derecho: vista previa de subida de nivel" } end)
-RegisterLocaleBuilder("esMX", function() return { ["Right-click: Preview Level-Up"] = "Clic derecho: vista previa de subida de nivel" } end)
-RegisterLocaleBuilder("deDE", function() return { ["Right-click: Preview Level-Up"] = "Rechtsklick: Stufenaufstieg testen" } end)
-RegisterLocaleBuilder("itIT", function() return { ["Right-click: Preview Level-Up"] = "Clic destro: anteprima del passaggio di livello" } end)
-RegisterLocaleBuilder("ptBR", function() return { ["Right-click: Preview Level-Up"] = "Botão direito: prévia de subida de nível" } end)
-RegisterLocaleBuilder("ruRU", function() return { ["Right-click: Preview Level-Up"] = "Правая кнопка мыши: предпросмотр повышения уровня" } end)
-RegisterLocaleBuilder("koKR", function() return { ["Right-click: Preview Level-Up"] = "오른쪽 클릭: 레벨 상승 미리 보기" } end)
-RegisterLocaleBuilder("zhCN", function() return { ["Right-click: Preview Level-Up"] = "右键点击：预览升级提示" } end)
-RegisterLocaleBuilder("zhTW", function() return { ["Right-click: Preview Level-Up"] = "右鍵點擊：預覽升級提示" } end)
+RegisterLocaleBuilder("frFR", function() return { ["Middle-click: Preview Level-Up"] = "Clic du milieu : aperçu de l’alerte" } end)
+RegisterLocaleBuilder("esES", function() return { ["Middle-click: Preview Level-Up"] = "Clic central: vista previa de subida de nivel" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Middle-click: Preview Level-Up"] = "Clic central: vista previa de subida de nivel" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Middle-click: Preview Level-Up"] = "Mittelklick: Stufenaufstieg testen" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Middle-click: Preview Level-Up"] = "Clic centrale: anteprima del passaggio di livello" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Middle-click: Preview Level-Up"] = "Botão do meio: prévia de subida de nível" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Middle-click: Preview Level-Up"] = "Средняя кнопка мыши: предпросмотр повышения уровня" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Middle-click: Preview Level-Up"] = "가운데 클릭: 레벨 상승 미리 보기" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Middle-click: Preview Level-Up"] = "中键点击：预览升级提示" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Middle-click: Preview Level-Up"] = "中鍵點擊：預覽升級提示" } end)
 
 -- Version 1.5.2 timing and replay controls.
 RegisterLocaleBuilder("frFR", function() return {
     ["Switch to secondary stats at"] = "Passer aux statistiques secondaires à",
     ["Choose the percentage of display time spent on primary stats."] = "Choisissez la part du temps d’affichage consacrée aux statistiques principales.",
     ["Replace primary stats with secondary stats during the popup."] = "Remplace les statistiques principales par les statistiques secondaires pendant l’alerte.",
-    ["Middle-click: Replay last level-up"] = "Clic du milieu : revoir le dernier gain de niveau",
+    ["Right-click: Replay last level-up"] = "Clic droit : revoir le dernier gain de niveau",
     ["No recorded level-up to replay yet."] = "Aucun gain de niveau enregistré à revoir.",
 } end)
 RegisterLocaleBuilder("esES", function() return {
     ["Switch to secondary stats at"] = "Cambiar a estadísticas secundarias al",
     ["Choose the percentage of display time spent on primary stats."] = "Elige el porcentaje del tiempo de visualización dedicado a las estadísticas principales.",
     ["Replace primary stats with secondary stats during the popup."] = "Sustituye las estadísticas principales por las secundarias durante el aviso.",
-    ["Middle-click: Replay last level-up"] = "Clic central: repetir la última subida de nivel",
+    ["Right-click: Replay last level-up"] = "Clic derecho: repetir la última subida de nivel",
     ["No recorded level-up to replay yet."] = "Todavía no hay una subida de nivel registrada para repetir.",
 } end)
 RegisterLocaleBuilder("esMX", function() return {
     ["Switch to secondary stats at"] = "Cambiar a estadísticas secundarias al",
     ["Choose the percentage of display time spent on primary stats."] = "Elige el porcentaje del tiempo de visualización dedicado a las estadísticas principales.",
     ["Replace primary stats with secondary stats during the popup."] = "Sustituye las estadísticas principales por las secundarias durante el aviso.",
-    ["Middle-click: Replay last level-up"] = "Clic central: repetir la última subida de nivel",
+    ["Right-click: Replay last level-up"] = "Clic derecho: repetir la última subida de nivel",
     ["No recorded level-up to replay yet."] = "Todavía no hay una subida de nivel registrada para repetir.",
 } end)
 RegisterLocaleBuilder("deDE", function() return {
     ["Switch to secondary stats at"] = "Zu Sekundärwerten wechseln bei",
     ["Choose the percentage of display time spent on primary stats."] = "Wähle den Anteil der Anzeigedauer für die Hauptattribute.",
     ["Replace primary stats with secondary stats during the popup."] = "Ersetzt die Hauptattribute während der Anzeige durch Sekundärwerte.",
-    ["Middle-click: Replay last level-up"] = "Mittelklick: letzten Stufenaufstieg erneut anzeigen",
+    ["Right-click: Replay last level-up"] = "Rechtsklick: letzten Stufenaufstieg erneut anzeigen",
     ["No recorded level-up to replay yet."] = "Noch kein Stufenaufstieg zum erneuten Anzeigen gespeichert.",
 } end)
 RegisterLocaleBuilder("itIT", function() return {
     ["Switch to secondary stats at"] = "Passa alle statistiche secondarie al",
     ["Choose the percentage of display time spent on primary stats."] = "Scegli la percentuale del tempo di visualizzazione dedicata alle statistiche principali.",
     ["Replace primary stats with secondary stats during the popup."] = "Sostituisce le statistiche principali con quelle secondarie durante l’avviso.",
-    ["Middle-click: Replay last level-up"] = "Clic centrale: ripeti l’ultimo passaggio di livello",
+    ["Right-click: Replay last level-up"] = "Clic destro: ripeti l’ultimo passaggio di livello",
     ["No recorded level-up to replay yet."] = "Nessun passaggio di livello registrato da ripetere.",
 } end)
 RegisterLocaleBuilder("ptBR", function() return {
     ["Switch to secondary stats at"] = "Mudar para atributos secundários em",
     ["Choose the percentage of display time spent on primary stats."] = "Escolha a porcentagem do tempo de exibição dedicada aos atributos principais.",
     ["Replace primary stats with secondary stats during the popup."] = "Substitui os atributos principais pelos secundários durante o aviso.",
-    ["Middle-click: Replay last level-up"] = "Botão do meio: repetir a última subida de nível",
+    ["Right-click: Replay last level-up"] = "Botão direito: repetir a última subida de nível",
     ["No recorded level-up to replay yet."] = "Nenhuma subida de nível registrada para repetir.",
 } end)
 RegisterLocaleBuilder("ruRU", function() return {
     ["Switch to secondary stats at"] = "Перейти к вторичным характеристикам на",
     ["Choose the percentage of display time spent on primary stats."] = "Выберите долю времени показа основных характеристик.",
     ["Replace primary stats with secondary stats during the popup."] = "Заменяет основные характеристики вторичными во время показа окна.",
-    ["Middle-click: Replay last level-up"] = "Средняя кнопка мыши: повтор последнего повышения уровня",
+    ["Right-click: Replay last level-up"] = "Правая кнопка мыши: повтор последнего повышения уровня",
     ["No recorded level-up to replay yet."] = "Пока нет записанного повышения уровня для повтора.",
 } end)
 RegisterLocaleBuilder("koKR", function() return {
     ["Switch to secondary stats at"] = "보조 능력치로 전환하는 시점",
     ["Choose the percentage of display time spent on primary stats."] = "주요 능력치에 할당할 표시 시간의 비율을 선택합니다.",
     ["Replace primary stats with secondary stats during the popup."] = "팝업 도중 주요 능력치를 보조 능력치로 교체합니다.",
-    ["Middle-click: Replay last level-up"] = "가운데 클릭: 마지막 레벨 상승 다시 보기",
+    ["Right-click: Replay last level-up"] = "오른쪽 클릭: 마지막 레벨 상승 다시 보기",
     ["No recorded level-up to replay yet."] = "다시 볼 레벨 상승 기록이 아직 없습니다.",
 } end)
 RegisterLocaleBuilder("zhCN", function() return {
     ["Switch to secondary stats at"] = "切换到次要属性的时间比例",
     ["Choose the percentage of display time spent on primary stats."] = "选择主要属性占用的显示时间百分比。",
     ["Replace primary stats with secondary stats during the popup."] = "在弹窗显示期间将主要属性替换为次要属性。",
-    ["Middle-click: Replay last level-up"] = "中键点击：重播上次升级",
+    ["Right-click: Replay last level-up"] = "右键点击：重播上次升级",
     ["No recorded level-up to replay yet."] = "尚无可重播的升级记录。",
 } end)
 RegisterLocaleBuilder("zhTW", function() return {
     ["Switch to secondary stats at"] = "切換至次要屬性的時間比例",
     ["Choose the percentage of display time spent on primary stats."] = "選擇主要屬性佔用的顯示時間百分比。",
     ["Replace primary stats with secondary stats during the popup."] = "在彈窗顯示期間將主要屬性替換為次要屬性。",
-    ["Middle-click: Replay last level-up"] = "中鍵點擊：重播上次升級",
+    ["Right-click: Replay last level-up"] = "右鍵點擊：重播上次升級",
     ["No recorded level-up to replay yet."] = "尚無可重播的升級紀錄。",
 } end)
 
@@ -5720,6 +5720,98 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Level"] = "等級",
     ["Health"] = "生命力", ["Mana"] = "法力", ["Default"] = "預設", ["%d pt"] = "%d 點",
     ["Rage"] = "怒氣", ["Energy"] = "能量", ["Focus"] = "集中值", ["Runic Power"] = "符能", ["Power"] = "資源",
+} end)
+
+-- Debug reports stay available to players with debug mode off.
+RegisterLocaleBuilder("frFR", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Erreur (%s). Saisissez /glu debugreport et envoyez-moi le rapport !",
+    ["Debug report"] = "Rapport de débogage",
+    ["No GnomeLevelUp errors have been recorded."] = "Aucune erreur de GnomeLevelUp n’a été enregistrée.",
+    ["Stat capture"] = "Capture des caractéristiques",
+    ["3D portrait rendering"] = "Rendu du portrait 3D",
+    ["Level-up popup"] = "Fenêtre de montée de niveau",
+    ["Screenshot"] = "Capture d’écran",
+} end)
+RegisterLocaleBuilder("esES", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Se ha producido un error (%s). Escribe /glu debugreport y envíame el informe.",
+    ["Debug report"] = "Informe de depuración",
+    ["No GnomeLevelUp errors have been recorded."] = "No se han registrado errores de GnomeLevelUp.",
+    ["Stat capture"] = "Captura de estadísticas",
+    ["3D portrait rendering"] = "Renderizado del retrato 3D",
+    ["Level-up popup"] = "Ventana de subida de nivel",
+    ["Screenshot"] = "Captura de pantalla",
+} end)
+RegisterLocaleBuilder("esMX", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Ocurrió un error (%s). Escribe /glu debugreport y envíame el informe.",
+    ["Debug report"] = "Informe de depuración",
+    ["No GnomeLevelUp errors have been recorded."] = "No se han registrado errores de GnomeLevelUp.",
+    ["Stat capture"] = "Captura de estadísticas",
+    ["3D portrait rendering"] = "Renderizado del retrato 3D",
+    ["Level-up popup"] = "Ventana de subida de nivel",
+    ["Screenshot"] = "Captura de pantalla",
+} end)
+RegisterLocaleBuilder("deDE", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Ein Fehler ist aufgetreten (%s). Gib bitte /glu debugreport ein und sende mir den Bericht!",
+    ["Debug report"] = "Fehlerbericht",
+    ["No GnomeLevelUp errors have been recorded."] = "GnomeLevelUp hat keine Fehler aufgezeichnet.",
+    ["Stat capture"] = "Attributserfassung",
+    ["3D portrait rendering"] = "3D-Porträtdarstellung",
+    ["Level-up popup"] = "Stufenaufstiegsfenster",
+    ["Screenshot"] = "Screenshot",
+} end)
+RegisterLocaleBuilder("itIT", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Si è verificato un errore (%s). Digita /glu debugreport e inviami il rapporto!",
+    ["Debug report"] = "Rapporto di debug",
+    ["No GnomeLevelUp errors have been recorded."] = "Non sono stati registrati errori di GnomeLevelUp.",
+    ["Stat capture"] = "Acquisizione delle statistiche",
+    ["3D portrait rendering"] = "Rendering del ritratto 3D",
+    ["Level-up popup"] = "Finestra di aumento di livello",
+    ["Screenshot"] = "Screenshot",
+} end)
+RegisterLocaleBuilder("ptBR", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Ocorreu um erro (%s). Digite /glu debugreport e me envie o relatório!",
+    ["Debug report"] = "Relatório de depuração",
+    ["No GnomeLevelUp errors have been recorded."] = "Nenhum erro do GnomeLevelUp foi registrado.",
+    ["Stat capture"] = "Captura de atributos",
+    ["3D portrait rendering"] = "Renderização do retrato 3D",
+    ["Level-up popup"] = "Janela de subida de nível",
+    ["Screenshot"] = "Captura de tela",
+} end)
+RegisterLocaleBuilder("ruRU", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "Произошла ошибка (%s). Введите /glu debugreport и пришлите мне отчёт!",
+    ["Debug report"] = "Отчёт об ошибках",
+    ["No GnomeLevelUp errors have been recorded."] = "Ошибки GnomeLevelUp не зарегистрированы.",
+    ["Stat capture"] = "Считывание характеристик",
+    ["3D portrait rendering"] = "Отрисовка 3D-портрета",
+    ["Level-up popup"] = "Окно повышения уровня",
+    ["Screenshot"] = "Снимок экрана",
+} end)
+RegisterLocaleBuilder("koKR", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "오류가 발생했습니다(%s). /glu debugreport를 입력하고 보고서를 보내 주세요!",
+    ["Debug report"] = "디버그 보고서",
+    ["No GnomeLevelUp errors have been recorded."] = "기록된 GnomeLevelUp 오류가 없습니다.",
+    ["Stat capture"] = "능력치 수집",
+    ["3D portrait rendering"] = "3D 초상화 렌더링",
+    ["Level-up popup"] = "레벨 상승 창",
+    ["Screenshot"] = "스크린샷",
+} end)
+RegisterLocaleBuilder("zhCN", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "发生错误（%s）。请输入 /glu debugreport 并将报告发送给我！",
+    ["Debug report"] = "调试报告",
+    ["No GnomeLevelUp errors have been recorded."] = "未记录到 GnomeLevelUp 错误。",
+    ["Stat capture"] = "属性采集",
+    ["3D portrait rendering"] = "3D 头像渲染",
+    ["Level-up popup"] = "升级通知",
+    ["Screenshot"] = "截图",
+} end)
+RegisterLocaleBuilder("zhTW", function() return {
+    ["%s error has occurred, please type /glu debugreport and send the information to me!"] = "發生錯誤（%s）。請輸入 /glu debugreport 並將報告傳送給我！",
+    ["Debug report"] = "偵錯報告",
+    ["No GnomeLevelUp errors have been recorded."] = "未記錄到 GnomeLevelUp 錯誤。",
+    ["Stat capture"] = "屬性擷取",
+    ["3D portrait rendering"] = "3D 頭像算繪",
+    ["Level-up popup"] = "升級通知",
+    ["Screenshot"] = "螢幕擷取",
 } end)
 
 -- Load the client language only after registering every translation above.

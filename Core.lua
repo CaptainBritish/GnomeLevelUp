@@ -1465,6 +1465,7 @@ function ns.ApplyAddonState(updateBanner)
         ns.SetGnomeLevelUpSoundMuted(active and not ns.UsesNativeLevelUpSound() and ns.db.muteNativeDing ~= false)
     end
 
+    if ns.UpdateBlizzardBannerVisibility then ns.UpdateBlizzardBannerVisibility() end
     if updateBanner == false then return end
     if not active then
         ns.CloseLevelUp()
@@ -2342,10 +2343,10 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         local scenario = msg:match("^debugportrait%s+(%a+)$")
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
-        elseif scenario ~= "delay" and scenario ~= "fail" then
-            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail>")
+        elseif scenario ~= "delay" and scenario ~= "fail" and scenario ~= "unmasked" then
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked>")
         elseif ns.db.portraitMode ~= "player3d" then
-            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
         else
             ns.PreviewLevelUp(false, nil, nil, 3, nil, nil, scenario)
         end
@@ -2475,6 +2476,8 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         PrintSettingStatus("Enable debug commands", ns.db.debugEnabled)
     elseif msg == "memory" then
         ns.PrintMemoryUsage()
+    elseif msg == "debugreport" then
+        ns.OpenDebugReport()
     elseif msg == "perf on" or msg == "performance on" or msg == "perf off" or msg == "performance off" then
         ns.SetPerformanceProfiling(msg:match(" on$") ~= nil)
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L(ns.IsPerformanceProfilingEnabled()
@@ -2525,11 +2528,12 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu dumpskills    - print Skills-tab, equipped, and trainable weapon data")
         print("  /glu testtrainer   - print the current unlearned skill list")
         print("  /glu debugtime <new|slower|best> - preview level-time scenarios (debug mode)")
-        print("  /glu debugportrait <delay|fail> - simulate a slow or rejected 3D portrait load (debug mode)")
+        print("  /glu debugportrait <delay|fail|unmasked> - test the 3D portrait fallback or preview without the circular mask (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")
         print("  /glu resettimers - clear this character's recorded level timers and best times")
         print("  /glu memory        - print current addon memory usage")
+        print("  /glu debugreport   - open a copyable report of recent addon errors")
         print(ns.L("  /glu perf on|off   - start or stop performance profiling (off after reload)"))
         print(ns.L("  /glu perf          - print recorded performance diagnostics"))
         print("  /glu perf reset    - clear performance counters")

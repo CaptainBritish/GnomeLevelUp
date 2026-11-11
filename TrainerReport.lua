@@ -151,6 +151,8 @@ local function JSON(value)
     return "{" .. table.concat(parts, ",") .. "}"
 end
 
+ns.EncodeReportJSON = JSON
+
 function ns.GetTrainerReportJSON()
     local store = Store()
     local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or rawget(_G, "GetAddOnMetadata")

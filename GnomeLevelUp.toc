@@ -2,7 +2,7 @@
 ## Title: GnomeLevelUp
 ## Notes: A gnometastic level-up screen showing stat gains and unlearned trainer abilities.
 ## Author: Lessá - Argent Dawn EU / Lessa Fizzlewits (WoWF EU Roleplay) Captain_British on Curse
-## Version: 1.6.1
+## Version: 1.6.2
 ## SavedVariables: GnomeLevelUpDB, GnomeLevelUpProfilesDB, GnomeLevelUpHistoryDB
 ## SavedVariablesPerCharacter: GnomeLevelUpCharacterDB
 ## X-Website: https://welcometozombo.com/
@@ -32,6 +32,7 @@ Profiles.lua
 ProfileTransfer.lua
 HideBlizzardLevelUp.lua
 TrainerReport.lua
+ErrorReport.lua
 TrainerScan.lua
 TextureCompat.lua
 ThemeRenderer.lua

@@ -83,9 +83,19 @@ local function ModelViewportRatio()
     return MODEL_VIEWPORT_RATIO * size / 100
 end
 
+local render = {}
+
 -- Model-depth masking adapted from Animated Default Portraits by dvd (2026).
 -- See THIRD_PARTY_NOTICES.md. Texture masks alone cannot clip PlayerModel.
 local modelMaskState
+function render.ConfigurePortraitMask(mask)
+    mask:MakeCurrentCameraCustom()
+    mask:SetCameraFacing(math.pi / 2)
+    mask:SetPosition(0.1118, 0, -0.2837)
+    mask:SetCameraPosition(0, 14 * 0.6, 0)
+    mask:SetCameraRoll(mask.portraitMaskRoll)
+end
+
 local function UpdateModelMaskGeometry(diameter)
     if not modelMaskState then return end
     local model = content.playerModel
@@ -113,13 +123,13 @@ local function CreateModelMask()
         mask:SetFrameLevel(0)
         mask:SetFixedFrameLevel(true)
         mask:SetAllPoints(model)
+        mask.portraitMaskRoll = -0.17 + (i - 1) * math.pi / 12
+        if mask.SetKeepModelOnHide then mask:SetKeepModelOnHide(true) end
+        -- The asset can finish loading after the initial camera setup.
+        pcall(mask.SetScript, mask, "OnModelLoaded", render.ConfigurePortraitMask)
         mask:SetModel(587744) -- Built-in gears model with a circular opening.
         mask:SetPaused(true)
-        mask:MakeCurrentCameraCustom()
-        mask:SetCameraFacing(math.pi / 2)
-        mask:SetPosition(0.1118, 0, -0.2837)
-        mask:SetCameraPosition(0, 14 * 0.6, 0)
-        mask:SetCameraRoll(-0.17 + (i - 1) * math.pi / 12)
+        render.ConfigurePortraitMask(mask)
         -- Nonzero alpha keeps depth occlusion active without a visible cover.
         mask:SetIgnoreParentAlpha(true)
         mask:SetAlpha(0.0001)
@@ -723,8 +733,9 @@ content.portraitArtwork:SetAllPoints(content)
 content.portraitArtwork:SetFrameLevel(content:GetFrameLevel())
 content.portraitArtwork:Hide()
 local portraitPreparing = false
-local render = {}
 local entranceTimeline
+-- Menus request suspension without changing the popup timer or page state.
+local previewState = { active = false, suspended = false }
 
     -- Store every text layer so a font change updates the whole panel.
 content.fontElements = {}
@@ -1070,14 +1081,18 @@ function render.SyncPlayerModelCamera()
     if not model or not model.portraitLoaded or not ns.db or ns.db.portraitMode ~= "player3d" then return end
     if model.cameraWidth ~= model:GetWidth() or model.cameraHeight ~= model:GetHeight()
         or model.cameraScale ~= model:GetEffectiveScale() then
-        render.ApplyPlayerModelCamera(model)
+        render.TryPlayerModelCamera(model)
     end
 end
 
 function ns.ApplyPlayerModelSettings()
     ns.RefreshPlayerModelIdentity()
     ns.RefreshPortraitGeometry(true)
-    render.ApplyPlayerModelCamera()
+    if content.playerModel and content.playerModel.portraitLoaded then
+        render.TryPlayerModelCamera(content.playerModel)
+    else
+        render.ApplyPlayerModelCamera()
+    end
 end
 
 local function SetPlayerPortraitTexture(texture)
@@ -1101,21 +1116,90 @@ end
 
 function render.SetModelLayersShown(shown)
     content.modelBacking:SetShown(shown)
-    for _, mask in ipairs(content.modelMasks) do mask:SetShown(shown) end
+    local showMasks = shown and content.portraitLoadTest ~= "unmasked"
+    for _, mask in ipairs(content.modelMasks) do mask:SetShown(showMasks) end
+end
+
+function render.ReportPlayerModelFailure(model, reason, failure)
+    if content.portraitLoadTest then return end
+    ns.RecordError("portrait", reason, {
+        source = previewState.active and "preview" or "level_up", level = content.currentReachedLevel,
+        unitAssigned = model.unitAssigned, modelLoadedEvent = model.loadReceived, unitModelReady = model.unitModelReady,
+        modelFileID = model.lastModelFileID, fallback = model.fallbackKind, loadAttempt = model.loadToken,
+        milestone = content.isMilestone, maximum = content.isMaxLevel,
+    }, failure)
+end
+
+function render.ReadPlayerModelReady(model)
+    if not IsUnitModelReadyForUI then return true end
+    local ready = IsUnitModelReadyForUI("player")
+    if issecretvalue and issecretvalue(ready) then
+        model.unitModelReady = "<restricted>"
+        return false
+    end
+    model.unitModelReady = not not ready
+    return model.unitModelReady
+end
+
+function render.CheckPlayerModel(model)
+    if not render.ReadPlayerModelReady(model) then return false end
+    if model.GetModelFileID then
+        local fileID = model:GetModelFileID()
+        if issecretvalue and issecretvalue(fileID) then
+            model.lastModelFileID = "<restricted>"
+            return false
+        end
+        model.lastModelFileID = fileID
+        if not fileID or fileID <= 0 then return false end
+    end
+    return true
+end
+
+function render.ShowPlayerModelFallback(model)
+    model.portraitLoaded = false
+    model:SetAlpha(0)
+    render.SetModelLayersShown(false)
+    content.modelFallback:Show()
+end
+
+function render.TryPlayerModelCamera(model)
+    local ok, failure = xpcall(function() render.ApplyPlayerModelCamera(model) end, ns.CaptureErrorTrace)
+    if not ok then
+        model.cameraFailed, model.loadReported, model.applyingCamera = true, true, nil
+        render.ShowPlayerModelFallback(model)
+        render.ReportPlayerModelFailure(model, "model_setup_failed", failure)
+    end
+    return ok
 end
 
 local function FinishPlayerModelLoad(model)
     if not model.unitAssigned or not model.loadReceived or model.loadDelayed or model.portraitLoaded or not model:IsShown()
-        or not frame:IsShown() or frame.closingInputSuppressed or ns.db.portraitMode ~= "player3d" then return end
-    if IsUnitModelReadyForUI and not IsUnitModelReadyForUI("player") then return end
-    if model.GetModelFileID then
-        local fileID = model:GetModelFileID()
-        if not fileID or fileID <= 0 then return end
+        or not frame:IsShown() or frame.closingInputSuppressed or ns.db.portraitMode ~= "player3d" or model.cameraFailed then return end
+    local ok, ready = xpcall(function() return render.CheckPlayerModel(model) end, ns.CaptureErrorTrace)
+    if not ok then
+        if not model.loadReported then
+            model.loadReported = true
+            render.ReportPlayerModelFailure(model, "model_readiness_check_failed", ready)
+        end
+        return
     end
-    render.ApplyPlayerModelCamera(model)
+    if not ready or not render.TryPlayerModelCamera(model) then return end
+    local maskOK, failure = xpcall(function()
+        model:SetModelAlpha(1)
+        if content.portraitLoadTest ~= "unmasked" then
+            for _, mask in ipairs(content.modelMasks) do render.ConfigurePortraitMask(mask) end
+            UpdateModelMaskGeometry(content.modelBacking:GetWidth())
+        end
+    end, ns.CaptureErrorTrace)
+    if not maskOK then
+        model.loadReported, model.cameraFailed = true, true
+        render.ReportPlayerModelFailure(model, "model_layers_setup_failed", failure)
+        return
+    end
     model.portraitLoaded = true
     render.SetModelLayersShown(true)
-    model:SetAlpha(content.portraitArtwork:GetAlpha())
+    -- The model inherits the entrance and exit fades from portraitArtwork.
+    model:SetAlpha(1)
     content.modelFallback:Hide()
 end
 
@@ -1123,31 +1207,52 @@ local function LoadPlayerPortraitModel(model)
     model.loadToken = (model.loadToken or 0) + 1
     local token = model.loadToken
     model.portraitLoaded, model.unitAssigned, model.loadReceived = false, false, false
+    model.loadReported, model.cameraFailed, model.lastModelFileID, model.unitModelReady = nil, nil, nil, nil
     local portraitTest = content.portraitLoadTest
     model.loadDelayed = portraitTest == "delay"
-    model:SetAlpha(0)
-    render.SetModelLayersShown(false)
     local fallback = content.modelFallback
-    if not (IsUnitModelReadyForUI and not IsUnitModelReadyForUI("player") and render.SetClassPortraitTexture(fallback)) then
-        SetPlayerPortraitTexture(fallback)
+    local readyOK, ready = pcall(render.ReadPlayerModelReady, model)
+    local hasPlayerPortrait = readyOK and ready and pcall(SetPlayerPortraitTexture, fallback)
+    if hasPlayerPortrait then
+        model.fallbackKind = "player_2d"
+    elseif render.SetClassPortraitTexture(fallback) then
+        model.fallbackKind = "class_icon"
+    else
+        fallback:SetTexCoord(0, 1, 0, 1)
+        fallback:SetTexture("Interface\\CHARACTERFRAME\\TempPortrait")
+        model.fallbackKind = "placeholder"
     end
-    fallback:Show()
+    render.ShowPlayerModelFallback(model)
+    local loadError = not readyOK and ns.CaptureErrorTrace(ready) or nil
     if portraitTest ~= "fail" then
-        local ok, assigned = pcall(model.SetUnit, model, "player")
+        local ok, assigned = xpcall(function() return model:SetUnit("player") end, ns.CaptureErrorTrace)
         -- Older clients may return nothing. An explicit false rejects the assignment.
-        model.unitAssigned = ok and assigned ~= false
+        model.unitAssigned = ok and ((issecretvalue and issecretvalue(assigned)) or assigned ~= false)
+        if not ok then loadError = assigned end
     end
     FinishPlayerModelLoad(model)
-    if model.portraitLoaded then return end
     C_Timer.After(1.5, function()
-        if model.loadToken == token and not model.portraitLoaded and not model.loadReported and model:IsShown()
+        if model.loadToken == token and not model.loadReported and model:IsShown()
             and frame:IsShown() and not frame.closingInputSuppressed and ns.db.portraitMode == "player3d" then
+            -- A model can lose its data after OnModelLoaded has already fired.
+            if model.portraitLoaded then
+                local ok, stillReady = xpcall(function() return render.CheckPlayerModel(model) end, ns.CaptureErrorTrace)
+                if not ok or not stillReady then
+                    model.loadReported = true
+                    render.ShowPlayerModelFallback(model)
+                    render.ReportPlayerModelFailure(model, ok and "model_became_unready" or "model_readiness_check_failed",
+                        not ok and stillReady or nil)
+                end
+                return
+            end
             FinishPlayerModelLoad(model)
-            if model.portraitLoaded then return end
+            if model.portraitLoaded or model.loadReported then return end
             model.loadReported = true
             local message = model.unitAssigned and "3D Portrait render failed: The player model did not load in time."
                 or "3D Portrait render failed: Could not assign the player model."
             print("|cffff4040GnomeLevelUp|r: " .. ns.L(message))
+            render.ReportPlayerModelFailure(model, model.unitAssigned and "model_load_timeout" or "model_assignment_failed",
+                loadError)
         end
     end)
     if model.loadDelayed then
@@ -1178,8 +1283,12 @@ function ns.RefreshClassIcon()
             model:EnableMouse(false)
             model:SetClipsChildren(true)
             model:SetModelDrawLayer("ARTWORK")
-            model:SetFlattensRenderLayers(true)
-            model:SetIsFrameBuffer(true)
+            -- WoW Forever can hide models that draw into an offscreen buffer.
+            -- This is a client renderer difference, independent of the data mode.
+            if ns.GetClientFlavor() == "retail" then
+                model:SetFlattensRenderLayers(true)
+                model:SetIsFrameBuffer(true)
+            end
             model:SetScript("OnModelLoaded", function(self)
                 self.loadReceived = true
                 FinishPlayerModelLoad(self)
@@ -1229,7 +1338,7 @@ function ns.RefreshClassIcon()
         local model = content.playerModel
         content.classIcon:Hide()
         content.classRing:Show()
-        model:SetAlpha(not portraitPreparing and model.portraitLoaded and content.portraitArtwork:GetAlpha() or 0)
+        model:SetAlpha(not portraitPreparing and model.portraitLoaded and 1 or 0)
         content.playerModel:SetShown(not portraitPreparing and content.portraitArtwork:IsShown())
         ns.RefreshPortraitRing()
         return
@@ -3933,7 +4042,6 @@ function render.ApplyClosingEntrance(age)
     render.Alpha(bg, EntranceAlpha(entranceTimeline.background, age, true))
     local alpha = EntranceAlpha(entranceTimeline.portrait, age, true)
     render.Alpha(content.portraitArtwork, alpha)
-    if content.playerModel and content.playerModel.portraitLoaded then render.Alpha(content.playerModel, alpha) end
     for _, fs in ipairs(content.statLinePool) do
         local motion = fs.entranceMotion
         if motion and (fs.statData or fs.plainText) then
@@ -4023,9 +4131,6 @@ function render.BeginClosing(multiplier)
     end)
 end
 
--- Only this module changes preview lifetime; menus request suspension through
--- IsPreviewSuspensionRequested rather than changing the timer or page state.
-local previewState = { active = false, suspended = false }
 local function ResetPreviewState(active)
     previewState.active = active == true
     previewState.suspended = false
@@ -4291,7 +4396,8 @@ UpdateVisualEffects = function()
     render.Size(content.classRing, ringSize * ringSettle, ringSize * ringSettle)
     render.Size(content.classIcon, PortraitArtworkSize() * ringSettle, PortraitArtworkSize() * ringSettle)
     if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then
-        local diameter = ModelPortraitDiameter() * ringSettle
+        -- Keep the 3D framebuffer and depth mask at their layout size while the ring animates.
+        local diameter = ModelPortraitDiameter()
         render.Size(content.playerModel, diameter * ModelViewportRatio(), diameter * ModelViewportRatio())
         render.Size(content.modelBacking, diameter, diameter)
         UpdateModelMaskGeometry(diameter)
@@ -4304,12 +4410,12 @@ UpdateVisualEffects = function()
         content.classRingGraphic:SetPoint("CENTER", content.portraitAnchor, "CENTER", pointX, pointY)
         render.pointX, render.pointY = pointX, pointY
     end
-    if content.playerModel and db.portraitMode == "player3d" then
-        render.Alpha(content.playerModel, content.playerModel.portraitLoaded and ringAlpha or 0)
-        render.Shown(content.playerModel, not portraitPreparing and ringAlpha > 0)
-    end
+    local portraitVisible = not portraitPreparing and db.portraitMode ~= "none" and ringAlpha > 0
     render.Alpha(content.portraitArtwork, ringAlpha)
-    render.Shown(content.portraitArtwork, not portraitPreparing and db.portraitMode ~= "none" and ringAlpha > 0)
+    render.Shown(content.portraitArtwork, portraitVisible)
+    if content.playerModel and db.portraitMode == "player3d" then
+        render.Shown(content.playerModel, portraitVisible)
+    end
     if portraitEnabled and moving and portraitStage == "waiting"
         and entranceTimeline and effectAge >= entranceTimeline.portrait.finish + PORTRAIT_PULSE_GAP then
         portraitStage = "pulse"
@@ -5146,7 +5252,7 @@ function render.RefreshPlayerModelLayout()
     if model.layoutHorizontal == horizontal and model.layoutPopupScale == scale and model.layoutFit == fit then return end
     model.layoutHorizontal, model.layoutPopupScale, model.layoutFit = horizontal, scale, fit
     if modelMaskState then modelMaskState.inset, modelMaskState.scale = nil, nil end
-    if model.portraitLoaded then render.ApplyPlayerModelCamera(model) end
+    if model.portraitLoaded then render.TryPlayerModelCamera(model) end
 end
 
 local function RefreshPopupLayoutNow()
@@ -5248,11 +5354,13 @@ local function ShouldSuspendPreview()
     return previewState.active and ns.IsPreviewSuspensionRequested() == true
 end
 
-function ns.HandleLevelUpScreenshotResult(saved)
-    if not render.screenshotSavePending then return end
+function ns.HandleLevelUpScreenshotResult(saved, reason, failure)
+    local request = render.screenshotSavePending
+    if not request then return end
     render.screenshotSavePending = nil
     if not saved then
         print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not save the level-up screenshot."))
+        ns.RecordError("screenshot", reason or "client_save_failed", request, failure)
     end
 end
 
@@ -5263,7 +5371,10 @@ end
 
 function render.QueueLevelUpScreenshot(delay)
     if previewState.active or not render.ShouldCaptureLevelUp() then return end
-    local request = {}
+    local request = {
+        source = "level_up", level = content.currentReachedLevel, fromLevel = content.levelRangeStart,
+        milestone = content.isMilestone, maximum = content.isMaxLevel, delay = delay,
+    }
     render.screenshotRequest = request
     -- A capture must still run if the visual driver stops after the entrance.
     C_Timer.After(delay, function()
@@ -5273,9 +5384,10 @@ function render.QueueLevelUpScreenshot(delay)
             or not frame:IsShown() or (frame.IsVisible and not frame:IsVisible()) then return end
 
         render.screenshotSavePending = request
-        local ok, accepted = pcall(Screenshot)
+        local ok, accepted = xpcall(function() return Screenshot() end, ns.CaptureErrorTrace)
         if not ok or accepted == false then
-            ns.HandleLevelUpScreenshotResult(false)
+            ns.HandleLevelUpScreenshotResult(false, ok and "capture_rejected" or "capture_api_failed",
+                not ok and accepted or nil)
         elseif render.screenshotSavePending == request then
             C_Timer.After(5, function()
                 if render.screenshotSavePending == request then render.screenshotSavePending = nil end
@@ -5465,9 +5577,12 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     render.QueueLevelUpScreenshot(entranceDuration + .15)
     UpdateVisualEffects()
 
-    local soundOK, soundError = pcall(ns.PlayLevelUpSound, false, previewState.active)
+    local soundOK, soundError = xpcall(function() ns.PlayLevelUpSound(false, previewState.active) end, ns.CaptureErrorTrace)
     if not soundOK then
-        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not play the selected sound. Choose another sound in Options > Sound. Details: %s", tostring(soundError)))
+        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not play the selected sound. Choose another sound in Options > Sound. Details: %s", tostring(soundError.message)))
+        ns.RecordError("sound", "level_up_playback_failed", {
+            source = previewState.active and "preview" or "level_up", level = currentLevel,
+        }, soundError)
     end
 end
 
@@ -5507,7 +5622,10 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     end
     --@end-do-not-package@
     local perf = ns.PerfStart("popup_prepare")
-    local ok, err = pcall(ShowLevelUpImpl, currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
+    local ok, err = xpcall(function()
+        ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel,
+            warlockPetAbilities, milestone, previousFastest, secondaryStats)
+    end, ns.CaptureErrorTrace)
     ns.PerfEnd(perf)
     if ok and not isPreview then
         ns.SaveLevelUpReplay({level = currentLevel, stats = statChanges, abilities = trainerAbilities,
@@ -5517,7 +5635,11 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
             timeToCap = content.isMaxLevel and ns.GetTimeToMaxLevel() or nil})
     end
     if not ok then
-        print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err))
+        print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err.message))
         print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up popup could not be shown. Try /reload. If it happens again, report the error above."))
+        ns.RecordError("popup", "render_failed", {
+            source = isPreview and "preview" or "level_up", level = currentLevel, fromLevel = rangeStart,
+            milestone = milestone, maximum = content.isMaxLevel,
+        }, err)
     end
 end

@@ -263,9 +263,15 @@ local function GetVisibleNumber(value)
     return value
 end
 
-local function ReadSnapshotNumber(value, previous)
-    value = GetVisibleNumber(value)
-    if type(value) == "number" then return value end
+local function ReadSnapshotNumber(snapshot, key, value, previous)
+    local restricted = type(issecretvalue) == "function" and issecretvalue(value)
+    if not restricted and type(value) == "number" then
+        if snapshot.unavailable then snapshot.unavailable[key] = nil end
+        return value
+    end
+    local unavailable = snapshot.unavailable or {}
+    unavailable[key] = restricted and "restricted" or "unavailable"
+    snapshot.unavailable = unavailable
     return previous
 end
 
@@ -280,14 +286,14 @@ function ns.SnapshotStats(reuse)
     -- An unreadable combat sample should not erase the baseline for this level.
     local sameLevel = reuse and reuse.level == level
     snap.level = level
-    snap.health = ReadSnapshotNumber(UnitHealthMax("player"), sameLevel and snap.health or nil)
-    snap.power = ReadSnapshotNumber(UnitPowerMax("player"),
+    snap.health = ReadSnapshotNumber(snap, "health", UnitHealthMax("player"), sameLevel and snap.health or nil)
+    snap.power = ReadSnapshotNumber(snap, "power", UnitPowerMax("player"),
         sameLevel and snap.powerToken == powerToken and snap.power or nil)
     snap.powerToken, snap.powerLabel = powerToken, powerLabel
     snap.stats = snap.stats or {}
     snap.secondary = ns.db and ns.db.showSecondaryStats and ns.SnapshotSecondaryStats(snap.secondary) or nil
     for i = 1, 5 do
-        snap.stats[i] = ReadSnapshotNumber(UnitStat("player", i), sameLevel and snap.stats[i] or nil)
+        snap.stats[i] = ReadSnapshotNumber(snap, STAT_ENGLISH[i], UnitStat("player", i), sameLevel and snap.stats[i] or nil)
     end
     return snap
 end

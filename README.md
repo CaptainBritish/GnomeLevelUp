@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.6.1**
+**Development version: 1.6.2**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -27,7 +27,7 @@ flavour; use `/glu mode retail`, `/glu mode forever` or `/glu mode auto` to chan
 ## Highlights in 1.5.2
 
 - Adjustable primary/secondary stat timing within the existing popup duration.
-- Middle-click replay of the last real level-up.
+- Replay of the last real level-up from the minimap button.
 - Decorative effects skip ability icons outside the scrolling viewport.
 
 ## Highlights in 1.5
@@ -44,8 +44,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## Setup and options
 
-Open `/glu options` or click the minimap button for settings. Right-click the
-button to preview a level-up; middle-click replays your last recorded level-up.
+Open `/glu options` or left-click the minimap button for settings. Right-click
+to replay your last recorded level-up, or middle-click to preview a level-up.
 Use `/glu firsttime` to reopen setup, or `/glu controlleroptions` for the
 controller menu.
 
@@ -161,6 +161,7 @@ capture/report commands mainly apply to Forever; Retail uses spellbook unlocks.
 | `/glu sound` | Toggle GLU playback for replacement/custom sounds; Blizzard's default selection remains native |
 | `/glu duration [seconds]` | Show the current duration, or set it to 1–60 seconds; default is 7 |
 | `/glu memory` | Print current addon memory usage in KB/MB |
+| `/glu debugreport` | Review and copy the last five recorded addon errors for support. Available with debug mode off. |
 | `/glu mode [retail\|forever\|auto]` or `/glu flavor [retail\|forever\|auto]` | Show the current/resolved client mode, or choose a mode |
 | `/glu combat` | Toggle waiting for combat to end; enabled by default |
 | `/glu trainerreport` | Open trainer-report export and save instructions |
@@ -186,7 +187,7 @@ settings changed by commands are saved as usual.
 | `/glu debugskills` | Preview an expanded skill list; Forever includes pet-training examples and Retail shows new abilities | No |
 | `/glu debugstats <old> <new>` | Set exact Strength old/new totals; randomize other stats from 1 up to each entered limit, keeping new at least old; whole numbers from 0–9007199254740991, new at least old | Yes |
 | `/glu debugtime <new\|slower\|best>` | Preview a level time with no previous best, a faster old time (without an extra comparison line), or a new best; uses sample times, shows the timing section and leaves real history untouched | Yes |
-| `/glu debugportrait <delay\|fail>` | With Player 3D portrait selected, preview a delayed 3D reveal or a rejected model assignment. Both exercise the portrait fallback and chat warning for that preview. | Yes |
+| `/glu debugportrait <delay\|fail\|unmasked>` | With Player 3D portrait selected, test a delayed or rejected model load, or preview the model without the circular mask. | Yes |
 | `/glu debugstats reset` | Restore ordinary preview totals and open a preview | Yes |
 | `/glu debugmilestone <1-1000>` or `/glu debugmilestone reset` | Save a custom milestone interval for real level-ups, milestone screenshots and previews while debug mode is on. Reset or select a preset to clear the override. | Yes |
 | `/glu dumptraining` | Print cached trainer skills and learned state | Yes |
