@@ -30,7 +30,7 @@ Set a flag to `true` to make that locale available to auto-detection and the lan
 | koKR | Korean | Enabled |
 | zhCN | Chinese (Simplified) | Enabled |
 | zhTW | Chinese (Traditional) | Enabled |
-| trTR | Turkish | Enabled; partial (English for untranslated lines) |
+| trTR | Turkish | Enabled |
 
 Every new player-facing string must have entries in every non-English locale.
 Each language has its own dictionary file in `Locales/` (for example
