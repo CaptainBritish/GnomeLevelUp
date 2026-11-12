@@ -3,7 +3,7 @@ local ADDON_NAME, ns = ...
 -- Shared help is keyed by source labels; widgets translate only when hovered.
 ns.OPTION_DESCRIPTIONS = {
     ["Complete trainer reporting"] = "Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport.",
-    ["Reset Theme Hues"] = "Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept.",
+    ["Reset Theme Hues"] ="Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept.",
     ["Level History"] = "Review recorded level times and your best times across characters. Hover a row to see which character set the personal best.",
     ["Character"] = "Choose a character whose recorded level times you want to view.",
     ["History mode"] = "View Retail or Forever history. Records are kept separate.",
@@ -212,16 +212,6 @@ local function ClampOptionTooltip(tooltip)
     tooltip:SetClampedToScreen(true)
 end
 
-local function ApplyOptionTooltipFont(tooltip, locale)
-    local name = tooltip:GetName()
-    if not name or not tooltip.NumLines then return end
-    local count = math.max(tooltip.gluOptionFontLines or 0, tooltip:NumLines())
-    if locale then tooltip.gluOptionFontLines = nil else tooltip.gluOptionFontLines = count end
-    for line = 1, count do
-        ns.ApplyLocaleFont(_G[name .. "TextLeft" .. line], locale)
-    end
-end
-
 function ns.ShowOptionTooltip(owner, label, description)
     local shared, key = ns.GetOptionDescription(label)
     description = description or shared
@@ -233,13 +223,7 @@ function ns.ShowOptionTooltip(owner, label, description)
     if (key or label) == "Portrait" then
         GameTooltip:AddLine(ns.L(ns.PORTRAIT_MEMORY_WARNING), 1, .2, .2, true)
     end
-    if ns.GetLocaleFontPath() then
-        if not GameTooltip.gluOptionFontHook then
-            GameTooltip.gluOptionFontHook = true
-            GameTooltip:HookScript("OnHide", function(tooltip) ApplyOptionTooltipFont(tooltip, "enUS") end)
-        end
-        ApplyOptionTooltipFont(GameTooltip)
-    end
+    ns.ApplyTooltipLocaleFont(GameTooltip)
     GameTooltip:Show()
 end
 

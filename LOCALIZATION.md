@@ -30,10 +30,22 @@ Set a flag to `true` to make that locale available to auto-detection and the lan
 | koKR | Korean | Enabled |
 | zhCN | Chinese (Simplified) | Enabled |
 | zhTW | Chinese (Traditional) | Enabled |
+| trTR | Turkish | Enabled; partial (English for untranslated lines) |
 
-Every new player-facing string must have entries in all ten non-English locales.
-English source text is the lookup key. Spanish shares a base vocabulary with
-regional overrides; esES and esMX remain independently selectable. Native-speaker
+Every new player-facing string must have entries in every non-English locale.
+Each language has its own dictionary file in `Locales/` (for example
+`Locales/deDE.lua`); `Locals.lua` holds only the shared lookup, font and
+language-selection code, and `Locales/Init.lua` selects the client language
+after every dictionary has loaded. New locale files go in `GnomeLevelUp.toc`
+between `Locals.lua` and `Locales\Init.lua`.
+English source text is the lookup key.
+
+To start a new translation, copy `Locales/Template.lua`: it lists every UI
+string in English with instructions at the top. It is not loaded by the addon
+and is left out of release packages. Add each new UI string to the template as
+well as to every language file. Spanish shares a base vocabulary with
+regional overrides; esES and esMX remain independently selectable. The shared
+vocabulary is defined in `Locales/esES.lua`, so `Locales/esMX.lua` must load after it. Native-speaker
 feedback is welcome; do not describe generated wording as officially reviewed.
 
 ## Translation conventions
@@ -96,7 +108,7 @@ The default popup font now follows the client's `STANDARD_TEXT_FONT` when availa
 ## Standing project instruction: future strings
 
 Every future new user-facing string must use the shared translation catalogue
-and be added to **all ten non-English dictionaries**, including disabled locales.
+and be added to **every non-English dictionary**, including disabled locales.
 Preserve the exact English source supplied by the user, command names and format
 arguments. Do not rely on English fallback as completion of a new string.
 

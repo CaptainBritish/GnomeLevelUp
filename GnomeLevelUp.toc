@@ -17,6 +17,19 @@ Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
 Locals.lua
+Locales\enUS.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\esMX.lua
+Locales\deDE.lua
+Locales\itIT.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+Locales\trTR.lua
+Locales\Init.lua
 Sounds\SoundList.lua
 ThemeList.lua
 Data\ForeverTraining.lua

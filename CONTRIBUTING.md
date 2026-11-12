@@ -19,7 +19,7 @@ headless checks cannot confirm native rendering, sound or controller input.
 | Theme definitions, texture compatibility and textured frames | `ThemeList.lua`, `TextureCompat.lua`, `ThemeRenderer.lua` |
 | Mouse Options, tabs and responsive controls | `Options.lua`, `OptionsTabs.lua`, `OptionsLayout.lua` |
 | Controller menu and first-time setup | `ControllerOptions.lua` |
-| Shared option descriptions and translations | `OptionHelp.lua`, `Locals.lua` |
+| Shared option descriptions and translations | `OptionHelp.lua`, `Locals.lua`, `Locales/*.lua` |
 | Spellbook, trainer data and pet training | `SpellBookCompat.lua`, `TrainerScan.lua`, `WarlockPet.lua`, `Data/` |
 | Trainer reports | `TrainerReport.lua` |
 | Native notification suppression and minimap shortcuts | `HideBlizzardLevelUp.lua`, `MinimapButton.lua` |
@@ -37,7 +37,7 @@ Call required addon functions directly after their TOC dependencies load. Keep
 feature checks for client APIs and optional libraries. Do not remove a migration
 just because its old setting no longer appears in Options.
 
-Every new player-facing string needs all ten non-English translations. Do not
+Every new player-facing string needs a translation in every non-English language file. Do not
 translate API names, commands, IDs or asset paths. See [LOCALIZATION.md](LOCALIZATION.md).
 
 ## State boundaries
