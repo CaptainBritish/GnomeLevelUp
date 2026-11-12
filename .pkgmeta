@@ -12,3 +12,4 @@ ignore:
   - Examples
   - CONTRIBUTING.md
   - LOCALIZATION.md
+  - Locales/Template.lua

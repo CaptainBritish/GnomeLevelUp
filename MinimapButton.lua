@@ -31,6 +31,7 @@ local function OnTooltipShow(tooltip)
     tooltip:AddLine(ns.L("Right-click: Replay last level-up"), 1, 1, 1)
     tooltip:AddLine(ns.L("Middle-click: Preview Level-Up"), 1, 1, 1)
     tooltip:AddLine(ns.L("Drag to move"), 1, 1, 1)
+    ns.ApplyTooltipLocaleFont(tooltip)
 end
 
 function ns.SetMinimapButtonShown(shown)
