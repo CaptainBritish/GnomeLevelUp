@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.6.2**
+**Development version: 1.6.3**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -142,8 +142,14 @@ The path starts inside the client folder you're playing from. Replace
 Curseforge. It includes your GLU settings and cache; the same window also offers
 report-only JSON that you can copy into `GnomeLevelUp-trainer-report.json`.
 
-`/glu trainerreport clear` clears the reports. Reload or log out again to update
-the file on disk. Nothing is submitted automatically.
+**Clear all** and `/glu trainerreport clear` delete saved trainer reports and
+price captures. Click **Reload UI** or log out to save the deletion to disk.
+Nothing is submitted automatically.
+
+On Forever, enable debug mode and **Complete trainer reporting** in the Debug
+tab to include every readable class trainer price in `/glu trainerreport`.
+Open each trainer with all service filters enabled. Prices are recorded in copper
+as offered, so use an undiscounted trainer visit to collect base prices.
 
 ## Commands
 

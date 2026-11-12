@@ -2,6 +2,7 @@ local ADDON_NAME, ns = ...
 
 -- Shared help is keyed by source labels; widgets translate only when hovered.
 ns.OPTION_DESCRIPTIONS = {
+    ["Complete trainer reporting"] = "Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport.",
     ["Reset Theme Hues"] = "Restore the selected background, frame and portrait ring to their default hues. Other saved hue preferences are kept.",
     ["Level History"] = "Review recorded level times and your best times across characters. Hover a row to see which character set the personal best.",
     ["Character"] = "Choose a character whose recorded level times you want to view.",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.3
+
+- Updated WoW Forever trainer prices
+- Added Rogue Poised, both ranks of Shank, and the trainable Death Mark upgrades.
+- Removed obsolete trainer entries for Frost Blast, Lava Burst, Binding Heal, Salvation, Mass Salvation, Blessing of Light, and Greater Blessing of Light.
+- Improved trainer reporting for future use.
+- the hidden gnome cannot be stopped
+
 ## 1.6.2
 
 - Attempted another blank 3D portraits fix in WoW Forever

@@ -431,9 +431,11 @@ end
 
 -- Compare only positively identified offered spells. Filtered/missing rows and
 -- reputation-adjusted prices are not evidence of a catalogue change.
-local function CheckTrainerCatalogue(npcName)
+local function CheckTrainerCatalogue(npcName, capturePrices)
     if not ns.RecordTrainerObservation then return end
     local _, classToken = UnitClass("player")
+    if not classToken then return end
+    local prices = capturePrices and {} or nil
     local newChanges = 0
     for i = 1, GetNumTrainerServices() do
         local name, subtext, status, infoLevel, _, spellID, category, cost, professionCost = ReadService(i)
@@ -446,8 +448,13 @@ local function CheckTrainerCatalogue(npcName)
                 name=label,status=status,cost=cost,npcName=npcName}) then
                 newChanges = newChanges + 1
             end
+            if prices and level and level > 0 and cost and cost >= 0 and cost < math.huge and cost == math.floor(cost) then
+                local key = spellID .. ":" .. level .. ":" .. cost
+                prices[key] = { spellID = spellID, requiredLevel = level, name = label, offeredCost = cost, status = status }
+            end
         end
     end
+    if prices then ns.RecordTrainerPriceScan(classToken, npcName, prices) end
     if newChanges > 0 then
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("A change in the trainer data has been detected, please type /glu trainerreport and submit the file to me!"))
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Report options: type %s to open the export window and copy report-only JSON.", "|cffffff00/glu trainerreport|r"))
@@ -461,9 +468,10 @@ local function ScanTrainer()
     if flavor ~= "forever" then return end
     local npcName = UnitName("npc")
     local trainerIsProfession = IsProfessionTrainer()
+    local capturePrices = ns.IsCompleteTrainerReportingEnabled and ns.IsCompleteTrainerReportingEnabled()
     if not trainerIsProfession and ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData()
-        and ns.db and ns.db.monitorTrainerChanges ~= false then
-        CheckTrainerCatalogue(npcName)
+        and ns.db and (ns.db.monitorTrainerChanges ~= false or capturePrices) then
+        CheckTrainerCatalogue(npcName, capturePrices)
     end
     if ns.db and ns.db.autoScanTrainers == false
         and not GnomeLevelUpDB.trainerRescanRequired then return end

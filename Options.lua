@@ -585,7 +585,7 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6.2"
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6.3"
     version:SetText(ns.L("Version %s", tostring(addonVersion)))
     ns.ApplyLocaleFont(version)
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1160,6 +1160,11 @@ local function BuildOptions()
             function(v) ns.db.showAllWarlockGrimoires = v end,
             LEFT, y, true, 32, y)
         allGrimoiresCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() ~= "retail" end
+        local trainerReportCheck = AddCheckbox("Complete trainer reporting",
+            function() return ns.db.completeTrainerReporting == true end,
+            function(v) ns.db.completeTrainerReporting = v end,
+            LEFT + 270, y, true, 32, y)
+        trainerReportCheck.gluOptionsCell.isVisible = IsForeverMode
         y = y - 32
 
         local function AddDebugAdjustButtons(input, step, current, commit)

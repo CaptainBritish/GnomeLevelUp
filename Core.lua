@@ -137,6 +137,7 @@ local defaults = {
     controllerGlyphStyle = "none", -- "none" | "xbox" | "playstation" | "nintendo"
     controllerMenuFrameStrata = "HIGH",
     debugEnabled = false,
+    completeTrainerReporting = false,
     collapsedSections = {},
 
     backgroundMode = "MODERN", -- "MODERN" or "CUSTOM"

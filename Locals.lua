@@ -5814,6 +5814,38 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Screenshot"] = "螢幕擷取",
 } end)
 
+do
+    local trainerPriceHelp = {
+        frFR = { "Rapports complets des maîtres de classe", "Enregistre tous les prix lisibles des maîtres de classe en mode débogage. Exportez les prix proposés avec /glu trainerreport." },
+        esES = { "Informes completos de instructores", "Registra todos los precios legibles de los instructores de clase en modo de depuración. Exporta los precios ofrecidos con /glu trainerreport." },
+        esMX = { "Informes completos de instructores", "Registra todos los precios legibles de los instructores de clase en modo de depuración. Exporta los precios ofrecidos con /glu trainerreport." },
+        deDE = { "Vollständige Lehrerberichte", "Zeichnet im Debugmodus alle lesbaren Preise von Klassenlehrern auf. Exportiere die angebotenen Preise mit /glu trainerreport." },
+        itIT = { "Rapporti completi degli istruttori", "Registra tutti i prezzi leggibili degli istruttori di classe in modalità debug. Esporta i prezzi offerti con /glu trainerreport." },
+        ptBR = { "Relatórios completos de instrutores", "Registra todos os preços legíveis dos instrutores de classe no modo de depuração. Exporte os preços oferecidos com /glu trainerreport." },
+        ruRU = { "Полные отчёты об учителях", "Записывает все доступные цены учителей классов в режиме отладки. Экспорт цен выполняется командой /glu trainerreport." },
+        koKR = { "직업 전문가 전체 보고서", "디버그 모드에서 확인할 수 있는 직업 전문가의 모든 훈련 비용을 기록합니다. /glu trainerreport로 비용을 내보낼 수 있습니다." },
+        zhCN = { "完整训练师报告", "在调试模式下记录职业训练师所有可读取的价格。使用 /glu trainerreport 导出实际报价。" },
+        zhTW = { "完整訓練師報告", "在偵錯模式下記錄職業訓練師所有可讀取的價格。使用 /glu trainerreport 匯出實際報價。" },
+    }
+    for locale, strings in pairs(trainerPriceHelp) do
+        RegisterLocaleBuilder(locale, function() return {
+            ["Complete trainer reporting"] = strings[1],
+            ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = strings[2],
+        } end)
+    end
+end
+
+do
+    local clearAllLabels = {
+        frFR = "Tout effacer", esES = "Borrar todo", esMX = "Borrar todo", deDE = "Alles löschen",
+        itIT = "Cancella tutto", ptBR = "Limpar tudo", ruRU = "Очистить всё", koKR = "모두 지우기",
+        zhCN = "全部清除", zhTW = "全部清除",
+    }
+    for locale, label in pairs(clearAllLabels) do
+        RegisterLocaleBuilder(locale, function() return { ["Clear all"] = label } end)
+    end
+end
+
 -- Load the client language only after registering every translation above.
 -- Core applies the saved override at ADDON_LOADED, before building Options.
 ns.SetLocale("auto")

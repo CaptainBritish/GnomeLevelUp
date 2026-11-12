@@ -2,6 +2,7 @@ local ADDON_NAME, ns = ...
 
 -- Observations are evidence for the author, never runtime catalogue overrides.
 local MAX_REPORTS = 250
+local MAX_PRICE_SCANS = 128
 local indexByClass = {}
 local lastFilteredChanges
 
@@ -76,6 +77,32 @@ end
 
 local function Text(value, limit)
     return type(value) == "string" and value:sub(1, limit) or nil
+end
+
+function ns.IsCompleteTrainerReportingEnabled()
+    return ns.db and ns.db.enabled ~= false and ns.db.completeTrainerReporting == true
+        and ns.IsDebugEnabled and ns.IsDebugEnabled() and ns.GetCurrentFlavor() == "forever"
+end
+
+function ns.RecordTrainerPriceScan(classToken, npcName, rows)
+    if not ns.IsCompleteTrainerReportingEnabled() or not next(rows) then return end
+    local store = Store()
+    if not store then return end
+    local _, build = GetBuildInfo()
+    local faction = UnitFactionGroup("player")
+    local _, race = UnitRace("player")
+    local key = table.concat({ build or "unknown", classToken, faction or "", race or "", npcName or "" }, ":")
+    store.priceScans = store.priceScans or {}
+    local scan = store.priceScans[key]
+    if not scan then
+        local count = 0
+        for _ in pairs(store.priceScans) do count = count + 1 end
+        if count >= MAX_PRICE_SCANS then store.priceScansTruncated = true; return end
+        scan = { classToken = classToken, npcName = npcName, clientBuild = build, faction = faction, race = race, spells = {} }
+        store.priceScans[key] = scan
+    end
+    scan.lastSeen = type(time) == "function" and time() or nil
+    for spellKey, row in pairs(rows) do scan.spells[spellKey] = row end
 end
 
 function ns.RecordTrainerObservation(observation)
@@ -157,9 +184,12 @@ function ns.GetTrainerReportJSON()
     local store = Store()
     local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or rawget(_G, "GetAddOnMetadata")
     local version = getMetadata and getMetadata(ADDON_NAME, "Version") or "unknown"
+    local includePrices = store and ns.IsCompleteTrainerReportingEnabled() and store.priceScans ~= nil
     return JSON({ addon = ADDON_NAME, addonVersion = version, schemaVersion = 1,
         catalogueRevision = revision, changes = store and store.changes or {},
-        truncated = store and store.truncated == true or false })
+        truncated = store and store.truncated == true or false,
+        priceScans = includePrices and store.priceScans or nil,
+        priceScansTruncated = includePrices and store.priceScansTruncated or nil })
 end
 
 function ns.GetTrainerReportCount()
@@ -168,13 +198,23 @@ function ns.GetTrainerReportCount()
     return count
 end
 
-function ns.ClearTrainerReports()
+function ns.ClearTrainerReports(keepWindowOpen)
     if GnomeLevelUpDB then GnomeLevelUpDB.trainerChangeReports = nil end
-    if reportWindow then reportWindow:Hide() end
+    if not reportWindow then return end
+    copyArmed, copyText = false, nil
+    reportEdit:SetText("")
+    reportEdit:ClearFocus()
+    if keepWindowOpen then
+        copyHint:SetText(ns.L("Trainer reports cleared."))
+    else
+        reportWindow:Hide()
+    end
 end
 
 function ns.OpenTrainerReport()
-    if ns.GetTrainerReportCount() == 0 then
+    local store = Store()
+    local hasPrices = store and ns.IsCompleteTrainerReportingEnabled() and store.priceScans and next(store.priceScans)
+    if ns.GetTrainerReportCount() == 0 and not hasPrices then
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("No trainer catalogue differences have been recorded."))
         return
     end
@@ -220,6 +260,11 @@ function ns.OpenTrainerReport()
             reportEdit:HighlightText()
             copyHint:SetText(ns.L("Press Ctrl+C to copy. The field clears afterward."))
         end)
+        local clear = CreateFrame("Button", nil, reportWindow, "UIPanelButtonTemplate")
+        clear:SetSize(160, 26)
+        clear:SetPoint("LEFT", copy, "RIGHT", 10, 0)
+        clear:SetText(ns.L("Clear all"))
+        clear:SetScript("OnClick", function() ns.ClearTrainerReports(true) end)
         copyHint = reportWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         copyHint:SetPoint("TOPLEFT", reload, "BOTTOMLEFT", 0, -6)
         copyHint:SetSize(600, 28)
