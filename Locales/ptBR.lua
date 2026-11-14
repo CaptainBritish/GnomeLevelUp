@@ -112,7 +112,11 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["None"] = "Nenhum",
     ["Off"] = "Desativado",
     ["On"] = "Ativado",
-    ["Only display new skills"] = "Só habilidades novas, sem graus superiores",
+    ["Hide rank upgrades"] = "Ocultar graus superiores",
+    ["Show new abilities"] = "Mostrar novas habilidades",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "Mostra habilidades, graus de feitiços e técnicas disponíveis na janela de nível e na linha do tempo.",
+    ["Only show the latest spell rank"] = "Mostrar apenas o grau mais alto",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "Quando houver vários graus de um feitiço disponíveis, mostra apenas o grau mais alto que você ainda não aprendeu.",
     ["Only skills unlocked at this level"] = "Só habilidades desbloqueadas neste nível",
     ["Open Controller Options"] = "Abrir opções do controle",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "Opcional. Substitui o som acima. Exemplo: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Use class colors"] = "Usar cores de classe",
     ["Use horizontal scrolling"] = "Usar rolagem horizontal",
     ["Version %s"] = "Versão %s",
-    ["Warlock Grimoires"] = "Grimórios de Bruxo",
+    ["Grimoires"] = "Grimórios",
     ["Weapon skills: %s"] = "Perícias com armas: %s",
     ["Wood Panel"] = "Painel de madeira",
     ["addon %s"] = "Addon %s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Highlight new abilities"] = "Destacar novas habilidades",
     ["Emphasize stat gains"] = "Destacar ganhos de atributos",
     ["New ability"] = "Nova habilidade",
+    ["Current rank"] = "Grau atual",
     ["Rank upgrade"] = "Melhoria de grau",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("ptBR", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("ptBR", function() return { ["Ability Cost Size"] = "Tamanho do custo das habilidades", ["Adjust the size of ability prices for the current layout."] = "Ajusta o tamanho do preço das habilidades no layout atual." } end)
 RegisterLocaleBuilder("ptBR", function() return { ["Learning cost: %s"] = "Custo de aprendizado: %s", ["%d abilities"] = "%d habilidades", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "Exibe uma prévia sem alterar o histórico. Clique com o botão direito para escolher o número de habilidades." } end)
 RegisterLocaleBuilder("ptBR", function() return { ["Show prices in tooltips"] = "Mostrar preços nas dicas", ["Show full learning costs when hovering over abilities."] = "Mostra o custo completo ao passar sobre as habilidades." } end)
-RegisterLocaleBuilder("ptBR", function() return { ["Contributors"] = "Colaboradores" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Special Thanks"] = "Agradecimentos especiais" } end)
 RegisterLocaleBuilder("ptBR", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Falha ao capturar atributos: As alterações esperadas ainda não apareceram após várias tentativas.",
     ["3D Portrait render failed: The player model did not load in time."] = "Falha ao exibir o retrato 3D: O modelo do personagem não carregou a tempo.",
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Complete trainer reporting"] = "Relatórios completos de instrutores",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "Registra todos os preços legíveis dos instrutores de classe no modo de depuração. Exporte os preços oferecidos com /glu trainerreport.",
     ["Clear all"] = "Limpar tudo",
+    ["Weather motes"] = "Partículas do clima",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "Reproduz o clima atual atrás da janela. Substitui as partículas de fundo e adiciona névoa baixa em chuva forte, neve intensa ou tempestades de areia.",
+    ["Show level timeline"] = "Mostrar linha de níveis",
+    ["Timeline skills per level"] = "Habilidades por nível",
+    ["Timeline opacity"] = "Opacidade da linha",
+    ["Timeline colour"] = "Cor da linha",
+    ["Use class colour for timeline"] = "Usar a cor da classe na linha",
+    ["Show progress between levels and upcoming abilities below the popup."] = "Mostra o progresso entre níveis e as próximas habilidades abaixo da janela.",
+    ["Set how many ability icons to show at each timeline marker."] = "Define quantos ícones de habilidades aparecem por marcador.",
+    ["Adjust the opacity of the timeline below the popup."] = "Ajusta a opacidade da linha abaixo da janela.",
+    ["Choose a custom colour for the timeline."] = "Escolhe uma cor personalizada para a linha.",
+    ["Use your class colour for the timeline."] = "Usa a cor da sua classe na linha.",
 } end)

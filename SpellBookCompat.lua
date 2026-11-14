@@ -166,15 +166,18 @@ local function GetSpellName(spellID, itemInfo)
 end
 
 local function GetSpellTexture(spellID)
+    if not spellID then return end
     if C_Spell and C_Spell.GetSpellTexture then
         local ok, texture = pcall(C_Spell.GetSpellTexture, spellID)
         if ok and texture then return texture end
     end
-    if type(GetSpellTexture) == "function" then
-        local ok, texture = pcall(GetSpellTexture, spellID)
+    local legacyGetSpellTexture = rawget(_G, "GetSpellTexture")
+    if type(legacyGetSpellTexture) == "function" then
+        local ok, texture = pcall(legacyGetSpellTexture, spellID)
         if ok then return texture end
     end
 end
+ns.GetSpellIconTexture = GetSpellTexture
 
 local function GetSpellLearnedLevel(index, spellBank, spellID, itemInfo)
     if C_SpellBook and C_SpellBook.GetSpellBookItemLevelLearned then
@@ -196,7 +199,7 @@ local function GetSpellLearnedLevel(index, spellBank, spellID, itemInfo)
 end
 
 local function IsRetailSkillLineAllowed(skillLineIndex, skillLineInfo)
-    if not skillLineInfo or skillLineInfo.isGuild or skillLineInfo.isOffSpec then
+    if not skillLineInfo or skillLineInfo.isGuild or skillLineInfo.isOffSpec or skillLineInfo.offSpecID then
         return false
     end
     -- Retail can place level-gated entries in more than one player skill
@@ -230,15 +233,15 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
             local count = tonumber(skillLineInfo.numSpellBookItems) or 0
             for index = offset + 1, offset + count do
                 local ok, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, index, playerBank)
-                local spellID = ok and itemInfo and tonumber(itemInfo.spellID)
-                if spellID and itemInfo.itemType == futureType and not seen[spellID] then
+                local spellID = ok and itemInfo and tonumber(itemInfo.spellID or itemInfo.actionID)
+                if spellID and itemInfo.itemType == futureType and not itemInfo.isOffSpec and not seen[spellID] then
                     local requiredLevel = GetSpellLearnedLevel(index, playerBank, spellID, itemInfo)
                     if requiredLevel then
                         seen[spellID] = true
                         futureSpells[#futureSpells + 1] = {
                             id = spellID,
                             name = GetSpellName(spellID, itemInfo) or ("Spell " .. spellID),
-                            icon = GetSpellTexture(spellID),
+                            icon = itemInfo.iconID or GetSpellTexture(spellID),
                             requiredLevel = requiredLevel,
                         }
                     end
@@ -257,6 +260,31 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
     cachedFutureRevision = spellbookRevision
     if ns.PerfEnd then ns.PerfEnd(perf) end
     return futureSpells
+end
+
+function ns.GetRetailTimelineSpells(firstLevel, lastLevel)
+    local abilities, seen = {}, {}
+    local function Add(spellID, name, level, icon)
+        if not level or level < firstLevel or level > lastLevel or seen[spellID] then return end
+        local _, rank = ns.GetTrainingRankInfo(name)
+        if rank and rank > 1 then return end
+        seen[spellID] = true
+        abilities[#abilities + 1] = { id = spellID, name = name, requiredLevel = level, icon = icon or GetSpellTexture(spellID) }
+    end
+    for _, spell in ipairs(ns.SnapshotRetailFutureSpells()) do
+        Add(spell.id, spell.name, spell.requiredLevel, spell.icon)
+    end
+    for _, spell in ipairs(ns.GetRetailFutureSpellsBeforeLevel() or {}) do
+        Add(spell.id, spell.name, spell.requiredLevel, spell.icon)
+    end
+    for id, name in pairs(ns.SnapshotSpellBook()) do
+        if C_Spell and C_Spell.GetSpellLevelLearned then
+            local ok, level = pcall(C_Spell.GetSpellLevelLearned, id)
+            if ok and type(level) == "number" and (not issecretvalue or not issecretvalue(level)) then Add(id, name, level) end
+        end
+    end
+    table.sort(abilities, function(a, b) return a.id < b.id end)
+    return abilities
 end
 
 function ns.GetRetailUnlearnedSpells(currentLevel, futureSpells, rangeStart)

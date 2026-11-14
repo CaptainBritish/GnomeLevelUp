@@ -43,6 +43,7 @@ function ns.InstallPopupStatMetrics(render, content, GetStatLine, MeasureStatTex
     function render.UpdateStatWordTargets(changes)
         local columns, space, endWidth = {}, 0, 0
         local function Include(fs,data)
+            if data.gainOnly then return end
             local widths=render.StatWordMetrics(fs,data)
             for i,width in ipairs(widths) do columns[i]=math.max(columns[i] or 0,width) end
             space=math.max(space,fs.statWordSpace or 0)

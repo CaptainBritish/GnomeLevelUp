@@ -46,7 +46,9 @@ ns.OPTION_DESCRIPTIONS = {
     ["Automatically save trainer data"] = "Save available training information when visiting trainers.",
     ["Include profession trainers"] = "Include profession training in trainer scans.",
     ["Only skills unlocked at this level"] = "Show unlocks from the gained level instead of earlier levels.",
-    ["Only display new skills"] = "Hide rank upgrades and show only new abilities.",
+    ["Hide rank upgrades"] = "Hide rank upgrades and show only new abilities.",
+    ["Show new abilities"] = "Show abilities, spell ranks, and training unlocks in the level-up popup and timeline.",
+    ["Only show the latest spell rank"] = "When several ranks of a spell are available, show only the highest unlearned rank.",
     ["Show Warlock pet abilities"] = "Include training abilities for your character's pet.",
     ["Show Hunter pet abilities"] = "Include training abilities for your character's pet.",
     ["Filter grimoires by active pet"] = "Show grimoires for your currently summoned pet.",
@@ -82,6 +84,7 @@ ns.OPTION_DESCRIPTIONS = {
     ["Import / export"] = "Share settings by copying a profile code.",
     ["Font"] = "Choose the font used by popup text.",
     ["Suspend Preview"] = "Pause a test popup's timeout only while Options is open.",
+    ["Timeline colour"] = "Choose a custom colour for the timeline.",
 }
 for _, setting in pairs(ns.OPTION_SETTINGS) do
     if setting.description then ns.OPTION_DESCRIPTIONS[setting.label] = setting.description end
@@ -154,6 +157,7 @@ local animationDescriptions = {
     ["Emphasize stat gains"] = "Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes.",
     ["Portrait motes"] = "Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst.",
     ["Background motes"] = "Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up.",
+    ["Weather motes"] = "Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms.",
     ["Frame edge glow"] = "Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern.",
     ["Portrait and ring settle"] = "Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash.",
     ["Reveal dividers"] = "Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal.",

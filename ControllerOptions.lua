@@ -340,6 +340,9 @@ local function Toggle(label, key, after)
             end }
     end
     local function available()
+        if (key == "useHorizontalAbilityScroll" or key == "highlightNewAbilities"
+            or key == "showHunterPetSkills" or key == "showWarlockPetSkills"
+            or key == "filterWarlockPetByActivePet") and not ns.NewAbilitiesEnabled() then return false end
         if ns.db.reducedMotion and ns.CLASSIC_FLAIR_SETTINGS[key] then return false end
         if key == "muteNativeDing" or key == "playSound" then return not ns.UsesNativeLevelUpSound() end
         if key == "showWeaponSkills" then return ns.WeaponTrainingAvailable() end
@@ -369,7 +372,7 @@ local function PetClassToggle(label, key, class)
     local entry = Toggle(label, key)
     entry.isAvailable = function()
         local _, token = UnitClass("player")
-        return token == class and ns.GetCurrentFlavor() == "forever"
+        return token == class and ns.TrainerAbilitiesEnabled()
     end
     local activate = entry.activate
     entry.activate = function()
@@ -408,9 +411,10 @@ local function BuildEntries(key)
             Toggle("Compact Layout", "compactMode"),
         }
         if ns.SupportsTrainerData() then
-            entries[#entries + 1] = { label = "Show pet skills",
-                get = function() return ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
+            entries[#entries + 1] = { label = "Show pet skills", isAvailable = ns.TrainerAbilitiesEnabled,
+                get = function() return ns.TrainerAbilitiesEnabled() and ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills and "On" or "Off" end,
                 activate = function()
+                    if not ns.TrainerAbilitiesEnabled() then return end
                     local enabled = not (ns.db.showHunterPetSkills and ns.db.showWarlockPetSkills)
                     ns.db.showHunterPetSkills, ns.db.showWarlockPetSkills = enabled, enabled
                 end }
@@ -467,6 +471,7 @@ local function BuildEntries(key)
                 end },
             NumericOption("duration"),
             NumericOption("popupScale"),
+            Toggle("Show level timeline", "showLevelTimeline"),
             Toggle("Lock Location", "lockFramePosition"),
             { label = "Preview Level-Up", get = function() return "A to preview" end,
                 activate = function() ns.PreviewLevelUp() end },
@@ -475,6 +480,10 @@ local function BuildEntries(key)
         }
         for index, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do
             table.insert(entries, 9 + index, NumericOption(setting.key))
+        end
+        if ns.LevelTimelineEnabled() then
+            if ns.NewAbilitiesEnabled() then table.insert(entries, #entries - 2, NumericOption("timelineSkillCount")) end
+            table.insert(entries, #entries - 2, NumericOption("timelineOpacity"))
         end
         return entries
     elseif key == "mode" then
@@ -521,24 +530,25 @@ local function BuildEntries(key)
     elseif key == "trainer" then
         if ns.GetCurrentFlavor() == "retail" then
             return {
+                Toggle(nil, "showNewAbilities"),
                 Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
                 Toggle("Use horizontal scrolling", "useHorizontalAbilityScroll"),
             }
         end
         local options = {
+            Toggle(nil, "showNewAbilities"),
+            Toggle(nil, "showOnlyCurrentLevelSkills"),
+            Toggle(nil, "showOnlyNewSkills"),
+            Toggle(nil, "showLatestTrainingRanks"),
             Toggle("Automatically save trainer data", "autoScanTrainers"),
             Toggle("Include profession trainers", "scanProfessionTrainers"),
             Toggle("Show unlearned weapon skills", "showWeaponSkills"),
             Toggle("Show learning costs", "showTrainerCosts"),
             Toggle("Show prices in tooltips", "showTrainerCostsInTooltips"),
-            Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
             PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
             PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
             PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
         }
-        if ns.SupportsTrainerData() then
-            table.insert(options, 6, Toggle("Only display new skills", "showOnlyNewSkills"))
-        end
         return options
     elseif key == "sound" then
         local options = {
@@ -576,7 +586,8 @@ local function BuildEntries(key)
             Toggle("Highlight new abilities", "highlightNewAbilities", function() ns.RefreshVisualEffects() end),
             Toggle("Emphasize stat gains", "emphasizeStatGains", function() ns.RefreshVisualEffects() end),
             Toggle("Portrait motes", "portraitSparks", function() ns.RefreshVisualEffects() end),
-            Toggle("Background motes", "backgroundEmbers", function() ns.RefreshVisualEffects() end),
+            Toggle("Background motes", "backgroundEmbers"),
+            Toggle("Weather motes", "weatherMotes"),
             Toggle("Frame edge glow", "frameEdgeGlow", function() ns.RefreshVisualEffects() end),
             Toggle("Portrait and ring settle", "portraitRingSettle", function() ns.RefreshVisualEffects() end),
             Toggle("Reveal dividers", "dividerReveal", function() ns.RefreshVisualEffects() end),

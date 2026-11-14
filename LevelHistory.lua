@@ -251,11 +251,14 @@ function ns.GetLevelHistoryView(key, flavor)
     return view
 end
 
-local function FormatTime(seconds)
-    if not ValidTime(seconds) then return "-" end
-    seconds = math.floor(seconds)
+function ns.FormatLevelClock(seconds)
+    seconds = math.max(0, math.floor(tonumber(seconds) or 0))
     if seconds >= 3600 then return string.format("%d:%02d:%02d", math.floor(seconds / 3600), math.floor(seconds / 60) % 60, seconds % 60) end
     return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+local function FormatTime(seconds)
+    return ValidTime(seconds) and ns.FormatLevelClock(seconds) or "-"
 end
 
 local HISTORY_LABELS = { "Level", "Recorded time", "Personal best" }

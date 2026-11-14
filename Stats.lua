@@ -305,14 +305,24 @@ local function GetDisplayedStatIndexes()
     return { 1, 2, 3, 4, 5 } -- + Spirit
 end
 
+local function StatIncreased(old, new, expected)
+    old, new = GetVisibleNumber(old), GetVisibleNumber(new)
+    return type(old) == "number" and type(new) == "number" and new > old
+        and (not expected or new - old >= expected)
+end
+
+local function CanShowManaGain(after)
+    if after and after.powerToken then return after.powerToken == "MANA" end
+    return ns.PlayerUsesMana()
+end
+
 function ns.HasMissingLevelUpStats(before, after, expectedGains)
+    if expectedGains.health and not StatIncreased(before.health, after.health) then return true end
+    if expectedGains.mana and CanShowManaGain(after)
+        and (before.powerToken ~= "MANA" or not StatIncreased(before.power, after.power)) then return true end
     for _, index in ipairs(GetDisplayedStatIndexes()) do
-        if expectedGains[index] then
-            local old = GetVisibleNumber(before.stats[index])
-            local new = GetVisibleNumber(after.stats[index])
-            if type(old) ~= "number" or type(new) ~= "number" or not (new > old) then
-                return true
-            end
+        if expectedGains[index] and not StatIncreased(before.stats[index], after.stats[index], expectedGains[index]) then
+            return true
         end
     end
     return false
@@ -340,34 +350,37 @@ function ns.BuildMaxLevelPreviewStats()
     return changes
 end
 
-function ns.DiffStats(before, after)
+function ns.DiffStats(before, after, expectedGains)
+    local beforeCaptured, afterCaptured = before, after
+    before, after = before or {}, after or {}
+    expectedGains = expectedGains or {}
     -- Primary rows show increases; the secondary page can also show decreases.
     local diff = {
         level = GetVisibleNumber(after.level) or after.level,
         stats = {},
-        secondary = ns.DiffSecondaryStats(before.secondary, after.secondary),
+        secondary = beforeCaptured and afterCaptured and ns.DiffSecondaryStats(before.secondary, after.secondary) or {},
     }
 
-    local function AddStat(name, oldVal, newVal, kind, statIndex)
-        oldVal, newVal = GetVisibleNumber(oldVal), GetVisibleNumber(newVal)
-        if oldVal == nil or newVal == nil then
-            return -- secret right now; skip this one rather than crash
+    local function AddStat(name, oldVal, newVal, kind, statIndex, eventGain)
+        if StatIncreased(oldVal, newVal, statIndex and eventGain) then
+            diff.stats[#diff.stats + 1] = { name = name, old = oldVal, new = newVal, kind = kind, statIndex = statIndex }
+        elseif eventGain then
+            -- The event tells us the gain. It cannot tell us either total.
+            diff.stats[#diff.stats + 1] = { name = name, gainOnly = eventGain, kind = kind, statIndex = statIndex }
         end
-        local ok, increased = pcall(function() return newVal > oldVal end)
-        if not ok or not increased then
-            return -- unchanged or (shouldn't happen, but just in case) went down
-        end
-        diff.stats[#diff.stats + 1] = { name = name, old = oldVal, new = newVal, kind = kind, statIndex = statIndex }
     end
 
-    AddStat("Health", before.health, after.health, "health")
-    if ns.GetCurrentFlavor() ~= "retail" or after.powerToken == "MANA" then
-        AddStat(after.powerLabel or "Power", before.power, after.power,
-            after.powerToken == "MANA" and "mana" or "power")
+    AddStat("Health", before.health, after.health, "health", nil, expectedGains.health)
+    if CanShowManaGain(afterCaptured) then
+        local oldMana = before.powerToken == "MANA" and before.power or nil
+        AddStat("Mana", oldMana, after.power, "mana", nil, expectedGains.mana)
+    elseif after.powerToken and ns.GetCurrentFlavor() ~= "retail" then
+        AddStat(after.powerLabel or "Power", before.power, after.power, "power")
     end
 
+    local oldStats, newStats = before.stats or {}, after.stats or {}
     for _, i in ipairs(GetDisplayedStatIndexes()) do
-        AddStat(STAT_NAMES[i], before.stats[i], after.stats[i], nil, i)
+        AddStat(STAT_NAMES[i], oldStats[i], newStats[i], nil, i, expectedGains[i])
     end
 
     return diff

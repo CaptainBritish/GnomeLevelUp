@@ -112,7 +112,11 @@ RegisterLocaleBuilder("koKR", function() return {
     ["None"] = "없음",
     ["Off"] = "끔",
     ["On"] = "켬",
-    ["Only display new skills"] = "상위 등급을 제외한 새 기술만 표시",
+    ["Hide rank upgrades"] = "상위 등급 숨기기",
+    ["Show new abilities"] = "새 기술 표시",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "레벨 상승 창과 타임라인에 기술, 주문 등급, 새로 배울 수 있는 기술을 표시합니다.",
+    ["Only show the latest spell rank"] = "가장 높은 주문 등급만 표시",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "한 주문의 여러 등급을 배울 수 있을 때, 아직 배우지 않은 가장 높은 등급만 표시합니다.",
     ["Only skills unlocked at this level"] = "현재 레벨에 해제된 기술만 표시",
     ["Open Controller Options"] = "게임패드 설정 열기",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "선택 사항입니다. 위의 소리 대신 재생합니다. 예: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Use class colors"] = "직업 색상 사용",
     ["Use horizontal scrolling"] = "가로 스크롤 사용",
     ["Version %s"] = "버전 %s",
-    ["Warlock Grimoires"] = "흑마법서",
+    ["Grimoires"] = "마법서",
     ["Weapon skills: %s"] = "무기 숙련: %s",
     ["Wood Panel"] = "나무 패널",
     ["addon %s"] = "애드온: %s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Highlight new abilities"] = "새 능력 강조",
     ["Emphasize stat gains"] = "능력치 증가 강조",
     ["New ability"] = "새 능력",
+    ["Current rank"] = "현재 등급",
     ["Rank upgrade"] = "등급 상승",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("koKR", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("koKR", function() return { ["Ability Cost Size"] = "기술 비용 글자 크기", ["Adjust the size of ability prices for the current layout."] = "현재 배치에서 기술 비용의 글자 크기를 조절합니다." } end)
 RegisterLocaleBuilder("koKR", function() return { ["Learning cost: %s"] = "학습 비용: %s", ["%d abilities"] = "기술 %d개", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "레벨 기록을 변경하지 않고 미리 봅니다. 오른쪽 클릭으로 기술 개수를 선택하세요." } end)
 RegisterLocaleBuilder("koKR", function() return { ["Show prices in tooltips"] = "툴팁에 가격 표시", ["Show full learning costs when hovering over abilities."] = "기술에 마우스를 올리면 전체 학습 비용을 표시합니다." } end)
-RegisterLocaleBuilder("koKR", function() return { ["Contributors"] = "기여자" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Special Thanks"] = "특별 감사" } end)
 RegisterLocaleBuilder("koKR", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "능력치 수집 실패: 다시 시도한 후에도 예상된 능력치 변화가 확인되지 않았습니다.",
     ["3D Portrait render failed: The player model did not load in time."] = "3D 초상화 표시 실패: 캐릭터 모델을 제때 불러오지 못했습니다.",
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Complete trainer reporting"] = "직업 전문가 전체 보고서",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "디버그 모드에서 확인할 수 있는 직업 전문가의 모든 훈련 비용을 기록합니다. /glu trainerreport로 비용을 내보낼 수 있습니다.",
     ["Clear all"] = "모두 지우기",
+    ["Weather motes"] = "날씨 입자",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "팝업 뒤에 현재 날씨를 표시합니다. 배경 입자를 대체하며 폭우, 폭설 또는 모래폭풍 때 하단에 안개를 추가합니다.",
+    ["Show level timeline"] = "레벨 타임라인 표시",
+    ["Timeline skills per level"] = "레벨당 기술 수",
+    ["Timeline opacity"] = "타임라인 불투명도",
+    ["Timeline colour"] = "타임라인 색상",
+    ["Use class colour for timeline"] = "타임라인에 직업 색상 사용",
+    ["Show progress between levels and upcoming abilities below the popup."] = "팝업 아래에 레벨 진행 상황과 다음 기술을 표시합니다.",
+    ["Set how many ability icons to show at each timeline marker."] = "각 레벨 표시에 표시할 기술 아이콘 수를 설정합니다.",
+    ["Adjust the opacity of the timeline below the popup."] = "팝업 아래 타임라인의 불투명도를 조정합니다.",
+    ["Choose a custom colour for the timeline."] = "타임라인의 사용자 지정 색상을 선택합니다.",
+    ["Use your class colour for the timeline."] = "타임라인에 내 직업 색상을 사용합니다.",
 } end)

@@ -112,7 +112,11 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["None"] = "無",
     ["Off"] = "關閉",
     ["On"] = "開啟",
-    ["Only display new skills"] = "僅顯示新技能，不含已學技能的升級",
+    ["Hide rank upgrades"] = "隱藏技能升級",
+    ["Show new abilities"] = "顯示新技能",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "在升級視窗和時間軸中顯示技能、法術等級和可學習的內容。",
+    ["Only show the latest spell rank"] = "僅顯示最高法術等級",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "同一法術有多個可學習等級時，僅顯示尚未學會的最高等級。",
     ["Only skills unlocked at this level"] = "僅顯示本級解鎖的技能",
     ["Open Controller Options"] = "開啟控制器設定",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "選填。取代上方音效。範例：Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Use class colors"] = "使用職業顏色",
     ["Use horizontal scrolling"] = "使用水平捲動",
     ["Version %s"] = "版本%s",
-    ["Warlock Grimoires"] = "術士魔典",
+    ["Grimoires"] = "魔典",
     ["Weapon skills: %s"] = "武器技能：%s",
     ["Wood Panel"] = "木製面板",
     ["addon %s"] = "插件：%s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Highlight new abilities"] = "醒目顯示新技能",
     ["Emphasize stat gains"] = "醒目顯示屬性提升",
     ["New ability"] = "新技能",
+    ["Current rank"] = "目前等級",
     ["Rank upgrade"] = "等級提升",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("zhTW", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("zhTW", function() return { ["Ability Cost Size"] = "技能費用字級", ["Adjust the size of ability prices for the current layout."] = "調整目前版面配置中的技能費用字級。" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Learning cost: %s"] = "學習費用：%s", ["%d abilities"] = "%d 個技能", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "顯示測試彈窗，不變更等級記錄。按右鍵可選擇技能數量。" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Show prices in tooltips"] = "在提示中顯示價格", ["Show full learning costs when hovering over abilities."] = "游標移至技能時顯示完整學習費用。" } end)
-RegisterLocaleBuilder("zhTW", function() return { ["Contributors"] = "貢獻者" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Special Thanks"] = "特別感謝" } end)
 RegisterLocaleBuilder("zhTW", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "屬性擷取失敗：重試後仍未偵測到預期的屬性變化。",
     ["3D Portrait render failed: The player model did not load in time."] = "3D頭像繪製失敗：角色模型未能及時載入。",
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Complete trainer reporting"] = "完整訓練師報告",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "在偵錯模式下記錄職業訓練師所有可讀取的價格。使用 /glu trainerreport 匯出實際報價。",
     ["Clear all"] = "全部清除",
+    ["Weather motes"] = "天氣粒子",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "在彈出視窗後方呈現目前天氣。取代背景粒子，並在大雨、大雪或沙塵暴時在底部加入薄霧。",
+    ["Show level timeline"] = "顯示等級時間軸",
+    ["Timeline skills per level"] = "每級技能數量",
+    ["Timeline opacity"] = "時間軸不透明度",
+    ["Timeline colour"] = "時間軸顏色",
+    ["Use class colour for timeline"] = "時間軸使用職業顏色",
+    ["Show progress between levels and upcoming abilities below the popup."] = "在彈出視窗下方顯示等級進度和即將解鎖的技能。",
+    ["Set how many ability icons to show at each timeline marker."] = "設定時間軸每個標記顯示的技能圖示數量。",
+    ["Adjust the opacity of the timeline below the popup."] = "調整彈出視窗下方時間軸的不透明度。",
+    ["Choose a custom colour for the timeline."] = "選擇時間軸的自訂顏色。",
+    ["Use your class colour for the timeline."] = "在時間軸上使用你的職業顏色。",
 } end)

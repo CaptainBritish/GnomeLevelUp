@@ -55,6 +55,25 @@ function ns.GetTrainingRankInfo(label)
     return base or normalized, tonumber(rank)
 end
 
+function ns.LatestTrainingRanks(abilities)
+    local latest, shown = {}, {}
+    for _, ability in ipairs(abilities) do
+        local family, rank = ability.trainingFamily, ability.trainingRank
+        if not family and not ability.preview then family, rank = ns.GetTrainingRankInfo(ability.name) end
+        local previous = family and latest[family]
+        if not family or not rank then
+            shown[#shown + 1] = ability
+        elseif not previous then
+            shown[#shown + 1] = ability
+            latest[family] = { rank = rank, index = #shown }
+        elseif rank > previous.rank then
+            shown[previous.index] = ability
+            previous.rank = rank
+        end
+    end
+    return shown
+end
+
 function ns.TrainingEntryKey(entry, level)
     local id = type(entry) == "table" and entry.spellID
     if id then return "spell:" .. tostring(id) end
@@ -135,6 +154,20 @@ local function GetClassSources()
     return static, scanned
 end
 
+function ns.GetBundledTimelineTraining(level)
+    local static = GetClassSources()
+    local eligible = {}
+    for _, entry in ipairs(static and static[level] or {}) do
+        if type(entry) == "table" and entry.spellID and ns.IsTrainingEntryEligible(entry)
+            and (not entry.profession or (ns.db and ns.db.scanProfessionTrainers))
+            and (not entry.requiredTalentId or ns.IsSpellKnownAcrossClients(entry.requiredTalentId)) then
+            -- An upcoming icon only needs the spell ID, even while its name loads.
+            eligible[#eligible + 1] = entry
+        end
+    end
+    return eligible
+end
+
 function ns.GetTrainerCatalogIndex()
     -- Use the bundled catalogue where available, otherwise legacy scan data.
     if catalogIndex and catalogIndex.revision == catalogRevision then
@@ -202,8 +235,20 @@ function ns.GetTrainerCatalogIndex()
         if a.level ~= b.level then return a.level < b.level end
         return a.name < b.name
     end)
-    catalogIndex = { revision = catalogRevision, entries = entries }
+    local byLevel, bySpellID = {}, {}
+    for _, item in ipairs(entries) do
+        local bucket = byLevel[item.level]
+        if not bucket then bucket = {}; byLevel[item.level] = bucket end
+        bucket[#bucket + 1] = item
+        if item.id then bySpellID[item.id] = item end
+    end
+    catalogIndex = { revision = catalogRevision, entries = entries, byLevel = byLevel, bySpellID = bySpellID }
     return entries
+end
+
+function ns.GetTrainerCatalogLookups()
+    ns.GetTrainerCatalogIndex()
+    return catalogIndex.byLevel, catalogIndex.bySpellID
 end
 
 -- Pet training records share the Hunter trainer catalog. Match complete
@@ -241,10 +286,15 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
     local unlearnedAbilities = {}
     local rankedAbilities = {}
     local knownFamilies = {}
-    if onlyNewSkills then
-        for _, item in ipairs(catalog) do
-            local family = item.entry.familyID
-            if family and (ns.IsTrainerSkillKnown(item.entry, known)
+    local currentRanks = {}
+    for _, item in ipairs(catalog) do
+        local family, rank = item.entry.familyID, item.entry.rank
+        if family then
+            local exactKnown = item.id and known.spells[item.id]
+            if exactKnown and rank and (not currentRanks[family] or rank > currentRanks[family].entry.rank) then
+                currentRanks[family] = item
+            end
+            if onlyNewSkills and (exactKnown or ns.IsTrainerSkillKnown(item.entry, known)
                 or known.spells[family]
                 or (ns.IsSpellKnownAcrossClients and ns.IsSpellKnownAcrossClients(family))) then
                 knownFamilies[family] = true
@@ -275,12 +325,18 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
                 icon = catalogEntry.icon,
                 id = catalogEntry.id,
                 cost = catalogEntry.cost,
+                requiredLevel = displayLevel,
             }
             local baseName, rank = ns.GetTrainingRankInfo(catalogEntry.name)
             if entry.familyID then baseName, rank = "spell:" .. entry.familyID, entry.rank end
             -- Retain display metadata separately from the temporary filter rank.
+            ability.trainingFamily = rank and baseName or nil
             ability.trainingRank = rank
             ability.isNewAbility = rank == nil or rank == 1
+            local current = currentRanks[entry.familyID]
+            if not hunterPetSkill and current and rank and current.entry.rank < rank then
+                ability.previousRankSpellID = current.id
+            end
             if onlyNewSkills and rank and baseName then
                 if not knownFamilies[entry.familyID] and (known.ranks[baseName] or 0) == 0 then
                     local existing = rankedAbilities[baseName]

@@ -1,6 +1,6 @@
 # GnomeLevelUp
 
-**Development version: 1.6.3**
+**Development version: 1.6.4**
 
 A fancy, CRPG-inspired level-up screen for World of Warcraft. It shows your stat
 gains and the trainer skills you haven't learned yet, with themes, custom sounds
@@ -196,6 +196,7 @@ settings changed by commands are saved as usual.
 | `/glu debugportrait <delay\|fail\|unmasked>` | With Player 3D portrait selected, test a delayed or rejected model load, or preview the model without the circular mask. | Yes |
 | `/glu debugstats reset` | Restore ordinary preview totals and open a preview | Yes |
 | `/glu debugmilestone <1-1000>` or `/glu debugmilestone reset` | Save a custom milestone interval for real level-ups, milestone screenshots and previews while debug mode is on. Reset or select a preset to clear the override. | Yes |
+| `/glu debugweather <type> <intensity>` | Preview rain (1), snow (2), or sandstorm (3) at an intensity from 0 to 1. Types 0 and 4 show no effect. | Yes |
 | `/glu dumptraining` | Print cached trainer skills and learned state | Yes |
 | `/glu testtrainer` | Print the current unlearned trainer/ability list | Yes |
 | `/glu dumpskills` | Print Skills-tab, equipped and trainable weapon diagnostics | Yes |

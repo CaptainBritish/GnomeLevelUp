@@ -112,7 +112,11 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["None"] = "Нет",
     ["Off"] = "Выкл.",
     ["On"] = "Вкл.",
-    ["Only display new skills"] = "Только новые способности, без повышенных рангов",
+    ["Hide rank upgrades"] = "Скрывать улучшения рангов",
+    ["Show new abilities"] = "Показывать новые способности",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "Показывает способности, ранги заклинаний и доступное обучение в окне повышения уровня и на шкале.",
+    ["Only show the latest spell rank"] = "Показывать только высший ранг",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "Если доступно несколько рангов заклинания, показывает только высший из ещё не изученных рангов.",
     ["Only skills unlocked at this level"] = "Только способности, открытые на этом уровне",
     ["Open Controller Options"] = "Открыть настройки геймпада",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "Необязательно. Заменяет выбранный выше звук. Пример: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Use class colors"] = "Использовать цвета классов",
     ["Use horizontal scrolling"] = "Горизонтальная прокрутка",
     ["Version %s"] = "Версия %s",
-    ["Warlock Grimoires"] = "Гримуары чернокнижника",
+    ["Grimoires"] = "Гримуары",
     ["Weapon skills: %s"] = "Навыки владения оружием: %s",
     ["Wood Panel"] = "Деревянная панель",
     ["addon %s"] = "Аддон: %s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Highlight new abilities"] = "Выделять новые способности",
     ["Emphasize stat gains"] = "Выделять прирост характеристик",
     ["New ability"] = "Новая способность",
+    ["Current rank"] = "Текущий ранг",
     ["Rank upgrade"] = "Повышение ранга",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("ruRU", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("ruRU", function() return { ["Ability Cost Size"] = "Размер текста стоимости способностей", ["Adjust the size of ability prices for the current layout."] = "Меняет размер текста стоимости способностей в текущей компоновке." } end)
 RegisterLocaleBuilder("ruRU", function() return { ["Learning cost: %s"] = "Стоимость обучения: %s", ["%d abilities"] = "Количество способностей: %d", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "Показывает тестовое окно без изменений истории. Щёлкните правой кнопкой, чтобы выбрать число способностей." } end)
 RegisterLocaleBuilder("ruRU", function() return { ["Show prices in tooltips"] = "Показывать цены в подсказках", ["Show full learning costs when hovering over abilities."] = "Показывает полную стоимость при наведении на способности." } end)
-RegisterLocaleBuilder("ruRU", function() return { ["Contributors"] = "Участники" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Special Thanks"] = "Особая благодарность" } end)
 RegisterLocaleBuilder("ruRU", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Сбой при считывании характеристик: Ожидаемые изменения не появились после повторных попыток.",
     ["3D Portrait render failed: The player model did not load in time."] = "Сбой отрисовки 3D-портрета: Модель персонажа не загрузилась вовремя.",
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Complete trainer reporting"] = "Полные отчёты об учителях",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "Записывает все доступные цены учителей классов в режиме отладки. Экспорт цен выполняется командой /glu trainerreport.",
     ["Clear all"] = "Очистить всё",
+    ["Weather motes"] = "Частицы погоды",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "Отображает текущую погоду на фоне окна. Заменяет фоновые частицы и добавляет дымку внизу при сильном дожде, снегопаде или песчаной буре.",
+    ["Show level timeline"] = "Показывать шкалу уровней",
+    ["Timeline skills per level"] = "Способности на уровень",
+    ["Timeline opacity"] = "Непрозрачность шкалы",
+    ["Timeline colour"] = "Цвет шкалы",
+    ["Use class colour for timeline"] = "Цвет класса для шкалы",
+    ["Show progress between levels and upcoming abilities below the popup."] = "Показывает переход между уровнями и будущие способности под окном.",
+    ["Set how many ability icons to show at each timeline marker."] = "Задаёт число значков способностей у каждой отметки.",
+    ["Adjust the opacity of the timeline below the popup."] = "Настраивает непрозрачность шкалы под окном.",
+    ["Choose a custom colour for the timeline."] = "Выбирает цвет шкалы.",
+    ["Use your class colour for the timeline."] = "Использует цвет вашего класса для шкалы.",
 } end)

@@ -57,6 +57,7 @@ function ns.InstallPopupRenderHelpers(render)
             end
             icon.effectVisible = visible
             if not visible then
+                if render.rankTooltipOwner == icon then render.HideAbilityTooltips(icon) end
                 render.Shown(icon.newAbilityGlow, false)
                 render.Shown(icon.ambientSparkle, false)
                 for _, texture in ipairs(icon.cornerSparkles or {}) do render.Shown(texture, false) end

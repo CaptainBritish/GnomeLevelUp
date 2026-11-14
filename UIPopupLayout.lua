@@ -33,14 +33,17 @@ function ns.CreatePopupHeadingFitter(context)
         local fit = 1
         for _, spec in ipairs(specs) do
             local text, width = spec[1], spec[2]
-            local path, _, flags = text:GetFont()
-            local naturalWidth = render.MeasureTextWidth(path, text.gluFontBaseSize * scale, flags, text:GetText())
-            fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
+            if not horizontal or text ~= content.petSpellsHeader then
+                local path, _, flags = text:GetFont()
+                local naturalWidth = render.MeasureTextWidth(path, text.gluFontBaseSize * scale, flags, text:GetText())
+                fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
+            end
         end
         -- One fit factor keeps all section headings the same size.
         for _, text in ipairs({content.statsHeader, content.spellsHeader, content.petSpellsHeader}) do
             local path, _, flags = text:GetFont()
-            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, text.gluFontBaseSize * scale * fit), flags or "")
+            local headingFit = horizontal and text == content.petSpellsHeader and 1 or fit
+            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, text.gluFontBaseSize * scale * headingFit), flags or "")
             SyncTextGeometry(text)
         end
         render.headingFitKey = key
@@ -59,7 +62,10 @@ function ns.CreatePopupSectionPositioner(context)
         local current = content.statsContainer
         local gap = SectionGap()
         content.statsHeader:ClearAllPoints()
-        if IsHorizontalLayout() then
+        local centerStats = IsHorizontalLayout() and not ns.NewAbilitiesEnabled()
+        if centerStats then
+            content.statsHeader:SetPoint("TOP", content, "TOP", context.horizontalStatsOnlyOffset, -24)
+        elseif IsHorizontalLayout() then
             local statsX = 24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2
             content.statsHeader:SetPoint("TOP", content, "TOPLEFT", statsX, -24)
         else
@@ -76,8 +82,13 @@ function ns.CreatePopupSectionPositioner(context)
             if IsHorizontalLayout() then
                 -- Section refreshes must preserve the footer anchor too.
                 content.levelTimeText:ClearAllPoints()
-                content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOMLEFT",
-                    24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2, 26 / math.max(.001, content:GetScale()))
+                local inset = 26 / math.max(.001, content:GetScale())
+                if centerStats then
+                    content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOM", context.horizontalStatsOnlyOffset, inset)
+                else
+                    content.levelTimeText:SetPoint("BOTTOM", content, "BOTTOMLEFT",
+                        24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2, inset)
+                end
             else
                 AnchorBelow(content.levelTimeText, current, gap + 2)
             end

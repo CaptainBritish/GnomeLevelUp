@@ -15,6 +15,7 @@ local WATERMARK_DIMENSIONS = {
     ["options-watermark-forever"] = { width = 379, height = 400 },
 }
 local WATERMARK_HEIGHT = 300
+local OPTIONS_WATERMARK_BOTTOM = 26
 
 local function GetWatermarkName(texturePath)
     return texturePath and texturePath:match("([^\\/]+)$")
@@ -24,6 +25,14 @@ local function SizeWatermark(watermark, texturePath)
     local dimensions = WATERMARK_DIMENSIONS[GetWatermarkName(texturePath)]
         or WATERMARK_DIMENSIONS["options-watermark"]
     watermark:SetSize(WATERMARK_HEIGHT * dimensions.width / dimensions.height, WATERMARK_HEIGHT)
+end
+
+local function CropOptionsWatermark(watermark, footerHeight)
+    local bottom = math.max(OPTIONS_WATERMARK_BOTTOM, footerHeight)
+    local visibleHeight = math.max(0, WATERMARK_HEIGHT - (bottom - OPTIONS_WATERMARK_BOTTOM))
+    watermark:SetHeight(visibleHeight)
+    watermark:SetTexCoord(0, 1, 0, visibleHeight / WATERMARK_HEIGHT)
+    watermark:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, bottom)
 end
 
 local function GetSeasonalWatermark()
@@ -48,6 +57,7 @@ function ns.RefreshOptionsWatermark(watermark)
     if texturePath then
         SizeWatermark(watermark, texturePath)
         watermark:SetTexture(texturePath)
+        if watermark.gluFooterHeight then CropOptionsWatermark(watermark, watermark.gluFooterHeight) end
         watermark:SetAlpha(0.40)
         watermark:Show()
     else
@@ -159,7 +169,7 @@ local function BuildOptions()
     end
 
     local watermark = panel:CreateTexture(nil, "BACKGROUND")
-    watermark:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, 18)
+    watermark:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -24, OPTIONS_WATERMARK_BOTTOM)
     watermark:SetAlpha(0.40)
     panel.gluWatermark = watermark
     local function RefreshSeasonalWatermark() ns.RefreshOptionsWatermark(watermark) end
@@ -238,11 +248,19 @@ local function BuildOptions()
     -- Row IDs preserve control order; measured cells handle wrapping and visibility.
     local optionLayout = ns.CreateOptionsLayout(body)
     local footer = CreateFrame("Frame", nil, panel)
-    footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 4, 8)
+    footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 4, 0)
     footer:SetFrameLevel(panel:GetFrameLevel() + 30)
     footer:EnableMouse(true)
+    do
+        local separator = footer:CreateTexture(nil, "OVERLAY")
+        separator:SetColorTexture(0, 0, 0, 0.5)
+        separator:SetPoint("TOPLEFT", footer, "TOPLEFT")
+        separator:SetPoint("TOPRIGHT", footer, "TOPRIGHT")
+        separator:SetHeight(2)
+    end
     local footerLayout = ns.CreateOptionsLayout(footer, 0)
-    footerLayout.topPadding = function() return 0 end
+    footerLayout.topPadding = function() return 12 end
+    footerLayout.bottomPadding = 0
     local optionTabs = ns.CreateOptionsTabs(panel, chrome, optionsScroll, optionLayout)
     function ns.SelectOptionsTab(key) return optionTabs:Select(key) end
     local IsForeverMode = ns.SupportsTrainerData
@@ -250,7 +268,7 @@ local function BuildOptions()
         ["Check trainer lists for catalogue changes"] = true,
         ["Export trainer report"] = true,
         ["Automatically save trainer data"] = true,
-        ["Only display new skills"] = true,
+        ["Hide rank upgrades"] = true,
         ["Show unlearned weapon skills"] = true,
         ["Show learning costs"] = true,
         ["Show Warlock pet abilities"] = true,
@@ -585,7 +603,7 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6.3"
+    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6.4"
     version:SetText(ns.L("Version %s", tostring(addonVersion)))
     ns.ApplyLocaleFont(version)
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -809,7 +827,8 @@ local function BuildOptions()
             local btn = CreateFrame("Button", nil, body)
             btn:SetSize(40, 20)
             btn:SetPoint("TOPLEFT", body, "TOPLEFT", x0 + 170, rowY - 1)
-            LayoutCell("color", rowY, x0, label, btn, { label, btn })
+            local cell = LayoutCell("color", rowY, x0, label, btn, { label, btn })
+            if key == "abilityName" or key == "abilitiesHeader" then cell.isVisible = ns.NewAbilitiesEnabled end
             local border = btn:CreateTexture(nil, "BACKGROUND")
             border:SetAllPoints()
             border:SetColorTexture(0.75, 0.75, 0.75, 1)
@@ -842,6 +861,9 @@ local function BuildOptions()
                 else portraitHueSwatch:Disable(); portraitHueSwatch:SetAlpha(0.45) end
             end
         end
+        local timelineSwatch = AddColorPicker("Timeline colour", ns.GetTimelineColour, ns.SetTimelineColour,
+            LEFT + 270, startY - math.floor((#colorEntries - 1) / 2) * 32)
+        timelineSwatch.gluOptionsCell.isVisible = ns.LevelTimelineEnabled
         y = startY - math.ceil(#colorEntries / 2) * 32 - 40
     end
 
@@ -962,13 +984,34 @@ local function BuildOptions()
         if setting.key ~= "statTextScale" then AddNumericOption(setting.key) end
     end
 
+    local appearanceToggleRow = y
+    local lockButton = AddSettingCheckbox("lockFramePosition", LEFT, appearanceToggleRow)
+    local horizontalButton = AddSettingCheckbox("horizontalMode", LEFT + 270, appearanceToggleRow)
+    y = appearanceToggleRow - 32
+    local compactButton, compactLabel = AddSettingCheckbox("compactMode", LEFT, y)
+    AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
+    local timelineButton = AddSettingCheckbox("showLevelTimeline", LEFT + 270, y)
+    y = y - 32
+    do
+        local _, skillCount = AddNumericOption("timelineSkillCount", LEFT, CONTROL_X, y)
+        local _, opacity = AddNumericOption("timelineOpacity", LEFT + 270, CONTROL_X + 270, y)
+        skillCount.isVisible = ns.OPTION_SETTINGS.timelineSkillCount.isAvailable
+        opacity.isVisible = ns.LevelTimelineEnabled
+        y = y - 34
+    end
+
     -- Pack the main Appearance settings independently of the optional debug rows.
     local appearanceCells = {}
+    for key, button in pairs({ lockFramePosition = lockButton, horizontalMode = horizontalButton,
+        compactMode = compactButton, showLevelTimeline = timelineButton }) do
+        local cell = button.gluOptionsCell
+        cell.optionLabel = ns.OPTION_SETTINGS[key].label
+        appearanceCells[#appearanceCells + 1] = cell
+    end
     for _, row in pairs(optionLayout.rows) do
         for _, cell in ipairs(row) do
             if not cell.skip and cell.section == currentSection and not cell.debugOnly
-                and (cell.kind == "dropdown" or cell.kind == "stepper")
-                and cell.optionLabel ~= "Ability Cost Size" and cell.optionLabel ~= "Stat text size" then
+                and (cell.kind == "dropdown" or cell.kind == "stepper") then
                 appearanceCells[#appearanceCells + 1] = cell
             end
         end
@@ -980,18 +1023,11 @@ local function BuildOptions()
     optionLayout:ArrangeGroups(appearanceCells, {
         { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background Fill Mode", "Frame" } },
         { columns = 3, positions = { 1, 3 }, labels = { "Frame strata", "Font" } },
+        { columns = 2, labels = { "Lock Location", "Horizontal layout", "Compact Layout", "Show level timeline" } },
         { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Section padding", "Heading text size", "Time to Level text size" } },
+        { columns = 2, labels = { "Ability Cost Size", "Stat text size" } },
+        { columns = 2, labels = { "Timeline skills per level", "Timeline opacity" } },
     }, appearanceRow)
-
-    local appearanceToggleRow = y
-    AddSettingCheckbox("lockFramePosition", LEFT, appearanceToggleRow)
-    do
-    local compactButton, compactLabel = AddSettingCheckbox("compactMode", LEFT + 150, appearanceToggleRow)
-    AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
-    end
-    y = appearanceToggleRow - 32
-    AddSettingCheckbox("horizontalMode", LEFT, y)
-    y = y - 32
 
     local suspendPreview = AddCheckbox("Suspend Preview",
         function() return ns.db.suspendPreview ~= false end,
@@ -1006,7 +1042,7 @@ local function BuildOptions()
         ns.PreviewLevelUp(false, nil, nil, count)
     end
     local previewButton = AddButton("Preview Level-Up", 150, LEFT + 160, 0, function(button, mouseButton)
-        if mouseButton ~= "RightButton" then
+        if mouseButton ~= "RightButton" or not ns.NewAbilitiesEnabled() then
             ns.PreviewLevelUp()
             return
         end
@@ -1069,10 +1105,13 @@ local function BuildOptions()
     AddCheckbox("Max Level Celebration",
         function() return ns.db.maxLevelCelebration ~= false end,
         function(v) ns.db.maxLevelCelebration = v; ns.RefreshMaxLevelCelebration() end)
-    AddCheckboxPair(EffectToggle("Highlight new abilities", "highlightNewAbilities"),
+    local highlightCheck, highlightLabel = AddCheckboxPair(EffectToggle("Highlight new abilities", "highlightNewAbilities"),
         EffectToggle("Emphasize stat gains", "emphasizeStatGains"))
-    AddCheckboxPair(EffectToggle("Portrait motes", "portraitSparks"),
-        EffectToggle("Background motes", "backgroundEmbers"))
+    AddAvailabilityRefresh(highlightCheck, highlightLabel, ns.NewAbilitiesEnabled)
+    local portraitMotes = EffectToggle("Portrait motes", "portraitSparks")
+    AddCheckbox(portraitMotes[1], portraitMotes[2], portraitMotes[3])
+    local _, _, weatherCheck, weatherLabel = AddSettingCheckboxPair("backgroundEmbers", "weatherMotes")
+    AddAvailabilityRefresh(weatherCheck, weatherLabel, ns.OPTION_SETTINGS.weatherMotes.isAvailable)
     local _, _, edgeCheck, edgeLabel = AddCheckboxPair(EffectToggle("Portrait and ring settle", "portraitRingSettle"),
         EffectToggle("Frame edge glow", "frameEdgeGlow"))
     AddAvailabilityRefresh(edgeCheck, edgeLabel, function() return ns.GetEffectiveBackgroundMode() ~= "MODERN" end)
@@ -1159,7 +1198,7 @@ local function BuildOptions()
             function() return ns.db.showAllWarlockGrimoires == true end,
             function(v) ns.db.showAllWarlockGrimoires = v end,
             LEFT, y, true, 32, y)
-        allGrimoiresCheck.gluOptionsCell.isVisible = function() return ns.GetCurrentFlavor() ~= "retail" end
+        allGrimoiresCheck.gluOptionsCell.isVisible = ns.TrainerAbilitiesEnabled
         local trainerReportCheck = AddCheckbox("Complete trainer reporting",
             function() return ns.db.completeTrainerReporting == true end,
             function(v) ns.db.completeTrainerReporting = v end,
@@ -1206,12 +1245,13 @@ local function BuildOptions()
             input:SetScript("OnEscapePressed", function(self) refresh(); self:ClearFocus() end)
             local minus, plus = AddDebugAdjustButtons(input, 1,
                 function() return ns.GetParticleValue(spec, kind) end, commit)
-            LayoutCell("edit", rowY, LEFT + (column - 1) * 175, label, input, { label, input, minus, plus }, true,
+            local cell = LayoutCell("edit", rowY, LEFT + (column - 1) * 175, label, input, { label, input, minus, plus }, true,
                 { columns = 3, column = column, minus = minus, plus = plus })
             refreshers[#refreshers + 1] = function()
                 if not input:HasFocus() then refresh() end
             end
             refresh()
+            return cell
         end
         for index, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
             local column = (index - 1) % 3 + 1
@@ -1266,7 +1306,8 @@ local function BuildOptions()
         end
         for _, spec in ipairs(ns.PARTICLE_SETTINGS) do
             for column, kind in ipairs({ "count", "size", "opacity" }) do
-                AddVisualTuningField(spec, kind, y, column)
+                local cell = AddVisualTuningField(spec, kind, y, column)
+                if spec.group == "sparkle" then cell.isVisible = ns.NewAbilitiesEnabled end
             end
             y = y - 60
         end
@@ -1397,73 +1438,70 @@ local function BuildOptions()
 
     AddSectionHeader("Trainer Data", "trainer_data")
 
+    AddSettingCheckbox("showNewAbilities", LEFT, y)
+    local scrollCheck, scrollLabel = AddCheckbox("Use horizontal scrolling",
+        function() return ns.db.useHorizontalAbilityScroll end,
+        function(v) ns.db.useHorizontalAbilityScroll = v end, LEFT + 270, y)
+    AddAvailabilityRefresh(scrollCheck, scrollLabel, ns.NewAbilitiesEnabled)
+    y = y - 32
+
     AddCheckbox("Check trainer lists for catalogue changes",
         function() return ns.db.monitorTrainerChanges ~= false end,
-        function(value) ns.db.monitorTrainerChanges = value end)
+        function(value) ns.db.monitorTrainerChanges = value end, LEFT, y)
 
-    local autoScanCheck, autoScanLabel, newSkillsCheck = AddCheckboxPair({
-        "Automatically save trainer data",
+    local autoScanCheck, autoScanLabel = AddCheckbox("Automatically save trainer data",
         function() return ns.CanCaptureTrainerData() and ns.db.autoScanTrainers end,
-        function(v) ns.db.autoScanTrainers = v end,
-    }, {
-        "Only display new skills",
-        function() return ns.db.showOnlyNewSkills == true end,
-        function(v) ns.db.showOnlyNewSkills = v end,
-    })
-    newSkillsCheck.gluOptionsCell.isVisible = ns.SupportsTrainerData
+        function(v) ns.db.autoScanTrainers = v end, LEFT + 270, y)
     AddAvailabilityRefresh(autoScanCheck, autoScanLabel, function()
         return ns.CanCaptureTrainerData()
     end)
+    y = y - 32
 
-    local weaponCheck, weaponLabel, costCheck, costLabel = AddCheckboxPair({
-        "Show unlearned weapon skills",
-        function() return ns.db.showWeaponSkills end,
-        function(v) if not ns.db.horizontalMode then ns.db.showWeaponSkills = v end end,
-    }, {
-        "Show learning costs",
-        function() return ns.db.showTrainerCosts end,
-        function(v) ns.db.showTrainerCosts = v end,
-    })
-    AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
-    AddAvailabilityRefresh(costCheck, costLabel, ns.SupportsTrainerData)
-    local tooltipCosts = AddSettingCheckbox("showTrainerCostsInTooltips")
+    for index, key in ipairs({ "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }) do
+        local check, label = AddSettingCheckbox(key, LEFT + (index - 1) * 175, y)
+        if key ~= "showOnlyCurrentLevelSkills" then check.gluOptionsCell.isVisible = ns.SupportsTrainerData end
+        AddAvailabilityRefresh(check, label, ns.OPTION_SETTINGS[key].isAvailable)
+    end
+    y = y - 32
+
+    local costCheck, costLabel, tooltipCosts, tooltipCostsLabel = AddSettingCheckboxPair("showTrainerCosts", "showTrainerCostsInTooltips")
+    AddAvailabilityRefresh(costCheck, costLabel, ns.TrainerAbilitiesEnabled)
     tooltipCosts.gluOptionsCell.isVisible = ns.SupportsTrainerData
+    AddAvailabilityRefresh(tooltipCosts, tooltipCostsLabel, ns.TrainerAbilitiesEnabled)
 
-    local currentLevelCheck, currentLevelLabel, petCheck, petLabel = AddCheckboxPair({
-        "Only skills unlocked at this level",
-        function() return ns.db.showOnlyCurrentLevelSkills end,
-        function(v) ns.db.showOnlyCurrentLevelSkills = v end,
-    }, {
+    local petCheck, petLabel, hunterPetCheck, hunterPetLabel = AddCheckboxPair({
         "Show Warlock pet abilities",
         function() return ns.db.showWarlockPetSkills end,
         function(v) ns.db.showWarlockPetSkills = v end,
+    }, {
+        "Show Hunter pet abilities",
+        function() return ns.db.showHunterPetSkills ~= false end,
+        function(v) ns.db.showHunterPetSkills = v end,
     })
     local function IsForeverWarlock()
-        if ns.GetCurrentFlavor() ~= "forever" then return false end
+        if not ns.TrainerAbilitiesEnabled() then return false end
         local _, classToken = UnitClass("player")
         return classToken == "WARLOCK"
     end
     AddAvailabilityRefresh(petCheck, petLabel, IsForeverWarlock)
 
-    local hunterPetCheck, hunterPetLabel = AddCheckbox("Show Hunter pet abilities",
-        function() return ns.db.showHunterPetSkills ~= false end,
-        function(v) ns.db.showHunterPetSkills = v end)
     local function IsForeverHunter()
-        if not ns.SupportsTrainerData() then return false end
+        if not ns.TrainerAbilitiesEnabled() then return false end
         local _, classToken = UnitClass("player")
         return classToken == "HUNTER"
     end
     AddAvailabilityRefresh(hunterPetCheck, hunterPetLabel, IsForeverHunter)
 
-    local filterPetCheck, filterPetLabel, scrollCheck, scrollLabel = AddCheckboxPair({
+    local weaponCheck, weaponLabel, filterPetCheck, filterPetLabel = AddCheckboxPair({
+        "Show unlearned weapon skills",
+        function() return ns.db.showWeaponSkills end,
+        function(v) if not ns.db.horizontalMode then ns.db.showWeaponSkills = v end end,
+    }, {
         "Filter grimoires by active pet",
         function() return ns.db.filterWarlockPetByActivePet end,
         function(v) ns.db.filterWarlockPetByActivePet = v end,
-    }, {
-        "Use horizontal scrolling",
-        function() return ns.db.useHorizontalAbilityScroll end,
-        function(v) ns.db.useHorizontalAbilityScroll = v end,
     })
+    AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
     AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
 
     AddButton("Export trainer report", 180, LEFT, y, function()
@@ -1775,11 +1813,11 @@ local function BuildOptions()
     y = y - 36
 
     local contributorsTitle = body:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    contributorsTitle:SetText(ns.L("Contributors"))
+    contributorsTitle:SetText(ns.L("Special Thanks"))
     TrackElement(contributorsTitle, LEFT, y)
     y = y - 26
     local contributors = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    contributors:SetText("Shadowhand, Alyssa, Molly, Rena, 3Zeah, Sindarina, Bun")
+    contributors:SetText("Shadowhand, Alyssa, Molly, Rena, 3Zeah, Sindarina, Bun, Buildábear, Afleyna")
     TrackElement(contributors, LEFT, y)
     y = y - 32
 
@@ -1803,10 +1841,12 @@ local function BuildOptions()
         footer:SetFrameLevel(panel:GetFrameLevel() + 30)
         footer:SetWidth(width + 32)
         footerLayout:Reflow()
+        watermark.gluFooterHeight = footer:GetHeight()
+        CropOptionsWatermark(watermark, watermark.gluFooterHeight)
         if optionsScroll then
             optionsScroll:ClearAllPoints()
             optionsScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -(headerHeight + 8))
-            optionsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, footer:GetHeight() + 8)
+            optionsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, footer:GetHeight())
         end
         return 8
     end

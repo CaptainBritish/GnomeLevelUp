@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.4
+
+##### New Features
+
+* Added Turkish (Türkçe) support, including Turkish characters in the Fritz font. Thanks, Shadowhand!
+* Added an optional level timeline along the bottom of the popup
+
+##### Customization Options
+
+* Added **Weather motes** for clear skies, rain, snow, sandstorms, and haze.
+* Added a toggle to hide duplicate spells, only the most recent rank is shown with this on.
+* Added a toggle to completly hide the Abilities section of the popup.
+
+##### Bug Fixes and Optimization
+
+* Reworked the locale system into to make it easier for future contribution (thanks Shadowhand!)
+* Fixed French stat names and stale labels after switching languages. 
+* If something prevents GLU from seeing the stat totals, GLU will show the stats gained.
+* Level times now show hours after 60 minutes. `349:06` becomes `5:49:06`.
+* The 3D portrait no longer lingers after the popup de-renders.
+
 ## 1.6.3
 
 - Updated WoW Forever trainer prices

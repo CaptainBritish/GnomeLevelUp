@@ -17,8 +17,10 @@ local optional = {
 
 local function NormalizeSettings(settings)
     ns.MigrateTrainerPriceSettings(settings)
+    ns.NormalizeAbilityFilters(settings)
     ns.RemoveObsoleteAnimationSounds(settings)
     ns.NormalizeScreenshotSettings(settings)
+    ns.NormalizeBackgroundMotes(settings)
     -- Older themes serialized an unset optional path as false. Keep accepting
     -- those exports, but store and export the ordinary nil representation.
     for key in pairs(optional) do

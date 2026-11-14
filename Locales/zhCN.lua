@@ -112,7 +112,11 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["None"] = "无",
     ["Off"] = "关闭",
     ["On"] = "开启",
-    ["Only display new skills"] = "仅显示新技能，不显示已学技能的升级",
+    ["Hide rank upgrades"] = "隐藏技能升级",
+    ["Show new abilities"] = "显示新技能",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "在升级弹窗和时间轴中显示技能、法术等级和可学习的内容。",
+    ["Only show the latest spell rank"] = "仅显示最高法术等级",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "同一法术有多个可学习等级时，仅显示尚未学会的最高等级。",
     ["Only skills unlocked at this level"] = "仅显示本级解锁的技能",
     ["Open Controller Options"] = "打开手柄设置",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "可选。替换上方音效。示例：Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Use class colors"] = "使用职业颜色",
     ["Use horizontal scrolling"] = "使用水平滚动",
     ["Version %s"] = "版本%s",
-    ["Warlock Grimoires"] = "术士魔典",
+    ["Grimoires"] = "魔典",
     ["Weapon skills: %s"] = "武器技能：%s",
     ["Wood Panel"] = "木质面板",
     ["addon %s"] = "插件：%s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Highlight new abilities"] = "突出显示新技能",
     ["Emphasize stat gains"] = "突出显示属性提升",
     ["New ability"] = "新技能",
+    ["Current rank"] = "当前等级",
     ["Rank upgrade"] = "等级提升",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("zhCN", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("zhCN", function() return { ["Ability Cost Size"] = "技能费用字号", ["Adjust the size of ability prices for the current layout."] = "调整当前布局中的技能费用字号。" } end)
 RegisterLocaleBuilder("zhCN", function() return { ["Learning cost: %s"] = "学习费用：%s", ["%d abilities"] = "%d 个技能", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "显示测试弹窗，不改变等级记录。右键点击可选择技能数量。" } end)
 RegisterLocaleBuilder("zhCN", function() return { ["Show prices in tooltips"] = "在提示中显示价格", ["Show full learning costs when hovering over abilities."] = "悬停技能时显示完整学习费用。" } end)
-RegisterLocaleBuilder("zhCN", function() return { ["Contributors"] = "贡献者" } end)
+RegisterLocaleBuilder("zhCN", function() return { ["Special Thanks"] = "特别感谢" } end)
 RegisterLocaleBuilder("zhCN", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "属性采集失败：重试后仍未检测到预期的属性变化。",
     ["3D Portrait render failed: The player model did not load in time."] = "3D头像渲染失败：角色模型未能及时加载。",
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Complete trainer reporting"] = "完整训练师报告",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "在调试模式下记录职业训练师所有可读取的价格。使用 /glu trainerreport 导出实际报价。",
     ["Clear all"] = "全部清除",
+    ["Weather motes"] = "天气粒子",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "在弹窗后方呈现当前天气。替代背景粒子，并在暴雨、大雪或沙尘暴时在底部添加薄雾。",
+    ["Show level timeline"] = "显示等级时间轴",
+    ["Timeline skills per level"] = "每级技能数量",
+    ["Timeline opacity"] = "时间轴不透明度",
+    ["Timeline colour"] = "时间轴颜色",
+    ["Use class colour for timeline"] = "时间轴使用职业颜色",
+    ["Show progress between levels and upcoming abilities below the popup."] = "在弹窗下方显示等级进度和即将解锁的技能。",
+    ["Set how many ability icons to show at each timeline marker."] = "设置时间轴每个标记显示的技能图标数量。",
+    ["Adjust the opacity of the timeline below the popup."] = "调整弹窗下方时间轴的不透明度。",
+    ["Choose a custom colour for the timeline."] = "选择时间轴的自定义颜色。",
+    ["Use your class colour for the timeline."] = "在时间轴上使用你的职业颜色。",
 } end)

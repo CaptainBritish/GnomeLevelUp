@@ -36,6 +36,8 @@ local defaults = {
     showTrainerCostsInTooltips = false,
     showOnlyCurrentLevelSkills = false,
     showOnlyNewSkills = false,
+    showNewAbilities = true,
+    showLatestTrainingRanks = true,
     shortenRetailStatTotals = false,
     relevantRetailStatsOnly = true,
     showWarlockPetSkills = true,
@@ -87,6 +89,12 @@ local defaults = {
     emphasizeStatGains = true,
     portraitSparks = true,
     backgroundEmbers = true,
+    weatherMotes = false,
+    showLevelTimeline = false,
+    timelineSkillCount = 4,
+    timelineOpacity = 85,
+    timelineColour = { .88, .76, .52 },
+    timelineClassColour = true,
     frameEdgeGlow = true,
     particlePortraitCount = 5,
     particlePortraitSize = 200,
@@ -306,8 +314,14 @@ end
 function ns.SupportsTrainerData()
     return ns.GetCurrentFlavor() ~= "retail"
 end
+function ns.NewAbilitiesEnabled()
+    return not ns.db or ns.db.showNewAbilities ~= false
+end
+function ns.TrainerAbilitiesEnabled()
+    return ns.SupportsTrainerData() and ns.NewAbilitiesEnabled()
+end
 function ns.AbilitySectionVisible(abilities)
-    return ns.SupportsTrainerData() or type(abilities) == "table" and #abilities > 0
+    return ns.NewAbilitiesEnabled() and (ns.SupportsTrainerData() or type(abilities) == "table" and #abilities > 0)
 end
 local function AbilityCostSizeKey()
     return ns.db and ns.db.horizontalMode and "horizontalAbilityCostSize" or "abilityCostSize"
@@ -321,13 +335,13 @@ function ns.GetAbilityCostSize()
 end
 
 function ns.TrainerCostsEnabled()
-    return ns.SupportsTrainerData() and ns.db ~= nil and ns.db.showTrainerCosts == true
+    return ns.TrainerAbilitiesEnabled() and ns.db ~= nil and ns.db.showTrainerCosts == true
 end
 function ns.WeaponTrainingAvailable()
-    return ns.SupportsTrainerData() and ns.db ~= nil and not ns.db.horizontalMode
+    return ns.TrainerAbilitiesEnabled() and ns.db ~= nil and not ns.db.horizontalMode
 end
 function ns.TrainerCostsInTooltips()
-    return ns.SupportsTrainerData() and ns.db ~= nil and ns.db.showTrainerCostsInTooltips == true
+    return ns.TrainerAbilitiesEnabled() and ns.db ~= nil and ns.db.showTrainerCostsInTooltips == true
 end
 
 function ns.MigrateTrainerPriceSettings(settings)
@@ -338,8 +352,29 @@ function ns.MigrateTrainerPriceSettings(settings)
     settings.trainerCostsTooltipOnly = nil
 end
 
+local abilityFilters = { "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }
+
+function ns.NormalizeAbilityFilters(settings)
+    for _, key in ipairs(abilityFilters) do
+        if settings[key] == true then
+            for _, other in ipairs(abilityFilters) do
+                if other ~= key then settings[other] = false end
+            end
+            return
+        end
+    end
+end
+
 function ns.DecorativeAnimationsEnabled()
     return not ns.db or not ns.db.reducedMotion and ns.db.backgroundAnimations ~= false
+end
+
+function ns.HasWeatherAPI()
+    return C_Weather ~= nil and type(C_Weather.GetCurrentWeather) == "function"
+end
+
+function ns.NormalizeBackgroundMotes(settings)
+    if settings.weatherMotes == true then settings.backgroundEmbers = false end
 end
 
 -- Shared controls keep mouse, controller and setup changes on the same path.
@@ -386,13 +421,29 @@ local function SharedToggle(key, label, changed, description, available)
             if changed then changed(ns.db[key]) end
         end }
 end
-local function RefreshTrainerCosts()
+local function RefreshAbilityOptions()
     ns.RefreshPopupLayout()
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
-SharedToggle("showTrainerCosts", "Show learning costs", RefreshTrainerCosts, nil, ns.SupportsTrainerData)
-SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshTrainerCosts,
-    "Show full learning costs when hovering over abilities.", ns.SupportsTrainerData)
+SharedToggle("showNewAbilities", "Show new abilities", RefreshAbilityOptions)
+SharedToggle("showTrainerCosts", "Show learning costs", RefreshAbilityOptions, nil, ns.TrainerAbilitiesEnabled)
+SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshAbilityOptions,
+    "Show full learning costs when hovering over abilities.", ns.TrainerAbilitiesEnabled)
+for _, filter in ipairs({
+    { "showOnlyCurrentLevelSkills", "Only skills unlocked at this level", ns.NewAbilitiesEnabled },
+    { "showOnlyNewSkills", "Hide rank upgrades", ns.TrainerAbilitiesEnabled },
+    { "showLatestTrainingRanks", "Only show the latest spell rank", ns.TrainerAbilitiesEnabled },
+}) do
+    local key = filter[1]
+    SharedToggle(key, filter[2], function(enabled)
+        if enabled then
+            for _, other in ipairs(abilityFilters) do
+                if other ~= key then ns.db[other] = false end
+            end
+        end
+        RefreshAbilityOptions()
+    end, nil, filter[3])
+end
 SharedToggle("screenshotMilestones", "Screenshot milestones", function(enabled)
     if enabled then ns.db.screenshotEveryLevel = false end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
@@ -401,6 +452,18 @@ SharedToggle("screenshotEveryLevel", "Screenshot every level", function(enabled)
     if enabled then ns.db.screenshotMilestones = false end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end)
+local function RefreshBackgroundMotes()
+    ns.RefreshVisualEffects()
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end
+SharedToggle("backgroundEmbers", "Background motes", function(enabled)
+    if enabled then ns.db.weatherMotes = false end
+    RefreshBackgroundMotes()
+end)
+SharedToggle("weatherMotes", "Weather motes", function()
+    ns.NormalizeBackgroundMotes(ns.db)
+    RefreshBackgroundMotes()
+end, nil, function() return not ns.db.reducedMotion and ns.HasWeatherAPI() end)
 SharedToggle("horizontalMode", "Horizontal layout", function(value)
     ns.SetHorizontalMode(value); ns.RefreshPopupLayout()
 end, "Arrange portrait, stats and abilities side by side.")
@@ -445,6 +508,43 @@ SharedToggle("classColourPortraitBackground", "Class-coloured portrait backgroun
 end, "Fill the background behind the 3D player portrait with your class colour.",
     function() return ns.db.portraitMode == "player3d" end)
 
+local function RefreshTimeline()
+    if ns.RefreshLevelTimeline then ns.RefreshLevelTimeline() end
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end
+SharedToggle("showLevelTimeline", "Show level timeline", RefreshTimeline, "Show progress between levels and upcoming abilities below the popup.")
+function ns.LevelTimelineEnabled()
+    return ns.db.showLevelTimeline == true
+end
+
+function ns.GetTimelineColour()
+    return (ns.db.timelineClassColour ~= false and ns.GetClassColor("level")) or ns.db.timelineColour or defaults.timelineColour
+end
+
+function ns.SetTimelineColour(colour)
+    local classColour = ns.GetClassColor("level") or defaults.timelineColour
+    ns.db.timelineClassColour = colour[1] == classColour[1] and colour[2] == classColour[2] and colour[3] == classColour[3]
+    ns.db.timelineColour = colour
+    RefreshTimeline()
+end
+for _, option in ipairs({
+    { key = "timelineSkillCount", label = "Timeline skills per level", min = 0, max = 4, step = 1, format = "%d",
+        description = "Set how many ability icons to show at each timeline marker." },
+    { key = "timelineOpacity", label = "Timeline opacity", min = 0, max = 100, step = 5, format = "%d%%",
+        description = "Adjust the opacity of the timeline below the popup." },
+}) do
+    local key = option.key
+    ns.OPTION_SETTINGS[key] = {
+        label = option.label, description = option.description, isAvailable = function()
+            return ns.LevelTimelineEnabled() and (key ~= "timelineSkillCount" or ns.NewAbilitiesEnabled())
+        end,
+        minimum = option.min, maximum = option.max, step = option.step,
+        get = function() return math.floor(math.max(option.min, math.min(option.max, tonumber(ns.db[key]) or defaults[key]))) end,
+        set = function(value) ns.db[key] = math.max(option.min, math.min(option.max, value)); RefreshTimeline() end,
+        format = function(value) return string.format(option.format, value) end,
+    }
+end
+
 ns.OPTION_SETTINGS_BY_LABEL = {}
 for _, setting in pairs(ns.OPTION_SETTINGS) do ns.OPTION_SETTINGS_BY_LABEL[setting.label] = setting end
 function ns.AdjustNumericOption(key, direction)
@@ -471,8 +571,9 @@ end
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
+    "showLevelTimeline", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "portraitRingGlint",
-    "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
+    "portraitSparks", "backgroundEmbers", "weatherMotes", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
@@ -485,6 +586,7 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
+    "showLevelTimeline", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
     "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",
@@ -494,14 +596,14 @@ ns.RESETTABLE_SETTING_KEYS = {
     "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity", "fireworkSize", "fireworkOpacity", "frameInset",
     "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
     "milestoneAnimations", "milestoneInterval", "screenshotMilestones", "screenshotEveryLevel",
-    "backgroundAnimations", "portraitSparks", "backgroundEmbers", "frameEdgeGlow",
+    "backgroundAnimations", "portraitSparks", "backgroundEmbers", "weatherMotes", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
     "portraitRingSettle", "dividerReveal",
     "playSound", "useThemeSounds", "muteNativeDing", "soundChoice", "useThemeLevelUpSound", "levelUpSoundCustomized",
     "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
     "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
-    "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
+    "showNewAbilities", "showLatestTrainingRanks", "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
     "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "horizontalPortraitRingScale", "horizontalPortraitRingOffset", "classColourPortraitBackground", "controllerGlyphStyle", "controllerMenuFrameStrata",
@@ -788,6 +890,7 @@ function ns.ApplyBackgroundTheme(value)
             end
         end
     end
+    ns.NormalizeBackgroundMotes(ns.db)
     if locationLocked then
         ns.db.lockFramePosition = true
         ns.db.framePosition = lockedPosition
@@ -927,6 +1030,7 @@ local function InitDB()
     ns.RemoveObsoleteAnimationSounds(GnomeLevelUpDB)
     ns.MigrateLevelUpSoundPreference(GnomeLevelUpDB)
     ns.MigrateTrainerPriceSettings(GnomeLevelUpDB)
+    ns.NormalizeAbilityFilters(GnomeLevelUpDB)
     local savedSchemaVersion = tonumber(GnomeLevelUpDB.schemaVersion) or 0
     -- Capture the pre-1.3.2 selectors before defaults add the new independent
     -- fields. This lets the migration distinguish an old custom theme from a
@@ -1114,6 +1218,7 @@ local function InitDB()
     GnomeLevelUpDB.themePreview = nil
     ns.db = GnomeLevelUpDB
     ns.NormalizeScreenshotSettings(ns.db)
+    ns.NormalizeBackgroundMotes(ns.db)
     if not IsMilestonePreset(ns.db.milestoneInterval) then ns.db.milestoneInterval = defaults.milestoneInterval end
 
     -- Retire the deleted placeholder in profiles saved by older theme builds.
@@ -1972,7 +2077,7 @@ ns.CLASSIC_FLAIR_SETTINGS = {
     portraitAnimation = "Portrait pulse and starburst", portraitRingGlint = "Portrait ring glint",
     portraitRingSettle = "Portrait and ring settle", highlightNewAbilities = "Highlight new abilities",
     emphasizeStatGains = "Emphasize stat gains", portraitSparks = "Portrait motes",
-    backgroundEmbers = "Background motes", frameEdgeGlow = "Frame edge glow",
+    backgroundEmbers = "Background motes", weatherMotes = "Weather motes", frameEdgeGlow = "Frame edge glow",
     dividerReveal = "Reveal dividers", backgroundAnimations = "Background animations",
 }
 for _, spec in ipairs(ns.EXTRA_EFFECTS) do ns.CLASSIC_FLAIR_SETTINGS[spec.key] = spec.label end
@@ -2160,7 +2265,7 @@ local function BuildPreviewStatChanges(maxLevelPreview)
     return previewStats
 end
 
-function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest)
+function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest, weatherTest)
     EnsureDatabase()
     local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or UnitLevel("player")
 
@@ -2202,7 +2307,7 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
         true, milestoneLevel ~= nil or maxLevelPreview == true, previous, maxLevelPreview, paceScenario ~= nil,
-        rangeStart, secondaryStats, nil, portraitTest)
+        rangeStart, secondaryStats, nil, portraitTest, weatherTest)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -2350,6 +2455,18 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
             print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
         else
             ns.PreviewLevelUp(false, nil, nil, 3, nil, nil, scenario)
+        end
+    elseif msg == "debugweather" or msg:match("^debugweather%s") then
+        if not ns.IsDebugEnabled() then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+            return
+        end
+        local kind, intensity = msg:match("^debugweather%s+([0-4])%s+(%S+)$")
+        intensity = tonumber(intensity)
+        if not kind or not intensity or not (intensity >= 0 and intensity <= 1) then
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugweather <0-4> <0-1>")
+        else
+            ns.PreviewLevelUp(false, nil, nil, 3, nil, nil, nil, { type = tonumber(kind), intensity = intensity })
         end
     elseif msg == "debugmilestone" or msg:match("^debugmilestone%s") then
         if not ns.IsDebugEnabled() then
@@ -2532,6 +2649,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu debugportrait <delay|fail|unmasked> - test the 3D portrait fallback or preview without the circular mask (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")
+        print("  /glu debugweather <0-4> <0-1> - preview rain (1), snow (2), sandstorm (3), or no effect (0 and 4) in debug mode")
         print("  /glu resettimers - clear this character's recorded level timers and best times")
         print("  /glu memory        - print current addon memory usage")
         print("  /glu debugreport   - open a copyable report of recent addon errors")

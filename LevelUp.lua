@@ -131,35 +131,32 @@ end
 local function DisplayLevelUp(afterStats)
     if not levelUpPending then return end
     pendingSinceCombat = false
-    if not baselineStats then
+    if not baselineStats and afterStats then
         ReportLevelUpError("stats", "baseline_missing", afterStats)
-        levelUpPending = false
-        ns.RefreshBaseline()
-        ClearPendingBatch()
-        return
     end
 
     levelUpPending = false
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "forever"
-    local startLevel = tonumber(pendingStart) or tonumber(baselineStats.level)
-    local combinedGain = startLevel and afterStats.level > startLevel + 1
+    local level = afterStats and afterStats.level or pendingEnd
+    local startLevel = pendingStart
+    local combinedGain = startLevel and level > startLevel + 1
     local rangeStart = combinedGain and startLevel or nil
     local retailFutureSpells = pendingFutureSpells or (ns.GetRetailFutureSpellsBeforeLevel
         and ns.GetRetailFutureSpellsBeforeLevel() or nil)
 
     local ok, err = xpcall(function()
         local afterSpells = ns.SnapshotSpellBook()
-        local statDiff = ns.DiffStats(baselineStats, afterStats)
+        local statDiff = ns.DiffStats(baselineStats, afterStats, expectedStatGains)
         local trainerAbilities
         if flavor == "retail" then
-            trainerAbilities = ns.GetRetailUnlearnedSpells(afterStats.level, retailFutureSpells, rangeStart)
+            trainerAbilities = ns.GetRetailUnlearnedSpells(level, retailFutureSpells, rangeStart)
         else
-            trainerAbilities = ns.GetAllTrainableUpToLevel(afterStats.level, afterSpells, rangeStart)
+            trainerAbilities = ns.GetAllTrainableUpToLevel(level, afterSpells, rangeStart)
         end
 
-        local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(afterStats.level)
+        local unlearnedWeaponSkills = ns.GetUnlearnedWeaponSkills(level)
         local warlockPetAbilities = ns.GetUnlearnedWarlockPetAbilities
-            and ns.GetUnlearnedWarlockPetAbilities(afterStats.level, rangeStart) or {}
+            and ns.GetUnlearnedWarlockPetAbilities(level, rangeStart) or {}
         if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
         local previousFastest
         local displayTime = levelTimeForDisplay
@@ -168,14 +165,14 @@ local function DisplayLevelUp(afterStats)
             trainerAbilities = UniqueAbilities(trainerAbilities)
             warlockPetAbilities = UniqueAbilities(warlockPetAbilities)
             unlearnedWeaponSkills = UniqueAbilities(unlearnedWeaponSkills)
-            for level = startLevel + 1, afterStats.level do
-                if pendingTimes[level] then ns.RecordLevelPace(pendingTimes[level]) end
+            for reached = startLevel + 1, level do
+                if pendingTimes[reached] then ns.RecordLevelPace(pendingTimes[reached]) end
             end
         else
-            ns.RecordCompletedLevel(afterStats.level, levelTimeForDisplay)
+            ns.RecordCompletedLevel(level, levelTimeForDisplay)
             previousFastest = ns.RecordLevelPace(levelTimeForDisplay)
         end
-        ns.ShowLevelUp(afterStats.level, statDiff.stats, trainerAbilities, unlearnedWeaponSkills, displayTime,
+        ns.ShowLevelUp(level, statDiff.stats, trainerAbilities, unlearnedWeaponSkills, displayTime,
             warlockPetAbilities, false, nil, previousFastest, nil, nil, rangeStart, statDiff.secondary)
         levelTimeForDisplay = nil
         if flavor == "retail" and ns.CaptureRetailFutureSpells then
@@ -188,6 +185,7 @@ local function DisplayLevelUp(afterStats)
 
     baselineStats = afterStats
     ClearPendingBatch()
+    if not baselineStats then QueueBaselineRefresh() end
 end
 
 local function ScheduleDisplay(delay, retryCount)
@@ -208,9 +206,7 @@ local function ScheduleDisplay(delay, retryCount)
         local snapshotOK, afterStats = xpcall(ns.SnapshotStats, ns.CaptureErrorTrace)
         if not snapshotOK then
             ReportLevelUpError("stats", "level_up_snapshot_failed", nil, retryCount or 0, afterStats)
-            levelUpPending, pendingSinceCombat, baselineStats = false, false, nil
-            ClearPendingBatch()
-            QueueBaselineRefresh()
+            DisplayLevelUp(nil)
             return
         end
         if baselineStats and next(expectedStatGains)
@@ -284,6 +280,13 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
     end
 end)
 
+local function RecordEventGain(key, gain)
+    if type(gain) == "number" and (not issecretvalue or not issecretvalue(gain))
+        and gain > 0 and gain < math.huge then
+        expectedStatGains[key] = (expectedStatGains[key] or 0) + gain
+    end
+end
+
 function ns.HandleLevelUp(newLevel, ...)
     local reachedLevel = tonumber(newLevel) or tonumber(UnitLevel("player"))
     if not reachedLevel or reachedLevel ~= reachedLevel or reachedLevel == math.huge or reachedLevel % 1 ~= 0 then return end
@@ -295,12 +298,12 @@ function ns.HandleLevelUp(newLevel, ...)
         pendingStart = baselineStats and tonumber(baselineStats.level) or reachedLevel - 1
         pendingFutureSpells = ns.GetRetailFutureSpellsBeforeLevel and ns.GetRetailFutureSpellsBeforeLevel() or nil
     end
-    -- The event supplies four fields after the level before the primary stat gains.
+    -- The first two gains are health and mana, even if the active power is different.
+    local health, mana = ...
+    RecordEventGain("health", health)
+    RecordEventGain("mana", mana)
     for index = 1, math.min(5, select("#", ...) - 4) do
-        local gain = select(index + 4, ...)
-        if type(gain) == "number" and (not issecretvalue or not issecretvalue(gain)) and gain > 0 then
-            expectedStatGains[index] = (expectedStatGains[index] or 0) + gain
-        end
+        RecordEventGain(index, select(index + 4, ...))
     end
     local previousReached = pendingEnd or pendingStart
     levelUpPending = true

@@ -261,7 +261,7 @@ function ns.CreateOptionsLayout(parent, minimumHeight)
                 end
             end
         end
-        parent:SetHeight(math.max(minimumHeight or 260, top + 16))
+        parent:SetHeight(math.max(minimumHeight or 260, top + (self.bottomPadding or 16)))
         if self.onReflow then self.onReflow() end
         self.running = false
     end

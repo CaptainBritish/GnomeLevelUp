@@ -112,7 +112,11 @@ RegisterLocaleBuilder("frFR", function() return {
     ["None"] = "Aucun",
     ["Off"] = "Désactivé",
     ["On"] = "Activé",
-    ["Only display new skills"] = "Nouvelles techniques, sans les rangs supérieurs",
+    ["Hide rank upgrades"] = "Masquer les rangs supérieurs",
+    ["Show new abilities"] = "Afficher les nouvelles techniques",
+    ["Show abilities, spell ranks, and training unlocks in the level-up popup and timeline."] = "Affiche les techniques, les rangs de sorts et les apprentissages disponibles dans la fenêtre de montée de niveau et sur la frise.",
+    ["Only show the latest spell rank"] = "Afficher uniquement le rang le plus élevé",
+    ["When several ranks of a spell are available, show only the highest unlearned rank."] = "Si plusieurs rangs d’un sort sont disponibles, affiche uniquement le rang le plus élevé que vous n’avez pas encore appris.",
     ["Only skills unlocked at this level"] = "Techniques débloquées à ce niveau",
     ["Open Controller Options"] = "Options de manette",
     ["Optional. Overrides the sound above. Example: Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg"] = "Facultatif. Remplace le son ci-dessus. Exemple : Interface\\AddOns\\GnomeLevelUp\\Sounds\\ding.ogg",
@@ -186,7 +190,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Use class colors"] = "Utiliser les couleurs de classe",
     ["Use horizontal scrolling"] = "Activer le défilement horizontal",
     ["Version %s"] = "Version %s",
-    ["Warlock Grimoires"] = "Grimoires de démoniste",
+    ["Grimoires"] = "Grimoires",
     ["Weapon skills: %s"] = "Compétences d’armes : %s",
     ["Wood Panel"] = "Panneau en bois",
     ["addon %s"] = "addon %s",
@@ -220,6 +224,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Highlight new abilities"] = "Mettre en évidence les nouvelles techniques",
     ["Emphasize stat gains"] = "Mettre en valeur les gains de caractéristiques",
     ["New ability"] = "Nouvelle technique",
+    ["Current rank"] = "Rang actuel",
     ["Rank upgrade"] = "Amélioration de rang",
 } end)
 
@@ -615,7 +620,7 @@ RegisterLocaleBuilder("frFR", function() return { ["Could not prepare the level-
 RegisterLocaleBuilder("frFR", function() return { ["Ability Cost Size"] = "Taille du coût des techniques", ["Adjust the size of ability prices for the current layout."] = "Ajuste la taille du prix des techniques dans la disposition actuelle." } end)
 RegisterLocaleBuilder("frFR", function() return { ["Learning cost: %s"] = "Coût d’apprentissage : %s", ["%d abilities"] = "%d techniques", ["Show a test popup without changing level history. Right-click to choose the number of abilities."] = "Affiche une alerte de test sans modifier l’historique. Faites un clic droit pour choisir le nombre de techniques." } end)
 RegisterLocaleBuilder("frFR", function() return { ["Show prices in tooltips"] = "Afficher les prix dans les infobulles", ["Show full learning costs when hovering over abilities."] = "Affiche le prix complet au survol des techniques." } end)
-RegisterLocaleBuilder("frFR", function() return { ["Contributors"] = "Contributeurs" } end)
+RegisterLocaleBuilder("frFR", function() return { ["Special Thanks"] = "Remerciements particuliers" } end)
 RegisterLocaleBuilder("frFR", function() return {
     ["Stat capture failed: Expected stat changes were still missing after retrying."] = "Échec de la capture des caractéristiques : Les changements attendus manquaient encore après plusieurs tentatives.",
     ["3D Portrait render failed: The player model did not load in time."] = "Échec de l’affichage du portrait 3D : Le modèle du personnage ne s’est pas chargé à temps.",
@@ -642,7 +647,7 @@ RegisterLocaleBuilder("frFR", function() return { ["Screenshot every level"] = "
 RegisterLocaleBuilder("frFR", function() return {
     ["Strength"] = "Force", ["Agility"] = "Agilité", ["Stamina"] = "Endurance", ["Intellect"] = "Intelligence", ["Spirit"] = "Esprit",
     ["Level"] = "Niveau",
-    ["Health"] = "Points de vie", ["Mana"] = "Mana", ["Default"] = "Par défaut", ["%d pt"] = "%d pt",
+    ["Health"] = "Santé", ["Mana"] = "Mana", ["Default"] = "Par défaut", ["%d pt"] = "%d pt",
     ["Rage"] = "Rage", ["Energy"] = "Énergie", ["Focus"] = "Focalisation", ["Runic Power"] = "Puissance runique", ["Power"] = "Ressource",
 } end)
 
@@ -662,4 +667,16 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Complete trainer reporting"] = "Rapports complets des maîtres de classe",
     ["Record every readable class trainer price while debug mode is enabled. Export the offered prices with /glu trainerreport."] = "Enregistre tous les prix lisibles des maîtres de classe en mode débogage. Exportez les prix proposés avec /glu trainerreport.",
     ["Clear all"] = "Tout effacer",
+    ["Weather motes"] = "Particules météo",
+    ["Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms."] = "Reproduit la météo actuelle derrière la fenêtre. Remplace les particules de fond et ajoute une brume basse en cas de forte pluie, neige ou tempête de sable.",
+    ["Show level timeline"] = "Afficher la frise des niveaux",
+    ["Timeline skills per level"] = "Techniques par niveau",
+    ["Timeline opacity"] = "Opacité de la frise",
+    ["Timeline colour"] = "Couleur de la frise",
+    ["Use class colour for timeline"] = "Utiliser la couleur de classe pour la frise",
+    ["Show progress between levels and upcoming abilities below the popup."] = "Affiche la progression entre les niveaux et les prochaines techniques sous la fenêtre.",
+    ["Set how many ability icons to show at each timeline marker."] = "Définit le nombre d’icônes de techniques par repère.",
+    ["Adjust the opacity of the timeline below the popup."] = "Règle l’opacité de la frise sous la fenêtre.",
+    ["Choose a custom colour for the timeline."] = "Choisit une couleur personnalisée pour la frise.",
+    ["Use your class colour for the timeline."] = "Utilise la couleur de votre classe pour la frise.",
 } end)

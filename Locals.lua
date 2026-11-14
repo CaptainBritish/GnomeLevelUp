@@ -33,7 +33,7 @@ local LANGUAGE_NAMES = {
 local locales = { enUS = {} }
 local localeBuilders = {}
 
--- Keep the constructors, not ten populated dictionaries. Switching language
+-- Keep the constructors, not every populated dictionary. Switching language
 -- releases the previous dictionary while keeping every language available.
 local function RegisterLocaleBuilder(locale, build)
     if not ENABLED_LOCALES[locale] then return end
@@ -119,8 +119,8 @@ local EAST_ASIAN_FONTS = {
     zhCN = "Fonts\\ARKai_T.ttf",
     zhTW = "Fonts\\blei00d.TTF",
 }
--- The game's Friz Quadrata lacks Turkish glyphs (ğ, ş, ı, İ); this bundled
--- copy has them. Only Friz is replaced; other fonts are left as chosen.
+-- Use Turkish Friz for the built-in decorative fonts. Arial Narrow already
+-- covers Turkish, and custom fonts keep the path the player chose.
 local TURKISH_FRIZ_FONT = "Interface\\AddOns\\GnomeLevelUp\\Fonts\\friz-quadrata-bt-58703370183b3.ttf"
 local BUILTIN_LATIN_FONTS = { ["FONTS\\ARIALN.TTF"] = true }
 for path in pairs(CYRILLIC_FONTS) do BUILTIN_LATIN_FONTS[path] = true end
@@ -138,7 +138,7 @@ function ns.GetPopupFontPath(path)
     -- Game-supplied names may use the client script even when GLU is in English.
     local locale = ns.GetLocaleFontPath(activeLocale) and activeLocale or clientLocale
     if locale == "trTR" then
-        return fontKey == "FONTS\\FRIZQT__.TTF" and TURKISH_FRIZ_FONT or path
+        return CYRILLIC_FONTS[fontKey] and TURKISH_FRIZ_FONT or path
     end
     if BUILTIN_LATIN_FONTS[fontKey] then
         if EAST_ASIAN_FONTS[locale] then return EAST_ASIAN_FONTS[locale] end
