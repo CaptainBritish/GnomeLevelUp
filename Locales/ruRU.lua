@@ -673,6 +673,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Timeline skills per level"] = "Способности на уровень",
     ["Pin level-up popup"] = "Закрепить окно повышения уровня",
     ["Unpin level-up popup"] = "Открепить окно повышения уровня",
+    ["Preview paused by Options."] = "Предпросмотр приостановлен в настройках.",
     ["Timeline Steps"] = "Уровни на шкале",
     ["Timeline opacity"] = "Непрозрачность шкалы",
     ["Timeline colour"] = "Цвет шкалы",

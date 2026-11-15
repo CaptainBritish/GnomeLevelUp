@@ -673,6 +673,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Timeline skills per level"] = "레벨당 기술 수",
     ["Pin level-up popup"] = "레벨 상승 알림 고정",
     ["Unpin level-up popup"] = "레벨 상승 알림 고정 해제",
+    ["Preview paused by Options."] = "설정에서 미리 보기를 일시 정지했습니다.",
     ["Timeline Steps"] = "타임라인 단계",
     ["Timeline opacity"] = "타임라인 불투명도",
     ["Timeline colour"] = "타임라인 색상",

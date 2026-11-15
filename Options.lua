@@ -723,7 +723,7 @@ local function BuildOptions()
                     ns.RememberThemeHues()
                 end
                 fill:SetColorTexture(r, g, b, 1)
-                ns.ApplyBackgroundOpacity(ns.db and ns.db.bgOpacity or 0.70)
+                if labelText ~= "Timeline colour" then ns.ApplyBackgroundOpacity(ns.db and ns.db.bgOpacity or 0.70) end
             end, backgroundHue and (ns.db.backgroundHueOpacity or 1) or nil)
         end)
         refreshers[#refreshers + 1] = refresh

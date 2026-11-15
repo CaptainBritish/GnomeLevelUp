@@ -1,7 +1,6 @@
 local ADDON_NAME, ns = ...
 
 local MAX_SKILLS = 4
-local MAX_STEPS = 4
 local TRACK_Y = -30
 local SKILL_FADE_SECONDS = .16
 local SKILL_STAGGER_SECONDS = .065
@@ -47,7 +46,8 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
         Add(sample and reached or ability.requiredLevel, ability.id, ability.icon, ability.name, ability.cost)
     end
     if ns.GetCurrentFlavor() == "retail" then
-        for _, ability in ipairs(ns.GetRetailTimelineSpells(first, last > reached and (cap or math.huge) or last)) do
+        local nextUnlockCap = last > reached and #byLevel[last] == 0 and (cap or math.huge) or nil
+        for _, ability in ipairs(ns.GetRetailTimelineSpells(first, last, nextUnlockCap)) do
             Add(ability.requiredLevel, ability.id, ability.icon, ability.name)
         end
     else
@@ -85,6 +85,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
     local timeline, markers, markerDot, barFlash
     local source, startLevel, reachedLevel, cap, steps
     local progress, reveal = 0, 0
+    local closeAlpha = 1
     local initialAge, exitAge, upcomingAge = 0, 0, 0
     local initialCount, upcomingCount = 0, 0
     local animationFinished = false
@@ -94,6 +95,66 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(icon) then GameTooltip:Hide() end
     end
 
+    local function CreateMarker(i)
+        local marker = CreateFrame("Frame", nil, timeline)
+        marker:SetHeight(118)
+        marker.icons = {}
+        marker.label = marker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        marker.label:SetPoint("TOP", marker, "TOP", 0, TRACK_Y - 8)
+        marker.tick = marker:CreateTexture(nil, "ARTWORK")
+        marker.tick:SetSize(2, 12)
+        marker.tick:SetPoint("CENTER", marker, "TOP", 0, TRACK_Y)
+        if i > 1 then
+            marker.spark = marker:CreateTexture(nil, "OVERLAY", nil, 1)
+            marker.spark:SetTexture("Interface\\Cooldown\\star4")
+            marker.spark:SetBlendMode("ADD")
+            marker.spark:SetPoint("CENTER", marker.tick, "CENTER")
+            marker.spark:Hide()
+        end
+        if i >= 3 then
+            marker.unlockLabel = marker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            marker.unlockLabel:SetPoint("TOP", marker, "TOP", 0, TRACK_Y - 27)
+        end
+        for j = 1, MAX_SKILLS do
+            local icon = CreateFrame("Frame", nil, marker)
+            icon.artwork = icon:CreateTexture(nil, "ARTWORK")
+            icon.artwork:SetAllPoints(icon)
+            icon.artwork:SetTexCoord(.08, .92, .08, .92)
+            icon:EnableMouse(false)
+            if i >= 3 then
+                icon:SetScript("OnEnter", function(self)
+                    local skill = self.skill
+                    if not GameTooltip or not skill or popup.closingInputSuppressed or ns.db.clickThrough then return end
+                    if skill.id and GameTooltip.SetSpellByID then
+                        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                        GameTooltip:SetSpellByID(skill.id)
+                    elseif skill.name then
+                        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                        GameTooltip:SetText(skill.name, 1, 1, 1, 1)
+                    else
+                        return
+                    end
+                    if ns.TrainerCostsInTooltips() then
+                        local cost = skill.cost
+                        if cost == nil and skill.id then
+                            -- Older replay snapshots do not include trainer prices.
+                            local _, bySpellID = ns.GetTrainerCatalogLookups()
+                            local item = bySpellID[skill.id]
+                            cost = item and item.cost
+                        end
+                        local price = render.FormatTrainerCost(cost, 3)
+                        if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
+                    end
+                    GameTooltip:Show()
+                end)
+                icon:SetScript("OnLeave", HideSkillTooltip)
+                icon:SetScript("OnHide", HideSkillTooltip)
+            end
+            marker.icons[j] = icon
+        end
+        markers[i] = marker
+    end
+
     local function Create()
         timeline = CreateFrame("Frame", "GnomeLevelUpLevelTimeline", popup)
         timeline:SetHeight(118)
@@ -101,65 +162,6 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         timeline:Hide()
         timeline:SetScript("OnHide", function() render.RefreshTimelineMouse() end)
         markers = {}
-        for i = 1, MAX_STEPS + 1 do
-            local marker = CreateFrame("Frame", nil, timeline)
-            marker:SetHeight(118)
-            marker.icons = {}
-            marker.label = marker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            marker.label:SetPoint("TOP", marker, "TOP", 0, TRACK_Y - 8)
-            marker.tick = marker:CreateTexture(nil, "ARTWORK")
-            marker.tick:SetSize(2, 12)
-            marker.tick:SetPoint("CENTER", marker, "TOP", 0, TRACK_Y)
-            if i > 1 then
-                marker.spark = marker:CreateTexture(nil, "OVERLAY", nil, 1)
-                marker.spark:SetTexture("Interface\\Cooldown\\star4")
-                marker.spark:SetBlendMode("ADD")
-                marker.spark:SetPoint("CENTER", marker.tick, "CENTER")
-                marker.spark:Hide()
-            end
-            if i >= 3 then
-                marker.unlockLabel = marker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                marker.unlockLabel:SetPoint("TOP", marker, "TOP", 0, TRACK_Y - 27)
-            end
-            for j = 1, MAX_SKILLS do
-                local icon = CreateFrame("Frame", nil, marker)
-                icon.artwork = icon:CreateTexture(nil, "ARTWORK")
-                icon.artwork:SetAllPoints(icon)
-                icon.artwork:SetTexCoord(.08, .92, .08, .92)
-                icon:EnableMouse(false)
-                if i >= 3 then
-                    icon:SetScript("OnEnter", function(self)
-                        local skill = self.skill
-                        if not GameTooltip or not skill or popup.closingInputSuppressed or ns.db.clickThrough then return end
-                        if skill.id and GameTooltip.SetSpellByID then
-                            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                            GameTooltip:SetSpellByID(skill.id)
-                        elseif skill.name then
-                            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                            GameTooltip:SetText(skill.name, 1, 1, 1, 1)
-                        else
-                            return
-                        end
-                        if ns.TrainerCostsInTooltips() then
-                            local cost = skill.cost
-                            if cost == nil and skill.id then
-                                -- Older replay snapshots do not include trainer prices.
-                                local _, bySpellID = ns.GetTrainerCatalogLookups()
-                                local item = bySpellID[skill.id]
-                                cost = item and item.cost
-                            end
-                            local price = render.FormatTrainerCost(cost, 3)
-                            if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
-                        end
-                        GameTooltip:Show()
-                    end)
-                    icon:SetScript("OnLeave", HideSkillTooltip)
-                    icon:SetScript("OnHide", HideSkillTooltip)
-                end
-                marker.icons[j] = icon
-            end
-            markers[i] = marker
-        end
         markerDot = timeline:CreateTexture(nil, "OVERLAY")
         markerDot:SetSize(6, 10)
         barFlash = timeline:CreateTexture(nil, "ARTWORK")
@@ -172,6 +174,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
     function render.ClearLevelTimeline()
         source, startLevel, reachedLevel = nil, nil, nil
         progress, reveal = 0, 0
+        closeAlpha = 1
         initialAge, exitAge, upcomingAge = 0, 0, 0
         initialCount, upcomingCount = 0, 0
         animationFinished = false
@@ -319,6 +322,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
 
     function render.FadeLevelTimeline(alpha)
         if not timeline or not timeline:IsShown() then return end
+        closeAlpha = alpha
         timeline:SetAlpha(timeline.opacity * reveal * alpha)
         local fade = 1 - math.sqrt(alpha)
         for i = 1, steps + 1 do
@@ -333,6 +337,28 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         end
     end
 
+    function ns.RefreshLevelTimelineColour()
+        if not timeline then return end
+        local colour = ns.GetTimelineColour()
+        local r, g, b = colour[1], colour[2], colour[3]
+        local sparkR, sparkG, sparkB = r + (1 - r) * .35, g + (1 - g) * .35, b + (1 - b) * .35
+        markerDot:SetColorTexture(r, g, b, 1)
+        for _, marker in ipairs(markers) do
+            marker.label:SetTextColor(r, g, b)
+            marker.tick:SetColorTexture(r, g, b, .8)
+            if marker.unlockLabel then marker.unlockLabel:SetTextColor(r, g, b) end
+            if marker.spark then marker.spark:SetVertexColor(sparkR, sparkG, sparkB) end
+        end
+    end
+
+    function ns.RefreshLevelTimelineOpacity()
+        if not timeline then return end
+        local wasInteractive = (timeline.opacity or 0) > 0
+        timeline.opacity = ns.OPTION_SETTINGS.timelineOpacity.get() / 100
+        render.Alpha(timeline, timeline.opacity * reveal * closeAlpha)
+        if wasInteractive ~= (timeline.opacity > 0) then render.RefreshTimelineMouse() end
+    end
+
     function ns.RefreshLevelTimeline()
         if not (ns.db and ns.db.showLevelTimeline and reachedLevel and source) then
             if timeline then timeline:Hide() end
@@ -345,6 +371,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             lastLevel = math.max(reachedLevel, math.min(lastLevel, cap))
             steps = math.max(2, lastLevel - reachedLevel + 1)
         end
+        for i = #markers + 1, steps + 1 do CreateMarker(i) end
         local showSkills = ns.NewAbilitiesEnabled()
         if showSkills and source.lastLevel ~= lastLevel then
             local saved = source.saved
@@ -367,10 +394,6 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             source.lastLevel = lastLevel
         end
         local count = showSkills and ns.OPTION_SETTINGS.timelineSkillCount.get() or 0
-        local colour = ns.GetTimelineColour()
-        local r, g, b = colour[1], colour[2], colour[3]
-        timeline.opacity = ns.OPTION_SETTINGS.timelineOpacity.get() / 100
-        timeline:SetAlpha(timeline.opacity * reveal)
         local bottomBar = ns.GetEffectiveBackgroundMode() == "MODERN" and modernBottomLine or texturedBottomEdge
         timeline:ClearAllPoints()
         timeline:SetPoint("TOP", bottomBar, "CENTER", 0, -TRACK_Y)
@@ -383,7 +406,14 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         local path = ns.GetPopupFontPath(ns.db.customFontPath)
         local widestMarker = 0
         initialCount, upcomingCount = 0, 0
-        for i, marker in ipairs(markers) do
+        for i = steps + 2, #markers do
+            local marker = markers[i]
+            marker:Hide()
+            marker.spark:Hide()
+            for _, icon in ipairs(marker.icons) do icon.skill = nil end
+        end
+        for i = 1, steps + 1 do
+            local marker = markers[i]
             local level = reachedLevel + i - 2
             marker.hasLevel = level >= startLevel and level <= lastLevel
             if not marker.hasLevel then marker:Hide() end
@@ -391,8 +421,6 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             marker:SetWidth(2 * iconSize + 3)
             marker.label:SetFont(path, 14, "OUTLINE")
             marker.label:SetText(marker.hasLevel and tostring(level) or "")
-            marker.label:SetTextColor(r, g, b)
-            marker.tick:SetColorTexture(r, g, b, .8)
             -- Older replay snapshots may still include starter spells.
             local skills = count > 0 and marker.hasLevel and level > 1 and source.levels[level]
             local iconTop = TRACK_Y - 27
@@ -402,7 +430,6 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                 if marker.hasUnlockLabel then
                     marker.unlockLabel:SetFont(path, 12, "OUTLINE")
                     marker.unlockLabel:SetText(ns.L("Level %d", source.nextUnlockLevel))
-                    marker.unlockLabel:SetTextColor(r, g, b)
                     skills, iconTop = source.nextUnlockSkills, TRACK_Y - 42
                 end
             end
@@ -441,10 +468,8 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         timeline:SetWidth(width)
         render.Size(barFlash, barWidth, 2)
         render.ParticlePoint(barFlash, timeline, "TOPLEFT", width / 2, TRACK_Y)
-        markerDot:SetColorTexture(r, g, b, 1)
-        for i = 2, #markers do
-            markers[i].spark:SetVertexColor(r + (1 - r) * .35, g + (1 - g) * .35, b + (1 - b) * .35)
-        end
+        ns.RefreshLevelTimelineColour()
+        ns.RefreshLevelTimelineOpacity()
         timeline:Show()
         PaintProgress()
         if animationFinished then

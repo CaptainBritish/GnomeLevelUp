@@ -280,16 +280,24 @@ do
         piece:SetPoint("CENTER", button, "RIGHT", -12, shape[3])
         pieces[#pieces + 1] = piece
     end
+    local pausedByOptions = false
+    local pinHighlighted
     local function ShowTooltip()
         if not GameTooltip then return end
         GameTooltip:SetOwner(button, "ANCHOR_TOP")
         GameTooltip:SetText(ns.L(render.pinned and "Unpin level-up popup" or "Pin level-up popup"))
+        if pausedByOptions then GameTooltip:AddLine(ns.L("Preview paused by Options."), .8, .8, .8) end
         GameTooltip:Show()
     end
-    function render.UpdatePinButton()
-        for _, piece in ipairs(pieces) do
-            if render.pinned then piece:SetColorTexture(1, .82, .25, 1)
-            else piece:SetColorTexture(1, 1, 1, .7) end
+    function render.UpdatePinButton(optionsPaused)
+        pausedByOptions = optionsPaused == true
+        local highlighted = render.pinned or pausedByOptions
+        if pinHighlighted ~= highlighted then
+            pinHighlighted = highlighted
+            for _, piece in ipairs(pieces) do
+                if highlighted then piece:SetColorTexture(1, .82, .25, 1)
+                else piece:SetColorTexture(1, 1, 1, .7) end
+            end
         end
         if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(button) then
             if frame:IsShown() and button:IsMouseEnabled() then ShowTooltip() else GameTooltip:Hide() end
@@ -304,7 +312,6 @@ do
     function render.TogglePin()
         if not frame:IsShown() or frame.closingInputSuppressed then return end
         render.pinned = not render.pinned
-        render.UpdatePinButton()
         ns.RefreshPreviewSuspension()
     end
     button:SetScript("OnClick", function()
@@ -4355,14 +4362,12 @@ function render.BeginClosing(multiplier)
 end
 
 local function ResetPreviewState(active)
-    if render.pinned then
-        render.pinned = nil
-        render.UpdatePinButton()
-    end
+    render.pinned = nil
     previewState.active = active == true
     previewState.timeoutPaused = false
     previewState.remainingTime = nil
     previewState.deadline = nil
+    render.UpdatePinButton(false)
 end
 
 function render.StylePaceRecord()
@@ -4954,6 +4959,7 @@ end)
 
 function ns.ApplyColors()
     ns.ApplyBackgroundAppearance()
+    ns.RefreshLevelTimelineColour()
     SetTextColorKey(content.title, "title")
     SetTextColorKey(content.levelText, "level")
     SetTextColorKey(content.statsHeader, "statsHeader")
@@ -5621,8 +5627,9 @@ function render.ArmHideTimer(delay, token, callback)
     end
 end
 
-local function ShouldPausePopupTimeout()
-    return render.pinned or (previewState.active and ns.IsPreviewSuspensionRequested() == true)
+local function GetPopupPauseState()
+    local optionsPaused = previewState.active and ns.IsPreviewSuspensionRequested() == true
+    return render.pinned or optionsPaused, optionsPaused
 end
 
 function ns.HandleLevelUpScreenshotResult(saved, reason, failure)
@@ -5674,7 +5681,7 @@ local function IsHovered()
 end
 
 local function TryFadeOut(token)
-    if token ~= hideToken or not frame:IsShown() or ShouldPausePopupTimeout() then return end
+    if token ~= hideToken or not frame:IsShown() or GetPopupPauseState() then return end
     if not (ns.db and ns.db.ignoreMouseoverDelay == true) and IsHovered() then
         render.ArmHideTimer(0.15, token, function() TryFadeOut(token) end)
         return
@@ -5692,7 +5699,9 @@ local function ScheduleFadeOut(delay)
     local token = hideToken
     delay = math.max(0, delay or 0)
     previewState.deadline = GetTime() + delay
-    if ShouldPausePopupTimeout() then
+    local paused, optionsPaused = GetPopupPauseState()
+    render.UpdatePinButton(optionsPaused)
+    if paused then
         previewState.timeoutPaused = true
         previewState.remainingTime = delay
         return
@@ -5708,7 +5717,9 @@ end
 -- Pinning and Options can hold the same timeout without stopping the stat pages.
 function ns.RefreshPreviewSuspension()
     if not frame:IsShown() or frame.closingInputSuppressed then return end
-    if ShouldPausePopupTimeout() then
+    local paused, optionsPaused = GetPopupPauseState()
+    render.UpdatePinButton(optionsPaused)
+    if paused then
         if previewState.timeoutPaused then return end
         previewState.remainingTime = math.max(0, (previewState.deadline or GetTime()) - GetTime())
         previewState.timeoutPaused = true

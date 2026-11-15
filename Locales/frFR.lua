@@ -673,6 +673,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Timeline skills per level"] = "Techniques par niveau",
     ["Pin level-up popup"] = "Épingler la fenêtre de passage de niveau",
     ["Unpin level-up popup"] = "Désépingler la fenêtre de passage de niveau",
+    ["Preview paused by Options."] = "Aperçu mis en pause par les options.",
     ["Timeline Steps"] = "Niveaux sur la frise",
     ["Timeline opacity"] = "Opacité de la frise",
     ["Timeline colour"] = "Couleur de la frise",

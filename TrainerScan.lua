@@ -622,11 +622,19 @@ frame:RegisterEvent("TRAINER_SHOW")
 frame:RegisterEvent("TRAINER_UPDATE")
 frame:RegisterEvent("TRAINER_CLOSED")
 frame:RegisterEvent("SPELLS_CHANGED")
+if ns.GetClientFlavor and ns.GetClientFlavor() == "retail" then frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED") end
 frame:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 frame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if (...) == "player" then
+            ns.InvalidateSpellBookSnapshot()
+            ns.CaptureRetailFutureSpells()
+        end
+        return
+    end
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever"
         and event ~= "SPELLS_CHANGED" and event ~= "LEARNED_SPELL_IN_SKILL_LINE" then
         return

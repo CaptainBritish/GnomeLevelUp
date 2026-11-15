@@ -526,7 +526,7 @@ function ns.SetTimelineColour(colour)
     local classColour = ns.GetClassColor("level") or defaults.timelineColour
     ns.db.timelineClassColour = colour[1] == classColour[1] and colour[2] == classColour[2] and colour[3] == classColour[3]
     ns.db.timelineColour = colour
-    RefreshTimeline()
+    if ns.RefreshLevelTimelineColour then ns.RefreshLevelTimelineColour() end
 end
 for _, option in ipairs({
     { key = "timelineSteps", label = "Timeline Steps", min = 2, max = 4, step = 1, format = "%d",
@@ -543,7 +543,14 @@ for _, option in ipairs({
         end,
         minimum = option.min, maximum = option.max, step = option.step,
         get = function() return math.floor(math.max(option.min, math.min(option.max, tonumber(ns.db[key]) or defaults[key]))) end,
-        set = function(value) ns.db[key] = math.max(option.min, math.min(option.max, value)); RefreshTimeline() end,
+        set = function(value)
+            ns.db[key] = math.max(option.min, math.min(option.max, value))
+            if key == "timelineOpacity" then
+                if ns.RefreshLevelTimelineOpacity then ns.RefreshLevelTimelineOpacity() end
+            else
+                RefreshTimeline()
+            end
+        end,
         format = function(value) return string.format(option.format, value) end,
     }
 end
@@ -2333,32 +2340,6 @@ ns.eventFrame = frame
 -- A newer world/loading event supersedes an older queued check.
 local setupCheckToken = 0
 local setupLoading = true
-local guildBankReminderPending
-
-local function ShowGuildBankReminder()
-    if not guildBankReminderPending or setupLoading then return end
-    guildBankReminderPending = false
-    if not ns.db or ns.db.enabled == false or ns.GetClientFlavor() ~= "forever" then return end
-    if not StaticPopupDialogs or not StaticPopup_Show then return end
-    local character = GnomeLevelUpCharacterDB
-    if type(character) == "table" and character.guildBankReminderShown then return end
-
-    local firstName, surname = (UnitNameUnmodified or UnitName)("player")
-    if issecretvalue and (issecretvalue(firstName) or issecretvalue(surname)) then return end
-    if firstName ~= "Hanie" or surname ~= "Dawnforge" then return end
-
-    StaticPopupDialogs.GNOMELEVELUP_GUILD_BANK_REMINDER = {
-        text = "Hani, put 50k in the guild bank.",
-        button1 = OKAY or "Okay",
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-    }
-    if StaticPopup_Show("GNOMELEVELUP_GUILD_BANK_REMINDER") then
-        GnomeLevelUpCharacterDB = type(character) == "table" and character or {}
-        GnomeLevelUpCharacterDB.guildBankReminderShown = true
-    end
-end
 
 local function QueueFirstTimeSetup()
     setupCheckToken = setupCheckToken + 1
@@ -2430,15 +2411,12 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "LOADING_SCREEN_DISABLED" then
         setupLoading = false
         QueueFirstTimeSetup()
-        ShowGuildBankReminder()
     elseif event == "PLAYER_REGEN_ENABLED" then
         QueueFirstTimeSetup()
     elseif event == "PLAYER_ENTERING_WORLD" then
-        if guildBankReminderPending == nil then guildBankReminderPending = true end
         QueueFirstTimeSetup()
         ns.ApplyAddonState(false)
         if ns.SyncClassColors then ns.SyncClassColors() elseif ns.ApplyColors then ns.ApplyColors() end
-        ShowGuildBankReminder()
     elseif event == "PLAYER_LEVEL_UP" then
         if ns.HandleLevelUp then
             ns.HandleLevelUp(...)

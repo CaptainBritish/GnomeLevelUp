@@ -673,6 +673,7 @@ RegisterLocaleBuilder("deDE", function() return {
     ["Timeline skills per level"] = "Fähigkeiten pro Stufe",
     ["Pin level-up popup"] = "Stufenaufstiegsfenster anheften",
     ["Unpin level-up popup"] = "Stufenaufstiegsfenster lösen",
+    ["Preview paused by Options."] = "Vorschau durch die Optionen pausiert.",
     ["Timeline Steps"] = "Stufen auf der Zeitleiste",
     ["Timeline opacity"] = "Deckkraft der Stufenleiste",
     ["Timeline colour"] = "Farbe der Stufenleiste",

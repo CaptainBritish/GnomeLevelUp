@@ -673,6 +673,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Timeline skills per level"] = "每級技能數量",
     ["Pin level-up popup"] = "固定升級彈出視窗",
     ["Unpin level-up popup"] = "取消固定升級彈出視窗",
+    ["Preview paused by Options."] = "預覽已由選項暫停。",
     ["Timeline Steps"] = "時間軸等級數",
     ["Timeline opacity"] = "時間軸不透明度",
     ["Timeline colour"] = "時間軸顏色",

@@ -688,6 +688,7 @@ RegisterLocaleBuilder("xxXX", function() return {
     ["Timeline skills per level"] = "Timeline skills per level",
     ["Pin level-up popup"] = "Pin level-up popup",
     ["Unpin level-up popup"] = "Unpin level-up popup",
+    ["Preview paused by Options."] = "Preview paused by Options.",
     ["Timeline Steps"] = "Timeline Steps",
     ["Timeline opacity"] = "Timeline opacity",
     ["Timeline colour"] = "Timeline colour",

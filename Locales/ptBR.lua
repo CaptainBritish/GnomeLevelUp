@@ -673,6 +673,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Timeline skills per level"] = "Habilidades por nível",
     ["Pin level-up popup"] = "Fixar aviso de subida de nível",
     ["Unpin level-up popup"] = "Desafixar aviso de subida de nível",
+    ["Preview paused by Options."] = "Prévia pausada pelas opções.",
     ["Timeline Steps"] = "Níveis na linha do tempo",
     ["Timeline opacity"] = "Opacidade da linha",
     ["Timeline colour"] = "Cor da linha",

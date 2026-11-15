@@ -673,6 +673,7 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Timeline skills per level"] = "每级技能数量",
     ["Pin level-up popup"] = "固定升级弹窗",
     ["Unpin level-up popup"] = "取消固定升级弹窗",
+    ["Preview paused by Options."] = "预览已由选项暂停。",
     ["Timeline Steps"] = "时间轴等级数",
     ["Timeline opacity"] = "时间轴不透明度",
     ["Timeline colour"] = "时间轴颜色",

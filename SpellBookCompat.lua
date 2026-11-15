@@ -8,6 +8,7 @@ local cachedRevision = -1
 local cachedFutureSpells
 local cachedFutureRevision = -1
 local retailFutureSpellsBeforeLevel
+local retailUnlockIndex
 local knownSpellCache = {}
 local knownSpellCacheRevision = -1
 local spellbookInvalidationQueued = false
@@ -22,6 +23,7 @@ function ns.InvalidateSpellBookSnapshot()
     cachedRevision = -1
     cachedFutureSpells = nil
     cachedFutureRevision = -1
+    retailUnlockIndex = nil
     knownSpellCache = {}
     knownSpellCacheRevision = -1
     if ns.InvalidateKnownTrainingLookup then
@@ -59,6 +61,7 @@ end
 function ns.CaptureRetailFutureSpells()
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "retail" then return end
     retailFutureSpellsBeforeLevel = CopyFutureSpells(ns.SnapshotRetailFutureSpells(true))
+    retailUnlockIndex = nil
 end
 
 function ns.GetRetailFutureSpellsBeforeLevel()
@@ -101,6 +104,7 @@ function ns.SnapshotSpellBook(forceRefresh)
         return cachedSpellbook
     end
 
+    retailUnlockIndex = nil
     local perf = ns.PerfStart and ns.PerfStart("spellbook_snapshot")
     local known = {}
     local playerBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
@@ -212,6 +216,7 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
         return cachedFutureSpells
     end
 
+    retailUnlockIndex = nil
     local perf = ns.PerfStart and ns.PerfStart("retail_future_snapshot")
     local futureSpells = {}
     local seen = {}
@@ -262,13 +267,21 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
     return futureSpells
 end
 
-function ns.GetRetailTimelineSpells(firstLevel, lastLevel)
-    local abilities, seen = {}, {}
+local function GetRetailUnlockIndex()
+    if retailUnlockIndex then return retailUnlockIndex end
+
+    local byLevel, levels, seen = {}, {}, {}
     local function Add(spellID, name, level, icon)
-        if not level or level < firstLevel or level > lastLevel or seen[spellID] then return end
+        if not level or level < 1 or level % 1 ~= 0 or seen[spellID] then return end
         local _, rank = ns.GetTrainingRankInfo(name)
         if rank and rank > 1 then return end
         seen[spellID] = true
+        local abilities = byLevel[level]
+        if not abilities then
+            abilities = {}
+            byLevel[level] = abilities
+            levels[#levels + 1] = level
+        end
         abilities[#abilities + 1] = { id = spellID, name = name, requiredLevel = level,
             icon = icon or GetSpellTexture(spellID), isNewAbility = true }
     end
@@ -279,9 +292,38 @@ function ns.GetRetailTimelineSpells(firstLevel, lastLevel)
         Add(spell.id, spell.name, spell.requiredLevel, spell.icon)
     end
     for id, name in pairs(ns.SnapshotSpellBook()) do
-        Add(id, name, GetSpellLearnedLevel(nil, nil, id))
+        if not seen[id] then Add(id, name, GetSpellLearnedLevel(nil, nil, id)) end
     end
-    table.sort(abilities, function(a, b) return a.id < b.id end)
+    table.sort(levels)
+    for _, abilities in pairs(byLevel) do
+        table.sort(abilities, function(a, b) return a.id < b.id end)
+    end
+    retailUnlockIndex = { byLevel = byLevel, levels = levels }
+    return retailUnlockIndex
+end
+
+function ns.GetRetailTimelineSpells(firstLevel, lastLevel, nextUnlockCap)
+    local index = GetRetailUnlockIndex()
+    local abilities = {}
+    local function AppendLevel(level)
+        local bucket = index.byLevel[level]
+        if not bucket then return end
+        for _, ability in ipairs(bucket) do
+            abilities[#abilities + 1] = ability
+        end
+    end
+    if firstLevel == lastLevel and not nextUnlockCap then
+        AppendLevel(firstLevel)
+        return abilities
+    end
+    for _, level in ipairs(index.levels) do
+        if level > lastLevel then
+            -- If the last marker is empty, the timeline can show the next unlock under it.
+            if nextUnlockCap and level <= nextUnlockCap and not index.byLevel[lastLevel] then AppendLevel(level) end
+            break
+        end
+        if level >= firstLevel then AppendLevel(level) end
+    end
     return abilities
 end
 

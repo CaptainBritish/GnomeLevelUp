@@ -675,6 +675,7 @@ RegisterLocaleBuilder("trTR", function() return {
     ["Timeline skills per level"] = "Seviye başına yetenek",
     ["Pin level-up popup"] = "Seviye atlama penceresini sabitle",
     ["Unpin level-up popup"] = "Seviye atlama penceresini serbest bırak",
+    ["Preview paused by Options."] = "Önizleme seçenekler tarafından duraklatıldı.",
     ["Timeline Steps"] = "Çizelge adımları",
     ["Timeline opacity"] = "Çizelge opaklığı",
     ["Timeline colour"] = "Çizelge rengi",

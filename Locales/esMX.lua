@@ -493,6 +493,7 @@ RegisterLocaleBuilder("esMX", function() return {
     ["Timeline skills per level"] = "Habilidades por nivel",
     ["Pin level-up popup"] = "Fijar aviso de subida de nivel",
     ["Unpin level-up popup"] = "Desfijar aviso de subida de nivel",
+    ["Preview paused by Options."] = "Vista previa pausada por las opciones.",
     ["Timeline Steps"] = "Niveles en la línea de tiempo",
     ["Timeline opacity"] = "Opacidad de la línea",
     ["Timeline colour"] = "Color de la línea",

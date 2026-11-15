@@ -5,21 +5,26 @@
 ##### New Features
 
 * Added Turkish (Türkçe) support, including Turkish characters in the Fritz font. Thanks, Shadowhand!
-* Added an optional level timeline along the bottom of the popup
+* Added an optional level timeline with upcoming abilities and hover tooltips.
+* Added a pin to keep the popup open.
 
 ##### Customization Options
 
 * Added **Weather motes** for clear skies, rain, snow, sandstorms, and haze.
-* Added a toggle to hide duplicate spells, only the most recent rank is shown with this on.
-* Added a toggle to completly hide the Abilities section of the popup.
+* Added a toggle to show only the latest spell rank.
+* Added a toggle to hide the Abilities section of the popup.
+* Added **Timeline Steps** to show two, three, or four levels at a time.
+* Grouped the spell filters at the bottom of Trainer Data, above **Export Trainer Report**.
 
 ##### Bug Fixes and Optimization
 
-* Reworked the locale system into to make it easier for future contribution (thanks Shadowhand!)
-* Fixed French stat names and stale labels after switching languages. 
+* Reworked the locale system to make translations easier to contribute. Thanks, Shadowhand!
+* Fixed French stat names and stale labels after switching languages.
 * If something prevents GLU from seeing the stat totals, GLU will show the stats gained.
-* Level times now show hours after 60 minutes. `349:06` becomes `5:49:06`.
+* Level times now show hours after 60 minutes. 
 * The 3D portrait no longer lingers after the popup de-renders.
+* Retail previews and the timeline share a spell unlock cache 
+* /glu test <level>`replaces /glu milestone and /glumaxlevel, you can now add a number to the end of it to preview that level.
 
 ## 1.6.3
 

@@ -673,6 +673,7 @@ RegisterLocaleBuilder("itIT", function() return {
     ["Timeline skills per level"] = "Abilità per livello",
     ["Pin level-up popup"] = "Fissa la finestra del passaggio di livello",
     ["Unpin level-up popup"] = "Sblocca la finestra del passaggio di livello",
+    ["Preview paused by Options."] = "Anteprima sospesa dalle opzioni.",
     ["Timeline Steps"] = "Livelli sulla cronologia",
     ["Timeline opacity"] = "Opacità della linea",
     ["Timeline colour"] = "Colore della linea",
