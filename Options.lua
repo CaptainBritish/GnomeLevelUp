@@ -998,6 +998,9 @@ local function BuildOptions()
         skillCount.isVisible = ns.OPTION_SETTINGS.timelineSkillCount.isAvailable
         opacity.isVisible = ns.LevelTimelineEnabled
         y = y - 34
+        local _, steps = AddNumericOption("timelineSteps", LEFT, CONTROL_X, y)
+        steps.isVisible = ns.LevelTimelineEnabled
+        y = y - 34
     end
 
     -- Pack the main Appearance settings independently of the optional debug rows.
@@ -1026,7 +1029,7 @@ local function BuildOptions()
         { columns = 2, labels = { "Lock Location", "Horizontal layout", "Compact Layout", "Show level timeline" } },
         { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Section padding", "Heading text size", "Time to Level text size" } },
         { columns = 2, labels = { "Ability Cost Size", "Stat text size" } },
-        { columns = 2, labels = { "Timeline skills per level", "Timeline opacity" } },
+        { columns = 2, labels = { "Timeline skills per level", "Timeline opacity", "Timeline Steps" } },
     }, appearanceRow)
 
     local suspendPreview = AddCheckbox("Suspend Preview",
@@ -1457,13 +1460,6 @@ local function BuildOptions()
     end)
     y = y - 32
 
-    for index, key in ipairs({ "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }) do
-        local check, label = AddSettingCheckbox(key, LEFT + (index - 1) * 175, y)
-        if key ~= "showOnlyCurrentLevelSkills" then check.gluOptionsCell.isVisible = ns.SupportsTrainerData end
-        AddAvailabilityRefresh(check, label, ns.OPTION_SETTINGS[key].isAvailable)
-    end
-    y = y - 32
-
     local costCheck, costLabel, tooltipCosts, tooltipCostsLabel = AddSettingCheckboxPair("showTrainerCosts", "showTrainerCostsInTooltips")
     AddAvailabilityRefresh(costCheck, costLabel, ns.TrainerAbilitiesEnabled)
     tooltipCosts.gluOptionsCell.isVisible = ns.SupportsTrainerData
@@ -1503,6 +1499,13 @@ local function BuildOptions()
     })
     AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
     AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
+
+    for index, key in ipairs({ "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }) do
+        local check, label = AddSettingCheckbox(key, LEFT + (index - 1) * 175, y)
+        if key ~= "showOnlyCurrentLevelSkills" then check.gluOptionsCell.isVisible = ns.SupportsTrainerData end
+        AddAvailabilityRefresh(check, label, ns.OPTION_SETTINGS[key].isAvailable)
+    end
+    y = y - 32
 
     AddButton("Export trainer report", 180, LEFT, y, function()
         ns.OpenTrainerReport()

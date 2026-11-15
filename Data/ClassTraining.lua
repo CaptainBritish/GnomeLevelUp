@@ -271,6 +271,36 @@ function ns.IsHunterPetTrainingEntry(entry)
     return false
 end
 
+local function BuildTrainerAbility(item, displayLevel)
+    local family, rank = ns.GetTrainingRankInfo(item.name)
+    if item.entry.familyID then family, rank = "spell:" .. item.entry.familyID, item.entry.rank end
+    return {
+        name = item.name,
+        icon = item.icon,
+        id = item.id,
+        cost = item.cost,
+        requiredLevel = displayLevel,
+        trainingFamily = rank and family or nil,
+        trainingRank = rank,
+        isNewAbility = rank == nil or rank == 1,
+    }
+end
+
+function ns.GetTrainerAbilitiesForLevel(level)
+    local _, classToken = UnitClass("player")
+    local abilities = {}
+    for _, item in ipairs(ns.GetTrainerCatalogIndex()) do
+        local hunterPet = classToken == "HUNTER" and ns.IsHunterPetTrainingEntry(item.entry)
+        local displayLevel = hunterPet and math.max(10, item.level) or item.level
+        if displayLevel == level and (not hunterPet or ns.db.showHunterPetSkills ~= false)
+            and (not item.entry.requiredTalentId or ns.IsSpellKnownAcrossClients(item.entry.requiredTalentId)) then
+            local ability = BuildTrainerAbility(item, displayLevel)
+            if not ns.db.showOnlyNewSkills or ability.isNewAbility then abilities[#abilities + 1] = ability end
+        end
+    end
+    return abilities
+end
+
 function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
     -- Return only skills that fit the player's level and are not learned.
     currentLevel = tonumber(currentLevel) or 0
@@ -320,19 +350,8 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
             and ns.db and ns.db.showHunterPetSkills == false
         if talentMatches and levelMatches and displayLevel <= currentLevel
             and not hiddenHunterPetSkill and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
-            local ability = {
-                name = catalogEntry.name,
-                icon = catalogEntry.icon,
-                id = catalogEntry.id,
-                cost = catalogEntry.cost,
-                requiredLevel = displayLevel,
-            }
-            local baseName, rank = ns.GetTrainingRankInfo(catalogEntry.name)
-            if entry.familyID then baseName, rank = "spell:" .. entry.familyID, entry.rank end
-            -- Retain display metadata separately from the temporary filter rank.
-            ability.trainingFamily = rank and baseName or nil
-            ability.trainingRank = rank
-            ability.isNewAbility = rank == nil or rank == 1
+            local ability = BuildTrainerAbility(catalogEntry, displayLevel)
+            local baseName, rank = ability.trainingFamily, ability.trainingRank
             local current = currentRanks[entry.familyID]
             if not hunterPetSkill and current and rank and current.entry.rank < rank then
                 ability.previousRankSpellID = current.id

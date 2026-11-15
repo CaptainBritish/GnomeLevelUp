@@ -91,6 +91,7 @@ local defaults = {
     backgroundEmbers = true,
     weatherMotes = false,
     showLevelTimeline = false,
+    timelineSteps = 2,
     timelineSkillCount = 4,
     timelineOpacity = 85,
     timelineColour = { .88, .76, .52 },
@@ -528,6 +529,8 @@ function ns.SetTimelineColour(colour)
     RefreshTimeline()
 end
 for _, option in ipairs({
+    { key = "timelineSteps", label = "Timeline Steps", min = 2, max = 4, step = 1, format = "%d",
+        description = "Choose how many levels are visible on the timeline." },
     { key = "timelineSkillCount", label = "Timeline skills per level", min = 0, max = 4, step = 1, format = "%d",
         description = "Set how many ability icons to show at each timeline marker." },
     { key = "timelineOpacity", label = "Timeline opacity", min = 0, max = 100, step = 5, format = "%d%%",
@@ -571,7 +574,7 @@ end
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
-    "showLevelTimeline", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
+    "showLevelTimeline", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "portraitRingGlint",
     "portraitSparks", "backgroundEmbers", "weatherMotes", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
@@ -586,7 +589,7 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
-    "showLevelTimeline", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
+    "showLevelTimeline", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
     "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",
@@ -2265,12 +2268,18 @@ local function BuildPreviewStatChanges(maxLevelPreview)
     return previewStats
 end
 
-function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest, weatherTest)
+function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest, weatherTest, previewLevel)
     EnsureDatabase()
-    local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or UnitLevel("player")
+    local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or previewLevel or UnitLevel("player")
+    local forever = ns.GetCurrentFlavor() == "forever"
 
     local trainerAbilities = {}
-    if debugSkills or abilityCount then
+    if previewLevel then
+        if ns.NewAbilitiesEnabled() then
+            trainerAbilities = forever and ns.GetTrainerAbilitiesForLevel(currentLevel)
+                or ns.GetRetailTimelineSpells(currentLevel, currentLevel)
+        end
+    elseif debugSkills or abilityCount then
         trainerAbilities = BuildDebugAbilityPreview(currentLevel, abilityCount or 15)
     else
         -- Trainer data may be empty before the first visit.
@@ -2280,8 +2289,11 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     local unlearnedWeaponSkills = abilityCount == 0 and {} or ns.GetUnlearnedWeaponSkills(currentLevel)
     local _, classToken = UnitClass("player")
     local warlockPetAbilities = {}
-    local forever = ns.GetCurrentFlavor() == "forever"
-    if forever and debugSkills and abilityCount ~= 0 then
+    if previewLevel then
+        if forever and ns.GetUnlearnedWarlockPetAbilities then
+            warlockPetAbilities = ns.GetUnlearnedWarlockPetAbilities(currentLevel)
+        end
+    elseif forever and debugSkills and abilityCount ~= 0 then
         warlockPetAbilities = BuildDebugGrimoirePreview(15)
     elseif forever and classToken == "WARLOCK" and abilityCount ~= 0 then
         warlockPetAbilities[1] = {
@@ -2295,10 +2307,11 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
             preview = true,
         }
     end
-    SetPreviewIcons(trainerAbilities)
+    if not previewLevel then SetPreviewIcons(trainerAbilities) end
     if ns.SuppressBlizzardBanner then ns.SuppressBlizzardBanner() end
     local previewStats = BuildPreviewStatChanges(maxLevelPreview)
-    local seconds = ns.GetCurrentLevelPlayedTime and ns.GetCurrentLevelPlayedTime()
+    local seconds = (not previewLevel or maxLevelPreview) and ns.GetCurrentLevelPlayedTime
+        and ns.GetCurrentLevelPlayedTime() or nil
     local previous
     if paceScenario then
         seconds = 110
@@ -2306,8 +2319,9 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     end
     local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
-        true, milestoneLevel ~= nil or maxLevelPreview == true, previous, maxLevelPreview, paceScenario ~= nil,
-        rangeStart, secondaryStats, nil, portraitTest, weatherTest)
+        true, milestoneLevel ~= nil or maxLevelPreview == true or previewLevel ~= nil,
+        previous, maxLevelPreview, paceScenario ~= nil,
+        rangeStart, secondaryStats, nil, portraitTest, weatherTest, previewLevel ~= nil)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -2319,6 +2333,33 @@ ns.eventFrame = frame
 -- A newer world/loading event supersedes an older queued check.
 local setupCheckToken = 0
 local setupLoading = true
+local guildBankReminderPending
+
+local function ShowGuildBankReminder()
+    if not guildBankReminderPending or setupLoading then return end
+    guildBankReminderPending = false
+    if not ns.db or ns.db.enabled == false or ns.GetClientFlavor() ~= "forever" then return end
+    if not StaticPopupDialogs or not StaticPopup_Show then return end
+    local character = GnomeLevelUpCharacterDB
+    if type(character) == "table" and character.guildBankReminderShown then return end
+
+    local firstName, surname = (UnitNameUnmodified or UnitName)("player")
+    if issecretvalue and (issecretvalue(firstName) or issecretvalue(surname)) then return end
+    if firstName ~= "Hanie" or surname ~= "Dawnforge" then return end
+
+    StaticPopupDialogs.GNOMELEVELUP_GUILD_BANK_REMINDER = {
+        text = "Hani, put 50k in the guild bank.",
+        button1 = OKAY or "Okay",
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+    if StaticPopup_Show("GNOMELEVELUP_GUILD_BANK_REMINDER") then
+        GnomeLevelUpCharacterDB = type(character) == "table" and character or {}
+        GnomeLevelUpCharacterDB.guildBankReminderShown = true
+    end
+end
+
 local function QueueFirstTimeSetup()
     setupCheckToken = setupCheckToken + 1
     if ns.db and ns.db.firstTimeSetupCompleted then return end
@@ -2389,12 +2430,15 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "LOADING_SCREEN_DISABLED" then
         setupLoading = false
         QueueFirstTimeSetup()
+        ShowGuildBankReminder()
     elseif event == "PLAYER_REGEN_ENABLED" then
         QueueFirstTimeSetup()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        if guildBankReminderPending == nil then guildBankReminderPending = true end
         QueueFirstTimeSetup()
         ns.ApplyAddonState(false)
         if ns.SyncClassColors then ns.SyncClassColors() elseif ns.ApplyColors then ns.ApplyColors() end
+        ShowGuildBankReminder()
     elseif event == "PLAYER_LEVEL_UP" then
         if ns.HandleLevelUp then
             ns.HandleLevelUp(...)
@@ -2503,37 +2547,18 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
     elseif msg == "resettimers" then
         ns.ResetLevelTimers()
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Recorded level timers and best times reset for this character."))
-    elseif msg == "maxlevel" or msg:match("^maxlevel%s") then
-        local count = msg == "maxlevel" and 3 or tonumber(msg:match("^maxlevel%s+(%d+)$"))
-        if not count or count < 1 or count > 30 then
-            print("|cff3fe0ffGnomeLevelUp|r: /glu maxlevel [1-30]")
-            return
-        end
-        if not ns.IsDebugEnabled() then
-            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
-        elseif ns.GetLevelCap() then
-            ns.RequestLevelPlayedTime()
-            ns.PreviewLevelUp(false, nil, true, count)
-        else
-            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("The level cap is unavailable. Wait for loading to finish, then try /glu maxlevel again."))
-        end
-    elseif msg == "milestone" or msg:match("^milestone%s") then
-        local levelText, countText = msg:match("^milestone%s+(%d+)%s+(%d+)$")
-        local count = countText and tonumber(countText) or 3
-        local interval = ns.GetMilestoneInterval()
-        local level = msg == "milestone" and math.max(interval, math.ceil(UnitLevel("player") / interval) * interval)
-            or tonumber(levelText or msg:match("^milestone%s+(%d+)$"))
-        if level and count >= 1 and count <= 30 and level >= interval and level <= 1000 and level % interval == 0 then
-            ns.PreviewLevelUp(false, level, nil, count)
-        else
-            print("|cff3fe0ffGnomeLevelUp|r: /glu milestone [level] [1-30] " .. ns.L("Choose a level up to 1000 that is a multiple of %d.", interval))
-        end
     elseif msg == "test" or msg:match("^test%s") then
-        local count = msg == "test" and 3 or tonumber(msg:match("^test%s+(%d+)$"))
+        local count = msg == "test" and 3 or tonumber(msg:match("^test%s+count%s+(%d+)$"))
+        local level = tonumber(msg:match("^test%s+(%d+)$"))
+        local cap = level and ns.GetLevelCap()
         if count and count >= 1 and count <= 30 then
             ns.PreviewLevelUp(false, nil, nil, count)
+        elseif level and level >= 1 and level <= (cap or 1000) then
+            local maxLevelPreview = level == cap
+            if maxLevelPreview then ns.RequestLevelPlayedTime() end
+            ns.PreviewLevelUp(false, nil, maxLevelPreview, nil, nil, nil, nil, nil, level)
         else
-            print("|cff3fe0ffGnomeLevelUp|r: /glu test [1-30]")
+            print("|cff3fe0ffGnomeLevelUp|r: /glu test [level] | /glu test count <1-30>")
         end
     elseif msg == "sound" then
         ns.db.playSound = not ns.db.playSound
@@ -2628,9 +2653,8 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         end
     else
         print("|cff3fe0ffGnomeLevelUp|r commands:")
-        print("  /glu test [1-30]   - preview the normal level-up screen with an ability count")
-        print("  /glu milestone [level] [1-30] - preview milestone effects (e.g. 30 3; default count: 3)")
-        print("  /glu maxlevel [1-30] - preview max-level celebration (debug mode)")
+        print("  /glu test [level] - preview a level-up, with milestone or max-level effects when applicable")
+        print("  /glu test count <1-30> - preview a chosen number of sample abilities")
         print("  /glu testlevels <from> <to> [1-30] - preview combined level gains (debug mode)")
         print("  /glu options       - open the settings page (also under Options > AddOns)")
         print("  /glu sound         - toggle the level-up sound")

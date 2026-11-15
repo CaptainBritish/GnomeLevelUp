@@ -81,6 +81,11 @@ local CONTROLLER_GLYPHS = {
         playstation = { atlases = { "gamepad_shp_cross_64", "Gamepad_Shp_Cross_64" }, file = "Interface\\Gamepad\\gamepadshp.blp" },
         nintendo = { atlases = { "gamepad_rev_b_64", "Gamepad_Rev_B_64" }, file = "Interface\\Gamepad\\gamepadrev.blp" },
     },
+    pin = {
+        xbox = { atlases = { "gamepad_ltr_y_64", "Gamepad_Ltr_Y_64" } },
+        playstation = { atlases = { "gamepad_shp_triangle_64", "Gamepad_Shp_Triangle_64" } },
+        nintendo = { atlases = { "gamepad_rev_x_64", "gamepad_ltr_x_64" } },
+    },
 }
 
 function ns.ApplyControllerGlyph(texture, action, style)
@@ -91,7 +96,7 @@ function ns.ApplyControllerGlyph(texture, action, style)
         if left then texture:SetTexCoord(left, right, top, bottom) end
         return true
     end
-    if ns.SetTextureFile(texture, reference.file) and HasTextureFile(texture) then
+    if reference.file and ns.SetTextureFile(texture, reference.file) and HasTextureFile(texture) then
         texture:SetTexCoord(0, 1, 0, 1)
         return true
     end

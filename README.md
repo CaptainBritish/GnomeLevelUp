@@ -92,8 +92,10 @@ Milestone celebrations can run every 5, 10 or 20 levels.
 **Screenshot milestones** follows that interval. Enable **Screenshot every level**
 to capture all real level-ups instead. Max-level animations have their own
 toggle. Horizontal and vertical layouts remember separate popup positions. Rapid or
-combat-delayed level gains combine into one popup. Right-click or use the X to
-close early; **Classic Mode** retains simple opening and closing transitions.
+combat-delayed level gains combine into one popup. Use the pin beside the X to
+pause or resume automatic closing. In Forever controller mode, press Y on Xbox,
+Triangle on PlayStation, or X on Nintendo. Right-click or use the X to close early.
+**Classic Mode** retains simple opening and closing transitions.
 
 ## Portraits and sound
 
@@ -186,9 +188,8 @@ settings changed by commands are saved as usual.
 | Command | Action | Requires debug mode? |
 | --- | --- | --- |
 | `/glu debug [on\|off]` | Enable/disable debug controls and commands; no argument toggles the setting; off by default | No |
-| `/glu test [1-30]` | Preview the normal level-up screen with the chosen ability count; default three | No |
-| `/glu milestone [level] [1-30]` | Preview a milestone: level first (a multiple of the selected milestone interval, up to 1000), ability count second (default three); no arguments uses the current/next milestone | No |
-| `/glu maxlevel [1-30]` | Preview the max-level celebration and recorded time-to-cap (normal level time if history is incomplete), with the chosen ability count; default three | Yes |
+| `/glu test [level]` | Preview a level-up. With a level, show its class abilities and play milestone or max-level effects when applicable. | No |
+| `/glu test count <1-30>` | Preview the chosen number of sample abilities. | No |
 | `/glu testlevels <from> <to> [1-30]` | Preview a combined gain of at least two levels (for example `20 23`), optionally choosing the ability count; leaves real histories untouched | Yes |
 | `/glu debugskills` | Preview an expanded skill list; Forever includes pet-training examples and Retail shows new abilities | No |
 | `/glu debugstats <old> <new>` | Set exact Strength old/new totals; randomize other stats from 1 up to each entered limit, keeping new at least old; whole numbers from 0–9007199254740991, new at least old | Yes |
@@ -220,14 +221,14 @@ repeatable manual check:
 ```text
 /glu perf on
 /glu perf reset
-/glu test 3
+/glu test count 3
 ```
 
 Wait for the popup to close, then run `/glu perf`. Use `/glu perf off` to stop
 recording without clearing the results. `/glu perf reset` clears counters and
 does not start or stop profiling. Repeat after resetting counters
-with `/glu milestone 80 9` or `/glu maxlevel 30` (these two preview commands
-still require `/glu debug on`). Keep portrait/layout/effect settings
+with `/glu test` followed by a milestone level or your client’s level cap.
+Keep portrait, layout, and effect settings
 and the game location consistent. Record whether 3D and secondary stats are on.
 The first popup may include cold setup work; compare repeated warm runs too.
 

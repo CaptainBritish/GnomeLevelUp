@@ -180,20 +180,20 @@ end
 ns.GetSpellIconTexture = GetSpellTexture
 
 local function GetSpellLearnedLevel(index, spellBank, spellID, itemInfo)
-    if C_SpellBook and C_SpellBook.GetSpellBookItemLevelLearned then
+    if index and C_SpellBook and C_SpellBook.GetSpellBookItemLevelLearned then
         local ok, level = pcall(C_SpellBook.GetSpellBookItemLevelLearned, index, spellBank)
-        if ok and tonumber(level) then return tonumber(level) end
+        if ok and not IsSecretValue(level) and tonumber(level) then return tonumber(level) end
     end
-    if itemInfo and tonumber(itemInfo.levelLearned) then
+    if itemInfo and not IsSecretValue(itemInfo.levelLearned) and tonumber(itemInfo.levelLearned) then
         return tonumber(itemInfo.levelLearned)
     end
     if C_Spell and C_Spell.GetSpellLevelLearned then
         local ok, level = pcall(C_Spell.GetSpellLevelLearned, spellID)
-        if ok and tonumber(level) then return tonumber(level) end
+        if ok and not IsSecretValue(level) and tonumber(level) then return tonumber(level) end
     end
     if type(GetSpellLevelLearned) == "function" then
         local ok, level = pcall(GetSpellLevelLearned, spellID)
-        if ok and tonumber(level) then return tonumber(level) end
+        if ok and not IsSecretValue(level) and tonumber(level) then return tonumber(level) end
     end
     return nil
 end
@@ -269,7 +269,8 @@ function ns.GetRetailTimelineSpells(firstLevel, lastLevel)
         local _, rank = ns.GetTrainingRankInfo(name)
         if rank and rank > 1 then return end
         seen[spellID] = true
-        abilities[#abilities + 1] = { id = spellID, name = name, requiredLevel = level, icon = icon or GetSpellTexture(spellID) }
+        abilities[#abilities + 1] = { id = spellID, name = name, requiredLevel = level,
+            icon = icon or GetSpellTexture(spellID), isNewAbility = true }
     end
     for _, spell in ipairs(ns.SnapshotRetailFutureSpells()) do
         Add(spell.id, spell.name, spell.requiredLevel, spell.icon)
@@ -278,10 +279,7 @@ function ns.GetRetailTimelineSpells(firstLevel, lastLevel)
         Add(spell.id, spell.name, spell.requiredLevel, spell.icon)
     end
     for id, name in pairs(ns.SnapshotSpellBook()) do
-        if C_Spell and C_Spell.GetSpellLevelLearned then
-            local ok, level = pcall(C_Spell.GetSpellLevelLearned, id)
-            if ok and type(level) == "number" and (not issecretvalue or not issecretvalue(level)) then Add(id, name, level) end
-        end
+        Add(id, name, GetSpellLearnedLevel(nil, nil, id))
     end
     table.sort(abilities, function(a, b) return a.id < b.id end)
     return abilities

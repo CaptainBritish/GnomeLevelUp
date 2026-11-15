@@ -1,16 +1,37 @@
 local ADDON_NAME, ns = ...
 
 local MAX_SKILLS = 4
+local MAX_STEPS = 4
 local TRACK_Y = -30
-local OUTER_SKILL_TRAVEL = .08
+local SKILL_FADE_SECONDS = .16
+local SKILL_STAGGER_SECONDS = .065
+local MIN_SCROLL_SECONDS = .20
+
+local function ClampProgress(value)
+    return math.max(0, math.min(1, value))
+end
+
+local function Smooth(progress)
+    return progress * progress * (3 - 2 * progress)
+end
+
+local function SkillSequenceDuration(count)
+    if count == 0 then return 0 end
+    return SKILL_FADE_SECONDS + (count - 1) * SKILL_STAGGER_SECONDS
+end
+
+local function SkillFade(age, order)
+    return Smooth(ClampProgress((age - (order - 1) * SKILL_STAGGER_SECONDS) / SKILL_FADE_SECONDS))
+end
 
 local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
-    local byLevel = { [first] = {}, [reached] = {}, [last] = {} }
+    local byLevel = {}
+    for level = first, last do byLevel[level] = {} end
     local nextUnlockLevel, nextUnlockSkills
     local function Add(level, id, texture, name, cost)
-        if not (id or texture) then return end
+        if not level or level <= 1 or not (id or texture) then return end
         local list = byLevel[level]
-        if not list and level and last > reached and level > last and (not cap or level <= cap) then
+        if not list and last > reached and level > last and (not cap or level <= cap) then
             if not nextUnlockLevel or level < nextUnlockLevel then
                 nextUnlockLevel, nextUnlockSkills = level, {}
             end
@@ -44,15 +65,15 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
         AddCatalogueLevel(first)
         if reached ~= first then AddCatalogueLevel(reached) end
         if last > reached then
-            for level = last, cap or last do
+            for level = reached + 1, cap or last do
                 AddCatalogueLevel(level)
-                if (level == last and #byLevel[last] < MAX_SKILLS)
+                if (level <= last and #byLevel[level] < MAX_SKILLS)
                     or (level > last and (not nextUnlockSkills or #nextUnlockSkills < MAX_SKILLS)) then
                     for _, entry in ipairs(ns.GetBundledTimelineTraining(level)) do
                         Add(level, entry.spellID, entry.icon, entry.name, entry.cost)
                     end
                 end
-                if #byLevel[last] > 0 or nextUnlockLevel == level then break end
+                if level >= last and (#byLevel[last] > 0 or nextUnlockLevel == level) then break end
             end
         end
     end
@@ -61,9 +82,11 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
 end
 
 function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottomEdge)
-    local timeline, markers, markerDot, spark, barFlash
-    local source, startLevel, reachedLevel, endLevel, cap
+    local timeline, markers, markerDot, barFlash
+    local source, startLevel, reachedLevel, cap, steps
     local progress, reveal = 0, 0
+    local initialAge, exitAge, upcomingAge = 0, 0, 0
+    local initialCount, upcomingCount = 0, 0
     local animationFinished = false
     local sparkDuration, barFlashDuration = .60, .38
 
@@ -78,7 +101,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         timeline:Hide()
         timeline:SetScript("OnHide", function() render.RefreshTimelineMouse() end)
         markers = {}
-        for i = 1, 3 do
+        for i = 1, MAX_STEPS + 1 do
             local marker = CreateFrame("Frame", nil, timeline)
             marker:SetHeight(118)
             marker.icons = {}
@@ -87,13 +110,24 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             marker.tick = marker:CreateTexture(nil, "ARTWORK")
             marker.tick:SetSize(2, 12)
             marker.tick:SetPoint("CENTER", marker, "TOP", 0, TRACK_Y)
+            if i > 1 then
+                marker.spark = marker:CreateTexture(nil, "OVERLAY", nil, 1)
+                marker.spark:SetTexture("Interface\\Cooldown\\star4")
+                marker.spark:SetBlendMode("ADD")
+                marker.spark:SetPoint("CENTER", marker.tick, "CENTER")
+                marker.spark:Hide()
+            end
+            if i >= 3 then
+                marker.unlockLabel = marker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                marker.unlockLabel:SetPoint("TOP", marker, "TOP", 0, TRACK_Y - 27)
+            end
             for j = 1, MAX_SKILLS do
                 local icon = CreateFrame("Frame", nil, marker)
                 icon.artwork = icon:CreateTexture(nil, "ARTWORK")
                 icon.artwork:SetAllPoints(icon)
                 icon.artwork:SetTexCoord(.08, .92, .08, .92)
                 icon:EnableMouse(false)
-                if i == 3 then
+                if i >= 3 then
                     icon:SetScript("OnEnter", function(self)
                         local skill = self.skill
                         if not GameTooltip or not skill or popup.closingInputSuppressed or ns.db.clickThrough then return end
@@ -126,8 +160,6 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             end
             markers[i] = marker
         end
-        markers[3].unlockLabel = markers[3]:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        markers[3].unlockLabel:SetPoint("TOP", markers[3], "TOP", 0, TRACK_Y - 27)
         markerDot = timeline:CreateTexture(nil, "OVERLAY")
         markerDot:SetSize(6, 10)
         barFlash = timeline:CreateTexture(nil, "ARTWORK")
@@ -135,17 +167,19 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         barFlash:SetVertexColor(1, 1, 1)
         barFlash:SetBlendMode("ADD")
         barFlash:Hide()
-        spark = timeline:CreateTexture(nil, "OVERLAY", nil, 1)
-        spark:SetTexture("Interface\\Cooldown\\star4")
-        spark:SetBlendMode("ADD")
-        spark:Hide()
     end
 
     function render.ClearLevelTimeline()
-        source, startLevel, reachedLevel, endLevel = nil, nil, nil, nil
+        source, startLevel, reachedLevel = nil, nil, nil
         progress, reveal = 0, 0
+        initialAge, exitAge, upcomingAge = 0, 0, 0
+        initialCount, upcomingCount = 0, 0
         animationFinished = false
-        if timeline then timeline:Hide() end
+        if timeline then
+            for i = 2, #markers do markers[i].spark:Hide() end
+            barFlash:Hide()
+            timeline:Hide()
+        end
     end
 
     function render.PrepareLevelTimeline(level, abilities, sample, saved)
@@ -154,110 +188,149 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         if not reachedLevel or reachedLevel < 1 then return end
         cap = ns.GetLevelCap()
         startLevel = math.max(1, reachedLevel - 1)
-        endLevel = cap and reachedLevel >= cap and reachedLevel or reachedLevel + 1
         source = { abilities = abilities, sample = sample, saved = saved }
     end
 
     function render.RefreshTimelineMouse()
         if not markers then return end
-        local marker = markers[3]
-        local interactive = timeline:IsShown() and timeline.opacity > 0 and marker:IsShown()
+        local interactive = timeline:IsShown() and timeline.opacity > 0
             and not ns.db.clickThrough and not popup.closingInputSuppressed
-        for _, icon in ipairs(marker.icons) do
-            local enabled = false
-            if interactive and icon:IsShown() and icon.skill and (icon.skill.id or icon.skill.name) then
-                local center = marker.timelineX + icon.gluPointX
-                local halfWidth = icon:GetWidth() / 2
-                enabled = center - halfWidth >= 0 and center + halfWidth <= timeline:GetWidth()
+        for i = 3, #markers do
+            local marker = markers[i]
+            for _, icon in ipairs(marker.icons) do
+                local enabled = false
+                if interactive and marker:IsShown() and icon:IsShown() and icon.timelineOpacity == 1 then
+                    local center = marker.timelineX + icon.gluPointX
+                    local halfWidth = icon:GetWidth() / 2
+                    enabled = center - halfWidth >= 0 and center + halfWidth <= timeline:GetWidth()
+                end
+                if icon:IsMouseEnabled() ~= enabled then icon:EnableMouse(enabled) end
+                if not enabled then HideSkillTooltip(icon) end
             end
-            if icon:IsMouseEnabled() ~= enabled then icon:EnableMouse(enabled) end
-            if not enabled then HideSkillTooltip(icon) end
         end
     end
 
     function render.IsTimelineSkillHovered()
         if not timeline or not timeline:IsShown() or not GameTooltip or not GameTooltip.IsOwned or not GameTooltip:IsShown() then return false end
-        for _, icon in ipairs(markers[3].icons) do
-            if GameTooltip:IsOwned(icon) then return true end
+        for i = 3, steps + 1 do
+            for _, icon in ipairs(markers[i].icons) do
+                if GameTooltip:IsOwned(icon) then return true end
+            end
         end
         return false
     end
 
+    local function PaintSkills(first, last, age, fadeOutAge)
+        for i = first, last do
+            local marker = markers[i]
+            for _, icon in ipairs(marker.icons) do
+                local opacity = 0
+                if icon.skill then
+                    opacity = SkillFade(age, icon.sequenceOrder)
+                    if fadeOutAge then opacity = opacity * (1 - SkillFade(fadeOutAge, icon.sequenceOrder)) end
+                    local size = icon.fullSize * (.35 + .65 * opacity)
+                    render.Size(icon, size, size)
+                    render.Alpha(icon, opacity)
+                end
+                icon.timelineOpacity = opacity
+                render.Shown(icon, opacity > 0)
+            end
+            if marker.unlockLabel then
+                local opacity = marker.hasUnlockLabel and marker.icons[1].timelineOpacity or 0
+                render.Shown(marker.unlockLabel, opacity > 0)
+                render.Alpha(marker.unlockLabel, opacity)
+            end
+        end
+    end
+
     local function PaintProgress()
-        local eased = progress * progress * (3 - 2 * progress)
-        -- The reached level keeps its number and tick when its skills disappear.
-        local fade = math.max(0, math.min(1, (progress - .65) / .35))
-        local reachedSkillAlpha = 1 - fade * fade * (3 - 2 * fade)
-        local endpointDistance = .20
-        local approaching = math.min(1, (1 - eased) / endpointDistance)
-        -- The scrolling markers change size just outside their resting ticks.
-        local departing = math.max(0, 1 - eased / OUTER_SKILL_TRAVEL)
-        local arriving = math.max(0, 1 - (1 - eased) / OUTER_SKILL_TRAVEL)
-        for i, marker in ipairs(markers) do
-            local x = timeline.edge + timeline.span * (i - 1 - eased)
+        local eased = Smooth(progress)
+        for i = 1, steps + 1 do
+            local marker = markers[i]
+            local x = timeline.edge + timeline.spacing * (i - 1 - eased)
             marker.timelineX = x
             marker:SetPoint("TOP", timeline, "TOPLEFT", x, 0)
-            local alpha = i == 1 and (1 - eased) or i == 3 and eased or 1
-            if i ~= 2 then
+            local alpha = i == 1 and (1 - eased) or i == steps + 1 and eased or 1
+            if i == 1 or i == steps + 1 then
                 -- Fade the whole marker before its label or icons reach the clip edge.
                 local distance = i == 1 and x or timeline:GetWidth() - x
                 local fadeEnd = marker.fadeHalfWidth
-                local t = math.max(0, math.min(1, (distance - fadeEnd) / (timeline.edge - fadeEnd)))
-                alpha = math.min(alpha, t * t * (3 - 2 * t))
+                alpha = math.min(alpha, Smooth(ClampProgress((distance - fadeEnd) / (timeline.edge - fadeEnd))))
             end
             render.Alpha(marker, alpha)
             render.Shown(marker, marker.hasLevel and alpha > 0)
-            local sizeProgress = i == 1 and departing or i == 2 and approaching or arriving
-            local skillReveal = sizeProgress * sizeProgress * (3 - 2 * sizeProgress)
-            for _, icon in ipairs(marker.icons) do
-                if icon.skill then
-                    local size = icon.fullSize * (.35 + .65 * skillReveal)
-                    render.Size(icon, size, size)
-                    if i == 2 then render.Alpha(icon, reachedSkillAlpha) end
-                end
-            end
         end
-        render.ParticlePoint(markerDot, timeline, "TOPLEFT", timeline.edge + timeline.span * (1 - eased), TRACK_Y)
-        render.RefreshTimelineMouse()
+        render.ParticlePoint(markerDot, timeline, "TOPLEFT", timeline.edge + timeline.spacing * (1 - eased), TRACK_Y)
     end
 
     function render.UpdateLevelTimeline(age, barFinish, revealDuration, finish)
         if animationFinished or not timeline or not timeline:IsShown() then return false end
-        local t = math.max(0, math.min(1, (age - barFinish) / revealDuration))
-        reveal = t * t * (3 - 2 * t)
+        local sinceBar = age - barFinish
+        reveal = Smooth(ClampProgress(sinceBar / revealDuration))
         render.Alpha(timeline, timeline.opacity * reveal)
-        local scrollStart = barFinish + revealDuration
-        finish = math.max(scrollStart + .01, finish)
-        local nextProgress = math.max(0, math.min(1, (age - scrollStart) / (finish - scrollStart)))
+        local initialDuration = SkillSequenceDuration(initialCount)
+        local exitStart = math.max(revealDuration, initialDuration)
+        local scrollStart = barFinish + exitStart + initialDuration
+        finish = math.max(scrollStart + MIN_SCROLL_SECONDS, finish)
+        local nextInitialAge = math.max(0, math.min(initialDuration, sinceBar))
+        local nextExitAge = math.max(0, math.min(initialDuration, sinceBar - exitStart))
+        if initialAge ~= nextInitialAge or exitAge ~= nextExitAge then
+            initialAge, exitAge = nextInitialAge, nextExitAge
+            PaintSkills(1, 2, initialAge, exitAge)
+        end
+        local nextProgress = ClampProgress((age - scrollStart) / (finish - scrollStart))
         if progress ~= nextProgress then
             progress = nextProgress
             PaintProgress()
         end
         local elapsed = age - finish
+        local upcomingDuration = SkillSequenceDuration(upcomingCount)
+        local previousUpcomingAge = upcomingAge
+        upcomingAge = math.max(0, elapsed)
+        if previousUpcomingAge < upcomingDuration and upcomingAge ~= previousUpcomingAge then
+            PaintSkills(3, steps + 1, upcomingAge)
+            render.RefreshTimelineMouse()
+        end
         local sparkling = startLevel < reachedLevel and ns.DecorativeAnimationsEnabled()
             and elapsed >= 0 and elapsed < sparkDuration
-        render.Shown(spark, sparkling)
         render.Shown(barFlash, sparkling and elapsed < barFlashDuration)
-        if sparkling then
-            local t = elapsed / sparkDuration
-            local flare = t < .22 and 1 - (1 - t / .22)^3 or (1 - (t - .22) / .78)^2
-            local size = 6 + 42 * flare
-            render.Size(spark, size, size)
-            local angle = t * math.pi * 2
-            local radius = 7 * math.sin(math.pi * t)
-            spark:SetRotation(angle)
-            render.ParticlePoint(spark, timeline, "TOPLEFT", timeline.edge + math.sin(angle) * radius,
-                TRACK_Y + (1 - math.cos(angle)) * radius * .5)
-            render.Alpha(spark, flare^.45 * (.8 + .2 * math.cos(t * math.pi * 10)))
+        local sparkProgress = sparkling and elapsed / sparkDuration or 0
+        local flare = sparkProgress < .22 and 1 - (1 - sparkProgress / .22)^3
+            or (1 - (sparkProgress - .22) / .78)^2
+        for i = 2, steps + 1, steps - 1 do
+            local marker = markers[i]
+            local showSpark = sparkling and marker.hasLevel
+            render.Shown(marker.spark, showSpark)
+            if showSpark then
+                local size = 6 + 42 * flare
+                render.Size(marker.spark, size, size)
+                marker.spark:SetRotation(sparkProgress * math.pi * 2)
+                render.Alpha(marker.spark, flare^.45 * (.8 + .2 * math.cos(sparkProgress * math.pi * 10)))
+            end
+        end
+        if sparkling and elapsed < barFlashDuration then
             local flash = math.min(1, elapsed / barFlashDuration)
             render.Alpha(barFlash, flash < .22 and 1 - (1 - flash / .22)^3 or (1 - (flash - .22) / .78)^2)
         end
-        animationFinished = progress == 1 and elapsed >= sparkDuration
-        return progress < 1 or sparkling
+        local active = progress < 1 or sparkling or upcomingAge < upcomingDuration
+        animationFinished = not active
+        return active
     end
 
     function render.FadeLevelTimeline(alpha)
-        if timeline and timeline:IsShown() then timeline:SetAlpha(timeline.opacity * reveal * alpha) end
+        if not timeline or not timeline:IsShown() then return end
+        timeline:SetAlpha(timeline.opacity * reveal * alpha)
+        local fade = 1 - math.sqrt(alpha)
+        for i = 1, steps + 1 do
+            local marker = markers[i]
+            local duration = SkillSequenceDuration(i < 3 and initialCount or upcomingCount)
+            for _, icon in ipairs(marker.icons) do
+                if icon:IsShown() then
+                    render.Alpha(icon, icon.timelineOpacity * (1 - SkillFade(fade * duration, icon.sequenceOrder)))
+                end
+            end
+            if marker.hasUnlockLabel then render.Alpha(marker.unlockLabel, marker.icons[1]:GetAlpha()) end
+        end
     end
 
     function ns.RefreshLevelTimeline()
@@ -266,21 +339,32 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             return
         end
         if not timeline then Create() end
+        steps = ns.OPTION_SETTINGS.timelineSteps.get()
+        local lastLevel = reachedLevel + steps - 1
+        if cap then
+            lastLevel = math.max(reachedLevel, math.min(lastLevel, cap))
+            steps = math.max(2, lastLevel - reachedLevel + 1)
+        end
         local showSkills = ns.NewAbilitiesEnabled()
-        if showSkills and not source.levels then
+        if showSkills and source.lastLevel ~= lastLevel then
             local saved = source.saved
             local recorded = saved and saved.levels
-            local upcoming = recorded and recorded[endLevel]
-            if recorded and (endLevel == reachedLevel or (upcoming and #upcoming > 0) or saved.nextUnlockLevel) then
-                source.levels, source.nextUnlockLevel, source.nextUnlockSkills = recorded, saved.nextUnlockLevel, saved.nextUnlockSkills
-            else
-                source.levels, source.nextUnlockLevel, source.nextUnlockSkills = BuildTimelineSkills(
-                    startLevel, reachedLevel, endLevel, cap, source.abilities or {}, source.sample)
-                if recorded then
-                    source.levels[startLevel] = recorded[startLevel] or source.levels[startLevel]
-                    source.levels[reachedLevel] = recorded[reachedLevel] or source.levels[reachedLevel]
+            local levels, nextUnlock, nextSkills = BuildTimelineSkills(
+                startLevel, reachedLevel, lastLevel, cap, source.abilities or {}, source.sample)
+            for level = startLevel, lastLevel do
+                local skills = recorded and recorded[level]
+                if level > 1 and skills and (level <= reachedLevel or #skills > 0) then levels[level] = skills end
+            end
+            if saved and saved.nextUnlockLevel and saved.nextUnlockSkills then
+                local level = saved.nextUnlockLevel
+                if level <= lastLevel and level > reachedLevel and #levels[level] == 0 then
+                    levels[level] = saved.nextUnlockSkills
+                elseif level > lastLevel and (not nextUnlock or level <= nextUnlock) and (not cap or level <= cap) then
+                    nextUnlock, nextSkills = level, saved.nextUnlockSkills
                 end
             end
+            source.levels, source.nextUnlockLevel, source.nextUnlockSkills = levels, nextUnlock, nextSkills
+            source.lastLevel = lastLevel
         end
         local count = showSkills and ns.OPTION_SETTINGS.timelineSkillCount.get() or 0
         local colour = ns.GetTimelineColour()
@@ -293,26 +377,29 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         -- Use the bar's final width even while its entrance animation draws it.
         local barWidth = math.max(1, bottomBar.fullWidth or bottomBar:GetWidth())
         local span = barWidth * .7
-        local iconSize = math.max(10, math.min(21, span / 7))
-        timeline.span = span
+        local spacing = span / (steps - 1)
+        local iconSize = math.max(10, math.min(21, span / 7, (spacing - 9) / 2))
+        timeline.span, timeline.spacing = span, spacing
         local path = ns.GetPopupFontPath(ns.db.customFontPath)
-        local levels = { startLevel < reachedLevel and startLevel or false, reachedLevel,
-            endLevel > reachedLevel and endLevel or false }
         local widestMarker = 0
+        initialCount, upcomingCount = 0, 0
         for i, marker in ipairs(markers) do
-            local level = levels[i]
+            local level = reachedLevel + i - 2
+            marker.hasLevel = level >= startLevel and level <= lastLevel
+            if not marker.hasLevel then marker:Hide() end
+            if marker.spark and i ~= 2 and i ~= steps + 1 then marker.spark:Hide() end
             marker:SetWidth(2 * iconSize + 3)
-            marker.hasLevel = level ~= false
             marker.label:SetFont(path, 14, "OUTLINE")
-            marker.label:SetText(level and tostring(level) or "")
+            marker.label:SetText(marker.hasLevel and tostring(level) or "")
             marker.label:SetTextColor(r, g, b)
             marker.tick:SetColorTexture(r, g, b, .8)
-            local skills = count > 0 and level and source.levels[level]
+            -- Older replay snapshots may still include starter spells.
+            local skills = count > 0 and marker.hasLevel and level > 1 and source.levels[level]
             local iconTop = TRACK_Y - 27
             if marker.unlockLabel then
-                local showUnlock = level and count > 0 and source.nextUnlockLevel ~= nil
-                render.Shown(marker.unlockLabel, showUnlock == true)
-                if showUnlock then
+                marker.hasUnlockLabel = marker.hasLevel and i == steps + 1 and count > 0
+                    and (not skills or #skills == 0) and source.nextUnlockLevel ~= nil
+                if marker.hasUnlockLabel then
                     marker.unlockLabel:SetFont(path, 12, "OUTLINE")
                     marker.unlockLabel:SetText(ns.L("Level %d", source.nextUnlockLevel))
                     marker.unlockLabel:SetTextColor(r, g, b)
@@ -320,13 +407,20 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                 end
             end
             marker.fadeHalfWidth = math.max(marker:GetWidth(), marker.label:GetStringWidth(),
-                marker.unlockLabel and marker.unlockLabel:IsShown() and marker.unlockLabel:GetStringWidth() or 0) / 2
+                marker.hasUnlockLabel and marker.unlockLabel:GetStringWidth() or 0) / 2
             widestMarker = math.max(widestMarker, marker.fadeHalfWidth)
             for j, icon in ipairs(marker.icons) do
-                local skill = skills and j <= count and skills[j]
+                local skill = skills and j <= count and skills[j] or nil
                 if icon.skill ~= skill then HideSkillTooltip(icon) end
                 icon.skill = skill
                 if skill then
+                    if i < 3 then
+                        initialCount = initialCount + 1
+                        icon.sequenceOrder = initialCount
+                    else
+                        upcomingCount = upcomingCount + 1
+                        icon.sequenceOrder = upcomingCount
+                    end
                     local texture = skill.texture or ns.GetSpellIconTexture(skill.id)
                     icon.artwork:SetTexture(texture or 134400)
                     icon.fullSize = iconSize
@@ -335,7 +429,10 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                     local column = j - rowStart - (columns - 1) / 2
                     render.ParticlePoint(icon, marker, "TOP", column * (iconSize + 3), iconTop - iconSize / 2 - (rowStart == 3 and iconSize + 3 or 0))
                 end
-                render.Shown(icon, skill ~= nil and skill ~= false)
+                if not skill then
+                    icon.timelineOpacity = 0
+                    render.Shown(icon, false)
+                end
             end
         end
         -- Leave enough space to fade fully before even the widest marker clips.
@@ -345,10 +442,22 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         render.Size(barFlash, barWidth, 2)
         render.ParticlePoint(barFlash, timeline, "TOPLEFT", width / 2, TRACK_Y)
         markerDot:SetColorTexture(r, g, b, 1)
-        spark:SetVertexColor(r + (1 - r) * .35, g + (1 - g) * .35, b + (1 - b) * .35)
+        for i = 2, #markers do
+            markers[i].spark:SetVertexColor(r + (1 - r) * .35, g + (1 - g) * .35, b + (1 - b) * .35)
+        end
         timeline:Show()
         PaintProgress()
-        if reveal < 1 and ns.WakeAbilityEffects then ns.WakeAbilityEffects() end
+        if animationFinished then
+            initialAge = SkillSequenceDuration(initialCount)
+            exitAge = initialAge
+            upcomingAge = SkillSequenceDuration(upcomingCount)
+        end
+        PaintSkills(1, 2, initialAge, exitAge)
+        PaintSkills(3, steps + 1, upcomingAge)
+        render.RefreshTimelineMouse()
+        if not animationFinished and ns.WakeAbilityEffects then
+            ns.WakeAbilityEffects()
+        end
     end
 
     function render.GetLevelTimelineReplay()

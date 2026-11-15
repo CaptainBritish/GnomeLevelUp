@@ -247,6 +247,72 @@ local closeIcon = closeButton:CreateTexture(nil, "OVERLAY")
 closeIcon:SetPoint("CENTER")
 closeIcon:SetSize(24, 24)
 
+do
+    local button = CreateFrame("Button", nil, frame)
+    render.pinButton = button
+    button:SetSize(24, 30)
+    button:SetPoint("RIGHT", closeButton, "LEFT", 0, 0)
+    button:SetFrameLevel(closeButton:GetFrameLevel())
+    if button.RegisterForClicks then button:RegisterForClicks("LeftButtonUp") end
+    local glyph = button:CreateTexture(nil, "OVERLAY")
+    glyph:SetPoint("LEFT", button, "LEFT", 2, 0)
+    glyph:SetSize(20, 20)
+    glyph:Hide()
+    local glyphText = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    glyphText:SetPoint("CENTER", glyph, "CENTER")
+    glyphText:Hide()
+    local glyphStyle
+    local fallbackGlyphs = { xbox = "Y", playstation = "△", nintendo = "X" }
+    function render.RefreshPinGlyph(style)
+        if glyphStyle == style then return end
+        glyphStyle = style
+        local hint = fallbackGlyphs[style]
+        button:SetWidth(hint and 44 or 24)
+        local hasAtlas = hint and ns.ApplyControllerGlyph(glyph, "pin", style)
+        glyph:SetShown(hasAtlas == true)
+        if hint then glyphText:SetText(hint) end
+        glyphText:SetShown(hint ~= nil and not hasAtlas)
+    end
+    local pieces = {}
+    for _, shape in ipairs({ {10, 2, 6}, {5, 5, 2.5}, {12, 2, -1}, {2, 5, -4.5} }) do
+        local piece = button:CreateTexture(nil, "OVERLAY")
+        piece:SetSize(shape[1], shape[2])
+        piece:SetPoint("CENTER", button, "RIGHT", -12, shape[3])
+        pieces[#pieces + 1] = piece
+    end
+    local function ShowTooltip()
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(button, "ANCHOR_TOP")
+        GameTooltip:SetText(ns.L(render.pinned and "Unpin level-up popup" or "Pin level-up popup"))
+        GameTooltip:Show()
+    end
+    function render.UpdatePinButton()
+        for _, piece in ipairs(pieces) do
+            if render.pinned then piece:SetColorTexture(1, .82, .25, 1)
+            else piece:SetColorTexture(1, 1, 1, .7) end
+        end
+        if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(button) then
+            if frame:IsShown() and button:IsMouseEnabled() then ShowTooltip() else GameTooltip:Hide() end
+        end
+    end
+    button:SetScript("OnEnter", ShowTooltip)
+    local function HideTooltip()
+        if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(button) then GameTooltip:Hide() end
+    end
+    button:SetScript("OnLeave", HideTooltip)
+    button:SetScript("OnHide", HideTooltip)
+    function render.TogglePin()
+        if not frame:IsShown() or frame.closingInputSuppressed then return end
+        render.pinned = not render.pinned
+        render.UpdatePinButton()
+        ns.RefreshPreviewSuspension()
+    end
+    button:SetScript("OnClick", function()
+        if ns.db and not ns.db.clickThrough then render.TogglePin() end
+    end)
+    render.UpdatePinButton()
+end
+
 local lastControllerUIState
 local function SyncControllerDefaults(active)
     if ns.db then
@@ -322,7 +388,9 @@ end
 
 local function RefreshCloseButtonLabel()
     frame.gluControllerActive = IsControllerUIActive()
-    if not frame.gluControllerActive then
+    local style = frame.gluControllerActive and ControllerLabelStyle() or "none"
+    render.RefreshPinGlyph(closeButton.gluGamePadEnabled and style or "none")
+    if style == "none" then
         closeIcon:Hide()
         closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
         closeText:SetText("X")
@@ -330,15 +398,7 @@ local function RefreshCloseButtonLabel()
         return
     end
 
-    if ControllerLabelStyle() == "none" then
-        closeIcon:Hide()
-        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
-        closeText:SetText("X")
-        closeText:Show()
-        return
-    end
-
-    local atlasApplied = ns.ApplyControllerGlyph(closeIcon, "back", ControllerLabelStyle())
+    local atlasApplied = ns.ApplyControllerGlyph(closeIcon, "back", style)
     if atlasApplied then
         closeIcon:SetSize(24, 24)
         closeText:Hide()
@@ -348,7 +408,7 @@ local function RefreshCloseButtonLabel()
         -- the gamepad API but do not expose the new atlas regions to addons.
         closeIcon:Hide()
         closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
-        closeText:SetText(ControllerLabelStyle() == "nintendo" and "A" or "B")
+        closeText:SetText(style == "nintendo" and "A" or "B")
         closeText:Show()
     end
 end
@@ -367,7 +427,6 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 local function IsControllerBackButton(button)
-    button = tostring(button or ""):upper()
     return button == "PAD2"
         or button == "PADB"
         or button == "PADBACK"
@@ -375,14 +434,23 @@ local function IsControllerBackButton(button)
         or button == "GAMEPAD_B"
 end
 
--- Forever's native controller UI can route the B/Back action directly to the
--- top-most gamepad-enabled frame. Keep this opt-in and feature-detected so
--- Retail and older clients retain the normal mouse-only close button.
+-- Route both face buttons through the same Forever gamepad receiver.
 if (ns.GetCurrentFlavor() ~= "retail")
     and type(closeButton.EnableGamePadButton) == "function" then
     closeButton:EnableGamePadButton(true)
+    closeButton.gluGamePadEnabled = true
     closeButton:SetScript("OnGamePadButtonDown", function(_, button)
-        if IsControllerBackButton(button) then ns.DismissLevelUp() end
+        button = tostring(button or ""):upper()
+        if IsControllerBackButton(button) then
+            ns.DismissLevelUp()
+        elseif frame.gluControllerActive then
+            local style = ControllerLabelStyle()
+            if (style == "nintendo" and (button == "PAD3" or button == "PADX"))
+                or (style ~= "nintendo" and (button == "PAD4" or button == "PADY" or button == "PADTRIANGLE"
+                    or button == "GAMEPAD_BUTTON_Y" or button == "GAMEPAD_Y")) then
+                render.TogglePin()
+            end
+        end
     end)
 end
 closeButton:SetScript("OnClick", function() ns.DismissLevelUp() end)
@@ -436,6 +504,10 @@ function ns.ApplyClickThrough(enabled)
     frame:EnableMouse(interactive)
     if closeButton and closeButton.EnableMouse then
         closeButton:EnableMouse(interactive)
+    end
+    render.pinButton:EnableMouse(interactive)
+    if not interactive and GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(render.pinButton) then
+        GameTooltip:Hide()
     end
     if render.RefreshTimelineMouse then render.RefreshTimelineMouse() end
 end
@@ -747,7 +819,7 @@ content.portraitArtwork:Hide()
 local portraitPreparing = false
 local entranceTimeline
 -- Menus request suspension without changing the popup timer or page state.
-local previewState = { active = false, suspended = false }
+local previewState = { active = false, timeoutPaused = false }
 
     -- Store every text layer so a font change updates the whole panel.
 content.fontElements = {}
@@ -1985,7 +2057,9 @@ local function UpdateSectionEntrance(age, moving)
             end
         end
     end
-    render.Alpha(closeButton, EntranceAlpha(plan.background, age, moving))
+    local chromeAlpha = EntranceAlpha(plan.background, age, moving)
+    render.Alpha(closeButton, chromeAlpha)
+    render.Alpha(render.pinButton, chromeAlpha)
     if not moving or age >= plan.finish then render.sectionComplete = plan end
     return moving and age < plan.finish
 end
@@ -4281,8 +4355,12 @@ function render.BeginClosing(multiplier)
 end
 
 local function ResetPreviewState(active)
+    if render.pinned then
+        render.pinned = nil
+        render.UpdatePinButton()
+    end
     previewState.active = active == true
-    previewState.suspended = false
+    previewState.timeoutPaused = false
     previewState.remainingTime = nil
     previewState.deadline = nil
 end
@@ -5543,8 +5621,8 @@ function render.ArmHideTimer(delay, token, callback)
     end
 end
 
-local function ShouldSuspendPreview()
-    return previewState.active and ns.IsPreviewSuspensionRequested() == true
+local function ShouldPausePopupTimeout()
+    return render.pinned or (previewState.active and ns.IsPreviewSuspensionRequested() == true)
 end
 
 function ns.HandleLevelUpScreenshotResult(saved, reason, failure)
@@ -5596,7 +5674,7 @@ local function IsHovered()
 end
 
 local function TryFadeOut(token)
-    if token ~= hideToken or not frame:IsShown() then return end
+    if token ~= hideToken or not frame:IsShown() or ShouldPausePopupTimeout() then return end
     if not (ns.db and ns.db.ignoreMouseoverDelay == true) and IsHovered() then
         render.ArmHideTimer(0.15, token, function() TryFadeOut(token) end)
         return
@@ -5614,34 +5692,34 @@ local function ScheduleFadeOut(delay)
     local token = hideToken
     delay = math.max(0, delay or 0)
     previewState.deadline = GetTime() + delay
-    if ShouldSuspendPreview() then
-        previewState.suspended = true
+    if ShouldPausePopupTimeout() then
+        previewState.timeoutPaused = true
         previewState.remainingTime = delay
         return
     end
+    previewState.timeoutPaused = false
+    previewState.remainingTime = nil
     render.ArmHideTimer(delay, token, function() TryFadeOut(token) end)
 end
-ns.RescheduleFadeOut = ScheduleFadeOut
+function ns.RescheduleFadeOut(delay)
+    if not render.pinned then ScheduleFadeOut(delay) end
+end
 
--- Only pause the timeout; stat pages continue so both can be inspected in Options.
--- Suspension applies to manually requested previews. Real level-ups
--- retain their usual timer, position, scale, animation, and layout.
+-- Pinning and Options can hold the same timeout without stopping the stat pages.
 function ns.RefreshPreviewSuspension()
-    if not previewState.active or not frame:IsShown() or frame.closingInputSuppressed then return end
-    if ShouldSuspendPreview() then
-        if previewState.suspended then return end
+    if not frame:IsShown() or frame.closingInputSuppressed then return end
+    if ShouldPausePopupTimeout() then
+        if previewState.timeoutPaused then return end
         previewState.remainingTime = math.max(0, (previewState.deadline or GetTime()) - GetTime())
-        previewState.suspended = true
+        previewState.timeoutPaused = true
         hideToken = hideToken + 1
         render.CancelHideTimer()
         if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
         render.CancelClosing()
         UpdateVisualEffects()
         frame:SetAlpha(1)
-    elseif previewState.suspended then
+    elseif previewState.timeoutPaused then
         local remaining = previewState.remainingTime or 0
-        previewState.suspended = false
-        previewState.remainingTime = nil
         ScheduleFadeOut(remaining)
         UpdateVisualEffects()
     end
@@ -5680,7 +5758,7 @@ end
 frame:SetScript("OnEnter", nil)
 
 
-local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats)
+local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats, cataloguePreview)
     local db = ns.db or {}
     if db.enabled == false then return end
 
@@ -5707,7 +5785,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     ns.RefreshClassIcon()
     content.currentReachedLevel = currentLevel
     render.PrepareLevelTimeline(currentLevel, content.currentTrainerAbilities,
-        previewState.active and not content.replayRecord, content.replayRecord and content.replayRecord.timeline)
+        previewState.active and not (content.replayRecord or cataloguePreview), content.replayRecord and content.replayRecord.timeline)
     ApplyToTextLayers(content.levelText, "SetText", content.levelRangeStart
         and ns.L("Level %d - %d", content.levelRangeStart, currentLevel) or ns.L("Level %d", currentLevel))
     render.RefreshMilestoneLevelText()
@@ -5783,7 +5861,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest, weatherTest)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest, weatherTest, cataloguePreview)
     ns.EnsureDatabase()
     render.screenshotRequest = nil
     ns.SetClosingClickThrough(false)
@@ -5806,7 +5884,7 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     rangeStart = tonumber(rangeStart)
     content.levelRangeStart = rangeStart and level and rangeStart >= 1 and rangeStart % 1 == 0 and rangeStart < level - 1 and rangeStart or nil
     content.isMaxLevel = level ~= nil and level == ns.GetLevelCap() and (not isPreview or maxLevelPreview == true)
-    -- Ordinary previews stay normal; /glu milestone opts into the celebration.
+    -- Only level-specific previews opt into the milestone check.
     local milestone = (not isPreview or milestonePreview == true) and level and level > 0
         and (content.isMaxLevel or ns.IsMilestoneLevel(level, content.levelRangeStart))
     if isPreview and replayRecord and type(replayRecord.milestone) == "boolean" then
@@ -5822,7 +5900,7 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     local perf = ns.PerfStart("popup_prepare")
     local ok, err = xpcall(function()
         ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel,
-            warlockPetAbilities, milestone, previousFastest, secondaryStats)
+            warlockPetAbilities, milestone, previousFastest, secondaryStats, cataloguePreview)
     end, ns.CaptureErrorTrace)
     ns.PerfEnd(perf)
     if ok and not isPreview then

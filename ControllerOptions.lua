@@ -484,6 +484,7 @@ local function BuildEntries(key)
         if ns.LevelTimelineEnabled() then
             if ns.NewAbilitiesEnabled() then table.insert(entries, #entries - 2, NumericOption("timelineSkillCount")) end
             table.insert(entries, #entries - 2, NumericOption("timelineOpacity"))
+            table.insert(entries, #entries - 2, NumericOption("timelineSteps"))
         end
         return entries
     elseif key == "mode" then
@@ -531,15 +532,12 @@ local function BuildEntries(key)
         if ns.GetCurrentFlavor() == "retail" then
             return {
                 Toggle(nil, "showNewAbilities"),
-                Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
                 Toggle("Use horizontal scrolling", "useHorizontalAbilityScroll"),
+                Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
             }
         end
         local options = {
             Toggle(nil, "showNewAbilities"),
-            Toggle(nil, "showOnlyCurrentLevelSkills"),
-            Toggle(nil, "showOnlyNewSkills"),
-            Toggle(nil, "showLatestTrainingRanks"),
             Toggle("Automatically save trainer data", "autoScanTrainers"),
             Toggle("Include profession trainers", "scanProfessionTrainers"),
             Toggle("Show unlearned weapon skills", "showWeaponSkills"),
@@ -548,6 +546,9 @@ local function BuildEntries(key)
             PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
             PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
             PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
+            Toggle(nil, "showOnlyCurrentLevelSkills"),
+            Toggle(nil, "showOnlyNewSkills"),
+            Toggle(nil, "showLatestTrainingRanks"),
         }
         return options
     elseif key == "sound" then
