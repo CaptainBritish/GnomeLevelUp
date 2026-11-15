@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4a
+
+* Forgot to add a toggle for Timeline Look Ahead, my bad.
+
 ## 1.6.4
 
 ##### New Features

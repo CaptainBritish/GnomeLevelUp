@@ -91,6 +91,7 @@ local defaults = {
     backgroundEmbers = true,
     weatherMotes = false,
     showLevelTimeline = false,
+    showTimelineNextUnlock = false,
     timelineSteps = 2,
     timelineSkillCount = 4,
     timelineOpacity = 85,
@@ -517,6 +518,9 @@ SharedToggle("showLevelTimeline", "Show level timeline", RefreshTimeline, "Show 
 function ns.LevelTimelineEnabled()
     return ns.db.showLevelTimeline == true
 end
+SharedToggle("showTimelineNextUnlock", "Look ahead for timeline abilities", RefreshTimeline,
+    "If the last timeline level has no abilities, show the next level with unlocks beneath it.",
+    function() return ns.LevelTimelineEnabled() and ns.NewAbilitiesEnabled() end)
 
 function ns.GetTimelineColour()
     return (ns.db.timelineClassColour ~= false and ns.GetClassColor("level")) or ns.db.timelineColour or defaults.timelineColour
@@ -581,7 +585,7 @@ end
 -- These settings travel with a custom background theme. Keeping the list in
 -- one place prevents a theme from silently omitting an Appearance option.
 ns.APPEARANCE_SETTING_KEYS = {
-    "showLevelTimeline", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
+    "showLevelTimeline", "showTimelineNextUnlock", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "portraitRingGlint",
     "portraitSparks", "backgroundEmbers", "weatherMotes", "frameEdgeGlow",
     "portraitAnimation", "highlightNewAbilities", "emphasizeStatGains",
@@ -596,7 +600,7 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
-    "showLevelTimeline", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
+    "showLevelTimeline", "showTimelineNextUnlock", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
     "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",

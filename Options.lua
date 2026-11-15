@@ -991,6 +991,7 @@ local function BuildOptions()
     local compactButton, compactLabel = AddSettingCheckbox("compactMode", LEFT, y)
     AddAvailabilityRefresh(compactButton, compactLabel, function() return not ns.db.horizontalMode end)
     local timelineButton = AddSettingCheckbox("showLevelTimeline", LEFT + 270, y)
+    local nextUnlockButton
     y = y - 32
     do
         local _, skillCount = AddNumericOption("timelineSkillCount", LEFT, CONTROL_X, y)
@@ -1000,13 +1001,15 @@ local function BuildOptions()
         y = y - 34
         local _, steps = AddNumericOption("timelineSteps", LEFT, CONTROL_X, y)
         steps.isVisible = ns.LevelTimelineEnabled
+        nextUnlockButton = AddSettingCheckbox("showTimelineNextUnlock", LEFT + 270, y)
+        nextUnlockButton.gluOptionsCell.isVisible = ns.OPTION_SETTINGS.showTimelineNextUnlock.isAvailable
         y = y - 34
     end
 
     -- Pack the main Appearance settings independently of the optional debug rows.
     local appearanceCells = {}
     for key, button in pairs({ lockFramePosition = lockButton, horizontalMode = horizontalButton,
-        compactMode = compactButton, showLevelTimeline = timelineButton }) do
+        compactMode = compactButton, showLevelTimeline = timelineButton, showTimelineNextUnlock = nextUnlockButton }) do
         local cell = button.gluOptionsCell
         cell.optionLabel = ns.OPTION_SETTINGS[key].label
         appearanceCells[#appearanceCells + 1] = cell
@@ -1029,7 +1032,7 @@ local function BuildOptions()
         { columns = 2, labels = { "Lock Location", "Horizontal layout", "Compact Layout", "Show level timeline" } },
         { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Section padding", "Heading text size", "Time to Level text size" } },
         { columns = 2, labels = { "Ability Cost Size", "Stat text size" } },
-        { columns = 2, labels = { "Timeline skills per level", "Timeline opacity", "Timeline Steps" } },
+        { columns = 2, labels = { "Timeline skills per level", "Timeline opacity", "Timeline Steps", "Look ahead for timeline abilities" } },
     }, appearanceRow)
 
     local suspendPreview = AddCheckbox("Suspend Preview",

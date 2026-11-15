@@ -23,14 +23,14 @@ local function SkillFade(age, order)
     return Smooth(ClampProgress((age - (order - 1) * SKILL_STAGGER_SECONDS) / SKILL_FADE_SECONDS))
 end
 
-local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
+local function BuildTimelineSkills(first, reached, last, cap, abilities, sample, lookAhead)
     local byLevel = {}
     for level = first, last do byLevel[level] = {} end
     local nextUnlockLevel, nextUnlockSkills
     local function Add(level, id, texture, name, cost)
         if not level or level <= 1 or not (id or texture) then return end
         local list = byLevel[level]
-        if not list and last > reached and level > last and (not cap or level <= cap) then
+        if not list and lookAhead and last > reached and level > last and (not cap or level <= cap) then
             if not nextUnlockLevel or level < nextUnlockLevel then
                 nextUnlockLevel, nextUnlockSkills = level, {}
             end
@@ -46,7 +46,7 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
         Add(sample and reached or ability.requiredLevel, ability.id, ability.icon, ability.name, ability.cost)
     end
     if ns.GetCurrentFlavor() == "retail" then
-        local nextUnlockCap = last > reached and #byLevel[last] == 0 and (cap or math.huge) or nil
+        local nextUnlockCap = lookAhead and last > reached and #byLevel[last] == 0 and (cap or math.huge) or nil
         for _, ability in ipairs(ns.GetRetailTimelineSpells(first, last, nextUnlockCap)) do
             Add(ability.requiredLevel, ability.id, ability.icon, ability.name)
         end
@@ -65,7 +65,7 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample)
         AddCatalogueLevel(first)
         if reached ~= first then AddCatalogueLevel(reached) end
         if last > reached then
-            for level = reached + 1, cap or last do
+            for level = reached + 1, (lookAhead and cap) or last do
                 AddCatalogueLevel(level)
                 if (level <= last and #byLevel[level] < MAX_SKILLS)
                     or (level > last and (not nextUnlockSkills or #nextUnlockSkills < MAX_SKILLS)) then
@@ -373,11 +373,12 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
         end
         for i = #markers + 1, steps + 1 do CreateMarker(i) end
         local showSkills = ns.NewAbilitiesEnabled()
-        if showSkills and source.lastLevel ~= lastLevel then
+        local lookAhead = ns.OPTION_SETTINGS.showTimelineNextUnlock.get()
+        if showSkills and (source.lastLevel ~= lastLevel or source.lookAhead ~= lookAhead) then
             local saved = source.saved
             local recorded = saved and saved.levels
             local levels, nextUnlock, nextSkills = BuildTimelineSkills(
-                startLevel, reachedLevel, lastLevel, cap, source.abilities or {}, source.sample)
+                startLevel, reachedLevel, lastLevel, cap, source.abilities or {}, source.sample, lookAhead)
             for level = startLevel, lastLevel do
                 local skills = recorded and recorded[level]
                 if level > 1 and skills and (level <= reachedLevel or #skills > 0) then levels[level] = skills end
@@ -386,12 +387,13 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                 local level = saved.nextUnlockLevel
                 if level <= lastLevel and level > reachedLevel and #levels[level] == 0 then
                     levels[level] = saved.nextUnlockSkills
-                elseif level > lastLevel and (not nextUnlock or level <= nextUnlock) and (not cap or level <= cap) then
+                elseif lookAhead and level > lastLevel and (not nextUnlock or level <= nextUnlock) and (not cap or level <= cap) then
                     nextUnlock, nextSkills = level, saved.nextUnlockSkills
                 end
             end
             source.levels, source.nextUnlockLevel, source.nextUnlockSkills = levels, nextUnlock, nextSkills
             source.lastLevel = lastLevel
+            source.lookAhead = lookAhead
         end
         local count = showSkills and ns.OPTION_SETTINGS.timelineSkillCount.get() or 0
         local bottomBar = ns.GetEffectiveBackgroundMode() == "MODERN" and modernBottomLine or texturedBottomEdge

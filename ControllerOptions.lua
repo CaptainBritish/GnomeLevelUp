@@ -485,6 +485,9 @@ local function BuildEntries(key)
             if ns.NewAbilitiesEnabled() then table.insert(entries, #entries - 2, NumericOption("timelineSkillCount")) end
             table.insert(entries, #entries - 2, NumericOption("timelineOpacity"))
             table.insert(entries, #entries - 2, NumericOption("timelineSteps"))
+            if ns.OPTION_SETTINGS.showTimelineNextUnlock.isAvailable() then
+                table.insert(entries, #entries - 2, Toggle(nil, "showTimelineNextUnlock"))
+            end
         end
         return entries
     elseif key == "mode" then
