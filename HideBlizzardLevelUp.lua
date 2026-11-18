@@ -12,10 +12,13 @@ local eventToastFrameName = "EventToastManagerFrame"
 
 local hookedFrames = {}
 local savedAlpha = {}
+local savedMouse = {}
 local dedicatedAlpha = {}
 local suppressionToken = 0
 local suppressionActive = false
 local suppressionQueueToken = 0
+local levelUpSpellUntil = 0
+local levelUpSpellToastInfo
 
 local suppressionTimers = {}
 local function CancelSuppressionTimers()
@@ -65,7 +68,8 @@ end
 local function GetFrameAlpha(frame)
     if not frame or type(frame.GetAlpha) ~= "function" then return 1 end
     local ok, alpha = pcall(frame.GetAlpha, frame)
-    return ok and tonumber(alpha) or 1
+    if not ok or (issecretvalue and issecretvalue(alpha)) then return 1 end
+    return tonumber(alpha) or 1
 end
 
 local function ShouldHideBanner()
@@ -85,13 +89,38 @@ local function RestoreArtwork(originalAlpha)
     end
 end
 
+local function DisableToastMouse(frame)
+    if not frame or not frame.IsMouseEnabled or not frame.EnableMouse then return end
+    if savedMouse[frame] == nil then savedMouse[frame] = frame:IsMouseEnabled() end
+    frame:EnableMouse(false)
+end
+
+local function RestoreEventToastArtwork()
+    levelUpSpellToastInfo = nil
+    RestoreArtwork(savedAlpha)
+    for frame, enabled in pairs(savedMouse) do
+        frame:EnableMouse(enabled)
+        savedMouse[frame] = nil
+    end
+end
+
 local function HideEventToastArtwork(frame)
     HideToastArtwork(frame, savedAlpha)
-    -- Blizzard animates the manager separately from its shadow and gold lines.
-    -- Hide the textures too so they stay invisible through a native fade.
+    -- The manager and pooled toast frame have independent alpha animations.
+    -- Suppress their artwork directly while Blizzard advances the toast queue.
     HideToastArtwork(frame.BlackBG, savedAlpha)
     HideToastArtwork(frame.GLine, savedAlpha)
     HideToastArtwork(frame.GLine2, savedAlpha)
+    DisableToastMouse(frame)
+
+    local toast = frame.currentDisplayingToast
+    if not toast then return end
+    if toast.GetRegions then
+        for _, region in ipairs({ toast:GetRegions() }) do HideToastArtwork(region, savedAlpha) end
+    end
+    HideToastArtwork(toast.WidgetContainer, savedAlpha)
+    DisableToastMouse(toast.TitleTextMouseOverFrame)
+    DisableToastMouse(toast.SubTitleMouseOverFrame)
 end
 
 local function GetLevelUpToastStatus(frame)
@@ -100,16 +129,17 @@ local function GetLevelUpToastStatus(frame)
     local info = toast and toast.toastInfo
     if not eventTypes or eventTypes.LevelUp == nil then return nil end
     if not info then return false end
-    if info.eventType == nil then return nil end
-    return info.eventType == eventTypes.LevelUp
-end
-
-function ns.FindBlizzardLevelUpFrame()
-    for _, name in ipairs(CANDIDATE_BANNER_NAMES) do
-        local frame = _G[name]
-        if frame then return frame end
+    local eventType = info.eventType
+    if issecretvalue and issecretvalue(eventType) then return false end
+    if eventType == nil then return nil end
+    if eventType == eventTypes.LevelUp or eventType == eventTypes.LevelUpSpell then return true end
+    -- A spell-learned toast can accompany a Retail level-up. Keep standalone spell notifications.
+    if eventType == eventTypes.SpellLearned and ns.GetCurrentFlavor() == "retail"
+        and (info == levelUpSpellToastInfo or GetTime() < levelUpSpellUntil) then
+        levelUpSpellToastInfo = info
+        return true
     end
-    return nil
+    return false
 end
 
 local function HookBlizzardFrame(frame)
@@ -125,7 +155,7 @@ local function UpdateEventToastArtwork(frame)
     if ShouldHideBanner() and (levelUp or (levelUp == nil and suppressionActive)) then
         HideEventToastArtwork(frame)
     else
-        RestoreArtwork(savedAlpha)
+        RestoreEventToastArtwork()
     end
 end
 
@@ -140,7 +170,7 @@ local function HookEventToastManager(frame)
             if type(frame[method]) == "function" then pcall(hooksecurefunc, frame, method, UpdateEventToastArtwork) end
         end
         if type(frame.Reset) == "function" then
-            pcall(hooksecurefunc, frame, "Reset", function() RestoreArtwork(savedAlpha) end)
+            pcall(hooksecurefunc, frame, "Reset", RestoreEventToastArtwork)
         end
     end
 end
@@ -180,7 +210,7 @@ function ns.RestoreBlizzardBanner()
     suppressionToken = suppressionToken + 1
     suppressionQueueToken = suppressionQueueToken + 1
     suppressionActive = false
-    RestoreArtwork(savedAlpha)
+    RestoreEventToastArtwork()
     RestoreArtwork(dedicatedAlpha)
 end
 
@@ -197,7 +227,7 @@ function ns.SuppressBlizzardBanner()
         if token == suppressionToken then
             suppressionActive = false
             local manager = _G[eventToastFrameName]
-            if manager then UpdateEventToastArtwork(manager) else RestoreArtwork(savedAlpha) end
+            if manager then UpdateEventToastArtwork(manager) else RestoreEventToastArtwork() end
         end
     end)
 end
@@ -236,6 +266,7 @@ eventFrame:SetScript("OnEvent", function(_, event)
         ns.UpdateBlizzardBannerVisibility()
         return
     end
+    levelUpSpellUntil = GetTime() + 16 -- The unlock may sit behind the level toast in the queue.
     ns.HideBlizzardBannerNow()
     -- Blizzard can create or start the toast after the level-up event runs.
     ns.QueueBlizzardSuppression()

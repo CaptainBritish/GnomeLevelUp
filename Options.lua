@@ -603,8 +603,9 @@ local function BuildOptions()
     local version = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     version:SetPoint("TOP", menuLogo, "BOTTOM", 0, -4)
     version:SetTextColor(0.70, 0.70, 0.70)
-    local addonVersion = _G["GetAddOnMetadata"] and _G["GetAddOnMetadata"](ADDON_NAME, "Version") or "1.6.4"
-    version:SetText(ns.L("Version %s", tostring(addonVersion)))
+    local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+    local addonVersion = getMetadata and getMetadata(ADDON_NAME, "Version")
+    if addonVersion then version:SetText(ns.L("Version %s", addonVersion)) end
     ns.ApplyLocaleFont(version)
     local byline = chrome:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     byline:SetPoint("TOP", version, "BOTTOM", 0, -2)
@@ -1503,10 +1504,10 @@ local function BuildOptions()
     AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
     AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
 
-    for index, key in ipairs({ "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }) do
-        local check, label = AddSettingCheckbox(key, LEFT + (index - 1) * 175, y)
-        if key ~= "showOnlyCurrentLevelSkills" then check.gluOptionsCell.isVisible = ns.SupportsTrainerData end
-        AddAvailabilityRefresh(check, label, ns.OPTION_SETTINGS[key].isAvailable)
+    for index, filter in ipairs(ns.ABILITY_FILTERS) do
+        local check, label = AddSettingCheckbox(filter.key, LEFT + (index - 1) * 175, y)
+        if filter.trainerOnly then check.gluOptionsCell.isVisible = ns.SupportsTrainerData end
+        AddAvailabilityRefresh(check, label, filter.isAvailable)
     end
     y = y - 32
 

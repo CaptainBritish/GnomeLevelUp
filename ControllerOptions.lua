@@ -532,27 +532,31 @@ local function BuildEntries(key)
         options[#options + 1] = CycleChoice("Milestone interval", ns.GetMilestoneInterval, ns.SetMilestoneInterval, ns.GetMilestoneIntervalChoices)
         return options
     elseif key == "trainer" then
-        if ns.GetCurrentFlavor() == "retail" then
-            return {
+        local retail = ns.GetCurrentFlavor() == "retail"
+        local options
+        if retail then
+            options = {
                 Toggle(nil, "showNewAbilities"),
                 Toggle("Use horizontal scrolling", "useHorizontalAbilityScroll"),
-                Toggle("Only skills unlocked at this level", "showOnlyCurrentLevelSkills"),
+            }
+        else
+            options = {
+                Toggle(nil, "showNewAbilities"),
+                Toggle("Automatically save trainer data", "autoScanTrainers"),
+                Toggle("Include profession trainers", "scanProfessionTrainers"),
+                Toggle("Show unlearned weapon skills", "showWeaponSkills"),
+                Toggle("Show learning costs", "showTrainerCosts"),
+                Toggle("Show prices in tooltips", "showTrainerCostsInTooltips"),
+                PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
+                PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
+                PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
             }
         end
-        local options = {
-            Toggle(nil, "showNewAbilities"),
-            Toggle("Automatically save trainer data", "autoScanTrainers"),
-            Toggle("Include profession trainers", "scanProfessionTrainers"),
-            Toggle("Show unlearned weapon skills", "showWeaponSkills"),
-            Toggle("Show learning costs", "showTrainerCosts"),
-            Toggle("Show prices in tooltips", "showTrainerCostsInTooltips"),
-            PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
-            PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
-            PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
-            Toggle(nil, "showOnlyCurrentLevelSkills"),
-            Toggle(nil, "showOnlyNewSkills"),
-            Toggle(nil, "showLatestTrainingRanks"),
-        }
+        for _, filter in ipairs(ns.ABILITY_FILTERS) do
+            if not retail or not filter.trainerOnly then
+                options[#options + 1] = Toggle(nil, filter.key)
+            end
+        end
         return options
     elseif key == "sound" then
         local options = {

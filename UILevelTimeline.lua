@@ -142,8 +142,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                             local item = bySpellID[skill.id]
                             cost = item and item.cost
                         end
-                        local price = render.FormatTrainerCost(cost, 3)
-                        if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
+                        render.AddTrainerCostTooltipLine(cost)
                     end
                     GameTooltip:Show()
                 end)

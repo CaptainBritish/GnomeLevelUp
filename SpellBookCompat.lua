@@ -2,15 +2,11 @@ local ADDON_NAME, ns = ...
 local GetSpellLevelLearned = rawget(_G, "GetSpellLevelLearned")
 
 -- Cache spellbook reads until a spell-change event invalidates them.
-local spellbookRevision = 0
 local cachedSpellbook
-local cachedRevision = -1
 local cachedFutureSpells
-local cachedFutureRevision = -1
 local retailFutureSpellsBeforeLevel
 local retailUnlockIndex
 local knownSpellCache = {}
-local knownSpellCacheRevision = -1
 local spellbookInvalidationQueued = false
 
 local function IsSecretValue(value)
@@ -18,14 +14,10 @@ local function IsSecretValue(value)
 end
 
 function ns.InvalidateSpellBookSnapshot()
-    spellbookRevision = spellbookRevision + 1
     cachedSpellbook = nil
-    cachedRevision = -1
     cachedFutureSpells = nil
-    cachedFutureRevision = -1
     retailUnlockIndex = nil
     knownSpellCache = {}
-    knownSpellCacheRevision = -1
     if ns.InvalidateKnownTrainingLookup then
         ns.InvalidateKnownTrainingLookup()
     end
@@ -68,16 +60,9 @@ function ns.GetRetailFutureSpellsBeforeLevel()
     return retailFutureSpellsBeforeLevel
 end
 
-function ns.GetSpellBookRevision()
-    return spellbookRevision
-end
-
 function ns.IsSpellKnownAcrossClients(spellID)
     if not spellID then return false end
-    if knownSpellCacheRevision ~= spellbookRevision then
-        knownSpellCache = {}
-        knownSpellCacheRevision = spellbookRevision
-    elseif knownSpellCache[spellID] ~= nil then
+    if knownSpellCache[spellID] ~= nil then
         return knownSpellCache[spellID]
     end
 
@@ -100,7 +85,7 @@ function ns.IsSpellKnownAcrossClients(spellID)
 end
 
 function ns.SnapshotSpellBook(forceRefresh)
-    if not forceRefresh and cachedSpellbook and cachedRevision == spellbookRevision then
+    if not forceRefresh and cachedSpellbook then
         return cachedSpellbook
     end
 
@@ -110,7 +95,6 @@ function ns.SnapshotSpellBook(forceRefresh)
     local playerBank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
     if not C_SpellBook or not C_SpellBook.GetNumSpellBookSkillLines or not playerBank then
         cachedSpellbook = known
-        cachedRevision = spellbookRevision
         if ns.PerfEnd then ns.PerfEnd(perf) end
         return known
     end
@@ -145,7 +129,6 @@ function ns.SnapshotSpellBook(forceRefresh)
         end
     end
     cachedSpellbook = known
-    cachedRevision = spellbookRevision
     if ns.PerfEnd then ns.PerfEnd(perf) end
     return known
 end
@@ -212,7 +195,7 @@ local function IsRetailSkillLineAllowed(skillLineIndex, skillLineInfo)
 end
 
 function ns.SnapshotRetailFutureSpells(forceRefresh)
-    if not forceRefresh and cachedFutureSpells and cachedFutureRevision == spellbookRevision then
+    if not forceRefresh and cachedFutureSpells then
         return cachedFutureSpells
     end
 
@@ -226,7 +209,6 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
         or not C_SpellBook.GetSpellBookSkillLineInfo
         or not C_SpellBook.GetSpellBookItemInfo or not playerBank or not futureType then
         cachedFutureSpells = futureSpells
-        cachedFutureRevision = spellbookRevision
         if ns.PerfEnd then ns.PerfEnd(perf) end
         return futureSpells
     end
@@ -262,7 +244,6 @@ function ns.SnapshotRetailFutureSpells(forceRefresh)
         return a.name < b.name
     end)
     cachedFutureSpells = futureSpells
-    cachedFutureRevision = spellbookRevision
     if ns.PerfEnd then ns.PerfEnd(perf) end
     return futureSpells
 end

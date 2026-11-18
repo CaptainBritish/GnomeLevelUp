@@ -1656,6 +1656,11 @@ function render.FormatTrainerCost(cost, maxParts)
     return #parts > 0 and table.concat(parts, " ") or nil
 end
 
+function render.AddTrainerCostTooltipLine(cost)
+    local price = render.FormatTrainerCost(cost, 3)
+    if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
+end
+
 function render.FormatPaceTime(seconds)
     seconds = math.floor(seconds)
     local hours, minutes, remaining = math.floor(seconds / 3600), math.floor(seconds % 3600 / 60), seconds % 60
@@ -2397,8 +2402,7 @@ local function GetAbilityIcon(index, row, pool)
             GameTooltip:AddLine(ns.L(self.isNewAbility and "New ability" or "Rank upgrade"), 1, 0.82, 0.20)
         end
         if self.trainerCost and TrainerCostsVisible() then
-            local price = render.FormatTrainerCost(self.trainerCost, 3)
-            if price then GameTooltip:AddLine(ns.L("Learning cost: %s", price), 1, 1, 1) end
+            render.AddTrainerCostTooltipLine(self.trainerCost)
         end
         if compare then ns.ApplyTooltipLocaleFont(GameTooltip) end
         GameTooltip:Show()
@@ -3762,6 +3766,9 @@ function render.HideMilestoneAccents()
     for _, ring in ipairs(accents.rings) do ring:Hide() end
     for _, clip in ipairs(accents.gleams) do clip:Hide() end
     for _, texture in ipairs(accents.burst) do texture:Hide() end
+    if accents.surge then
+        for _, texture in ipairs(accents.surge) do texture:Hide() end
+    end
     for _, trail in ipairs(accents.trails) do
         for _, texture in ipairs(trail.textures) do texture:Hide() end
     end
@@ -3836,7 +3843,8 @@ function render.UpdateMilestoneAccents()
         return false
     end
     render.milestoneAccentsHidden = false
-    local speed, active = Speed(), false
+    local speed = Speed()
+    local active = render.UpdateMilestoneRingSparks(accents, speed)
     local portraitFinish = plan.portrait.finish
     local shockwaves = db.portraitAnimation and db.portraitMode ~= "none" and IsPlayerPortrait()
     for i, ring in ipairs(accents.rings) do
@@ -3982,6 +3990,80 @@ function render.MaxClassTint(texture)
     texture:SetVertexColor(texture.maxR, texture.maxG, texture.maxB)
 end
 
+function render.PreparePortraitRingSparks(pool, periodScale)
+    local _, class = UnitClass("player")
+    local colour = ns.CLASS_COLORS[class] or { 1, .82, .2 }
+    for i, texture in ipairs(pool) do
+        texture:SetVertexColor(colour[1], colour[2], colour[3])
+        if i % 2 == 1 then
+            texture.surgePeriod = (.8 + math.random() * .6) * periodScale
+            texture.surgeDuration = .24 + math.random() * .14
+            texture.surgeOffset = math.random() * texture.surgePeriod
+            texture.surgeCycle = nil
+        end
+    end
+end
+
+function render.PortraitRingSparkAge(speed)
+    if not (render.ringSurgeStartedAt and IsPlayerPortrait() and ns.db.portraitAnimation) then return -1 end
+    return (effectAge - render.ringSurgeStartedAt - .2) * speed
+end
+
+function render.UpdatePortraitRingSparks(pool, age)
+    if age < 0 then
+        for _, texture in ipairs(pool) do render.Shown(texture, false) end
+        return false
+    end
+    local ring = ns.HasPortraitRingArtwork() and content.classRingGraphic or content.classRing
+    local contentScale = content:GetScale()
+    local ringRadius = ring:GetWidth() * .5 * contentScale
+    for i, texture in ipairs(pool) do
+        -- Each flash stays at the same spot for its whole life.
+        local head = pool[i % 2 == 1 and i or i - 1]
+        local beat = (age + head.surgeOffset) / head.surgePeriod
+        local cycle, phase = math.floor(beat), (beat % 1) * head.surgePeriod
+        local shown = phase < head.surgeDuration
+        if shown and head.surgeCycle ~= cycle then
+            head.surgeCycle = cycle
+            head.surgeAngle = math.random() * math.pi * 2
+            head.surgeSize = .5 + math.random() * 1.25
+        end
+        render.Shown(texture, shown)
+        if shown then
+            local angle = head.surgeAngle
+            local branch = i % 2 == 0 and 1 or -1
+            local distance = ringRadius + branch
+            local pulse = math.sin(math.pi * phase / head.surgeDuration)
+            render.ParticlePoint(texture, ring, "CENTER", math.cos(angle) * distance, math.sin(angle) * distance)
+            local scale = contentScale * head.surgeSize
+            render.ParticleSize(texture, (16 + 20 * pulse) * scale, 6 * scale)
+            texture:SetRotation(angle + branch * .5)
+            texture:SetAlpha(pulse)
+        end
+    end
+    return true
+end
+
+function render.UpdateMilestoneRingSparks(accents, speed)
+    local age = render.PortraitRingSparkAge(speed)
+    if content.isMaxLevel or age < 0 then
+        if accents.surge then render.UpdatePortraitRingSparks(accents.surge, -1) end
+        return false
+    end
+    if not accents.surge then
+        local layer = CreateFrame("Frame", nil, frame)
+        layer:SetAllPoints(frame)
+        layer:SetFrameLevel(frame:GetFrameLevel() + 12)
+        accents.surge = {}
+        EnsureParticlePool(accents.surge, layer, 2)
+    end
+    if not accents.surgePrepared then
+        render.PreparePortraitRingSparks(accents.surge, 1.25)
+        accents.surgePrepared = true
+    end
+    return render.UpdatePortraitRingSparks(accents.surge, age)
+end
+
 function render.PrepareMaxCelebration()
     local effects = content.maxLevelEffects
     if not effects then
@@ -4015,17 +4097,7 @@ function render.PrepareMaxCelebration()
         texture.maxDistance, texture.maxDuration = 35 + math.random() * 60, 1.1 + math.random() * .7
         render.MaxClassTint(texture)
     end
-    local _, class = UnitClass("player")
-    local surgeColor = ns.CLASS_COLORS[class] or { 1, .82, .2 }
-    for i, texture in ipairs(effects.surge) do
-        texture:SetVertexColor(surgeColor[1], surgeColor[2], surgeColor[3])
-        if i % 2 == 1 then
-            texture.surgePeriod = .8 + math.random() * .6
-            texture.surgeDuration = .24 + math.random() * .14
-            texture.surgeOffset = math.random() * texture.surgePeriod
-            texture.surgeCycle = nil
-        end
-    end
+    render.PreparePortraitRingSparks(effects.surge, 1)
     return effects
 end
 
@@ -4077,35 +4149,7 @@ function render.UpdateMaxCelebration()
         end
     end
     local portrait = db.portraitMode ~= "none"
-    local surgeAge = render.ringSurgeStartedAt and (effectAge - render.ringSurgeStartedAt - .2) * speed or -1
-    local surgeEnabled = portrait and IsPlayerPortrait() and db.portraitAnimation and surgeAge >= 0
-    local ring = ns.HasPortraitRingArtwork() and content.classRingGraphic or content.classRing
-    local ringRadius = ring:GetWidth() * .5 * content:GetScale()
-    for i, texture in ipairs(effects.surge) do
-        -- Independent slower flashes stay at one random spot for their whole life.
-        local head = effects.surge[i % 2 == 1 and i or i - 1]
-        local beat = (surgeAge + head.surgeOffset) / head.surgePeriod
-        local cycle, phase = math.floor(beat), (beat % 1) * head.surgePeriod
-        local shown = surgeEnabled and phase < head.surgeDuration
-        if shown and head.surgeCycle ~= cycle then
-            head.surgeCycle = cycle
-            head.surgeAngle = math.random() * math.pi * 2
-            head.surgeSize = .5 + math.random() * 1.25
-        end
-        render.Shown(texture, shown == true)
-        if shown then
-            local angle = head.surgeAngle
-            local branch = i % 2 == 0 and 1 or -1
-            local distance = ringRadius + branch
-            local pulse = math.sin(math.pi * phase / head.surgeDuration)
-            render.ParticlePoint(texture, ring, "CENTER", math.cos(angle) * distance, math.sin(angle) * distance)
-            local scale = content:GetScale() * head.surgeSize
-            render.ParticleSize(texture, (16 + 20 * pulse) * scale, 6 * scale)
-            texture:SetRotation(angle + branch * .5)
-            texture:SetAlpha(pulse)
-        end
-    end
-    if surgeEnabled then active = true end
+    if render.UpdatePortraitRingSparks(effects.surge, render.PortraitRingSparkAge(speed)) then active = true end
     local radius = (PortraitRingSize() * PortraitRingScale() * .56 + 12) * content:GetScale()
     local sparkAge = (effectAge - starburstStartedAt) * speed - .12
     for i, texture in ipairs(effects.sparks) do
@@ -4349,6 +4393,7 @@ function render.BeginClosing(multiplier)
     local accents=content.milestoneAccents
     if accents then
         for _,pool in ipairs({accents.rings,accents.burst}) do for _,texture in ipairs(pool) do Capture(texture) end end
+        if accents.surge then for _, texture in ipairs(accents.surge) do Capture(texture) end end
         for _,trail in ipairs(accents.trails) do for _,texture in ipairs(trail.textures) do Capture(texture) end end
     end
     portraitPulseGroup:Stop();content.portraitPulse:Hide()
@@ -4577,7 +4622,7 @@ function render.UpdateMaxBackgroundTint(force)
     if force or render.maxBackgroundFlash ~= strength then
         local _, class = UnitClass("player")
         bg.ShowModernBackgroundFlash(ns.CLASS_COLORS[class] or WHITE_COLOR, db.backgroundColor or BLACK_COLOR,
-            strength, bg.appliedOpacity or db.bgOpacity or .8, .6, milestone or not IsHorizontalLayout())
+            strength, bg.appliedOpacity or db.bgOpacity or .8, .6, not IsHorizontalLayout())
         render.maxBackgroundTinted, render.maxBackgroundFlash = true, strength
     end
     return true
@@ -4585,9 +4630,16 @@ end
 
 ns.RefreshMaxBackgroundTint = render.UpdateMaxBackgroundTint
 
+function render.SetVisualEffectsRunning(active)
+    local callback = active and RunVisualEffects or nil
+    if effectDriver:GetScript("OnUpdate") ~= callback then
+        effectDriver:SetScript("OnUpdate", callback)
+    end
+end
+
 function ns.WakeAbilityEffects()
     if frame:IsShown() and not render.closing and not frame.closingInputSuppressed then
-        effectDriver:SetScript("OnUpdate", RunVisualEffects)
+        render.SetVisualEffectsRunning(true)
     end
 end
 
@@ -4749,7 +4801,7 @@ UpdateVisualEffects = function()
     local maxPerf = content.isMaxLevel and ns.PerfStart("max_celebration_frame", effectAge)
     if render.UpdateMaxCelebration() then active = true end
     ns.PerfEnd(maxPerf)
-    effectDriver:SetScript("OnUpdate", active and frame:IsShown() and RunVisualEffects or nil)
+    render.SetVisualEffectsRunning(active and frame:IsShown())
 end
 
 function ns.RefreshVisualEffects()
@@ -4861,6 +4913,7 @@ local function StartVisualEffects()
     render.HideMilestoneAccents()
     if content.isMilestone then render.RollStatFireworks() end
     if content.milestoneAccents then
+        content.milestoneAccents.surgePrepared = false
         for i, texture in ipairs(content.milestoneAccents.burst) do
             texture.burstAngle = ((i - 1) % 16) * 2 * math.pi / 16 + math.random() * 0.20
             texture.burstDistance = 64 + math.random() * 110

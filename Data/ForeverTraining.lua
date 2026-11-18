@@ -2,7 +2,7 @@ local ADDON_NAME, ns = ...
 
 -- GnomeLevelUp custom Forever class-trainer catalogue.
 -- Names and icons resolve from the game client.
-ns.ForeverTrainingRevision = "1.6.2-custom-2026-11-11-warlock-prices"
+ns.ForeverTrainingRevision = "1.6.4a-custom-2026-11-17-hunter"
 ns.ClassTrainingForever = {
     DRUID = {
         [1] = {
@@ -253,8 +253,6 @@ ns.ClassTrainingForever = {
     HUNTER = {
         [1] = {
             { spellID = 2649, cost = 0, familyID = 2649, rank = 1, hunterPet = true },
-            { spellID = 4187, cost = 10, familyID = 4187, rank = 1, hunterPet = true },
-            { spellID = 24545, cost = 10, familyID = 24545, rank = 1, hunterPet = true },
             { spellID = 1494, cost = 10, familyID = 1494, rank = 1 },
         },
         [4] = {
@@ -275,6 +273,8 @@ ns.ClassTrainingForever = {
             { spellID = 14260, cost = 200, familyID = 14260, rank = 1 },
         },
         [10] = {
+            { spellID = 4187, cost = 10, familyID = 4187, rank = 1, hunterPet = true },
+            { spellID = 24545, cost = 10, familyID = 24545, rank = 1, hunterPet = true },
             { spellID = 14916, cost = 0, familyID = 2649, rank = 2, requiredIds = { 2649 }, hunterPet = true },
             { spellID = 13165, cost = 400, familyID = 13165, rank = 1 },
             { spellID = 13549, cost = 400, familyID = 1978, rank = 2, requiredIds = { 1978 } },

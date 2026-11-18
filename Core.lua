@@ -354,14 +354,22 @@ function ns.MigrateTrainerPriceSettings(settings)
     settings.trainerCostsTooltipOnly = nil
 end
 
-local abilityFilters = { "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showLatestTrainingRanks" }
+ns.ABILITY_FILTERS = {
+    { key = "showOnlyCurrentLevelSkills", label = "Only skills unlocked at this level", isAvailable = ns.NewAbilitiesEnabled },
+    { key = "showOnlyNewSkills", label = "Hide rank upgrades", isAvailable = ns.TrainerAbilitiesEnabled, trainerOnly = true },
+    { key = "showLatestTrainingRanks", label = "Only show the latest spell rank", isAvailable = ns.TrainerAbilitiesEnabled, trainerOnly = true },
+}
+
+local function ClearOtherAbilityFilters(settings, selectedKey)
+    for _, filter in ipairs(ns.ABILITY_FILTERS) do
+        if filter.key ~= selectedKey then settings[filter.key] = false end
+    end
+end
 
 function ns.NormalizeAbilityFilters(settings)
-    for _, key in ipairs(abilityFilters) do
-        if settings[key] == true then
-            for _, other in ipairs(abilityFilters) do
-                if other ~= key then settings[other] = false end
-            end
+    for _, filter in ipairs(ns.ABILITY_FILTERS) do
+        if settings[filter.key] == true then
+            ClearOtherAbilityFilters(settings, filter.key)
             return
         end
     end
@@ -431,20 +439,12 @@ SharedToggle("showNewAbilities", "Show new abilities", RefreshAbilityOptions)
 SharedToggle("showTrainerCosts", "Show learning costs", RefreshAbilityOptions, nil, ns.TrainerAbilitiesEnabled)
 SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshAbilityOptions,
     "Show full learning costs when hovering over abilities.", ns.TrainerAbilitiesEnabled)
-for _, filter in ipairs({
-    { "showOnlyCurrentLevelSkills", "Only skills unlocked at this level", ns.NewAbilitiesEnabled },
-    { "showOnlyNewSkills", "Hide rank upgrades", ns.TrainerAbilitiesEnabled },
-    { "showLatestTrainingRanks", "Only show the latest spell rank", ns.TrainerAbilitiesEnabled },
-}) do
-    local key = filter[1]
-    SharedToggle(key, filter[2], function(enabled)
-        if enabled then
-            for _, other in ipairs(abilityFilters) do
-                if other ~= key then ns.db[other] = false end
-            end
-        end
+for _, filter in ipairs(ns.ABILITY_FILTERS) do
+    local key = filter.key
+    SharedToggle(key, filter.label, function(enabled)
+        if enabled then ClearOtherAbilityFilters(ns.db, key) end
         RefreshAbilityOptions()
-    end, nil, filter[3])
+    end, nil, filter.isAvailable)
 end
 SharedToggle("screenshotMilestones", "Screenshot milestones", function(enabled)
     if enabled then ns.db.screenshotEveryLevel = false end
@@ -914,43 +914,6 @@ function ns.ApplyBackgroundTheme(value)
     ns.db.backgroundChoice = theme.backgroundName
     ns.db.frameChoice = theme.frameName or theme.backgroundName
     LoadSelectedThemeHues()
-    ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
-    RefreshAppearanceAfterThemeChange(true)
-    return true
-end
-
-function ns.ApplyBackgroundPreset(value)
-    EnsureDatabase()
-    ns.InvalidateColorPicker()
-    local theme = ns.FindBackgroundTheme(value)
-    if not theme or not theme.textures or not theme.textures.center then
-        ns.RestoreModernAppearance()
-        return false
-    end
-
-    ns.RememberThemeHues()
-    -- Background selection is independent from the portrait and frame
-    -- settings. Only replace values owned by the selected background preset.
-    ns.db.backgroundMode = "CUSTOM"
-    ns.db.backgroundTheme = value
-    ns.db.backgroundChoice = theme.backgroundName
-    ns.db.frameChoice = theme.frameName or theme.backgroundName
-    if theme.appearance then
-        if theme.appearance.backgroundStyle ~= nil then
-            ns.db.backgroundStyle = CopySetting(theme.appearance.backgroundStyle)
-        end
-        if theme.appearance.backgroundFillMode ~= nil then
-            ns.db.backgroundFillMode = CopySetting(theme.appearance.backgroundFillMode)
-        end
-        if theme.appearance.backgroundTextureColors ~= nil then
-            ns.db.backgroundTextureColors = CopySetting(theme.appearance.backgroundTextureColors)
-        end
-        if theme.appearance.backgroundTextureTransforms ~= nil then
-            ns.db.backgroundTextureTransforms = CopySetting(theme.appearance.backgroundTextureTransforms)
-        end
-    end
-    LoadThemeHue("background", ns.db.backgroundChoice)
-    LoadThemeHue("frame", ns.db.frameChoice)
     ApplyBackgroundDefaultStyle(ns.db.backgroundChoice)
     RefreshAppearanceAfterThemeChange(true)
     return true

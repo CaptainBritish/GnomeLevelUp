@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.5
+
+##### Bug Fixes and Optimization
+
+* General optimization, minor fixes
+* Improved Retail banner suppression
+* Fixed the milestone background flash
+* Corrected the training level for the first ranks of Great Stamina and Natural Armor
+* Reduced extra work during popup animations and simplified spellbook caching.
+* Sped up trainer ability lookups for `/glu test <level>`
+* Shared tooltip price formatting between the popup and timeline
+* Removed unused code and textures.
+
 ## 1.6.4a
 
 * Forgot to add a toggle for Timeline Look Ahead, my bad.

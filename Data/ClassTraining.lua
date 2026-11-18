@@ -288,16 +288,29 @@ end
 
 function ns.GetTrainerAbilitiesForLevel(level)
     local _, classToken = UnitClass("player")
+    local byLevel = ns.GetTrainerCatalogLookups()
+    local isHunter = classToken == "HUNTER"
+    local showPetSkills = isHunter and ns.db.showHunterPetSkills ~= false and level >= 10
     local abilities = {}
-    for _, item in ipairs(ns.GetTrainerCatalogIndex()) do
-        local hunterPet = classToken == "HUNTER" and ns.IsHunterPetTrainingEntry(item.entry)
-        local displayLevel = hunterPet and math.max(10, item.level) or item.level
-        if displayLevel == level and (not hunterPet or ns.db.showHunterPetSkills ~= false)
-            and (not item.entry.requiredTalentId or ns.IsSpellKnownAcrossClients(item.entry.requiredTalentId)) then
-            local ability = BuildTrainerAbility(item, displayLevel)
-            if not ns.db.showOnlyNewSkills or ability.isNewAbility then abilities[#abilities + 1] = ability end
+    local function AddLevel(catalogueLevel, petOnly)
+        local entries = byLevel[catalogueLevel]
+        if not entries then return end
+        for _, item in ipairs(entries) do
+            local hunterPet = isHunter and ns.IsHunterPetTrainingEntry(item.entry)
+            local include = hunterPet and showPetSkills or not hunterPet and not petOnly
+            local talent = item.entry.requiredTalentId
+            if include and (not talent or ns.IsSpellKnownAcrossClients(talent)) then
+                local ability = BuildTrainerAbility(item, level)
+                if not ns.db.showOnlyNewSkills or ability.isNewAbility then abilities[#abilities + 1] = ability end
+            end
         end
     end
+
+    -- The earliest pet training appears at level 10, even if indexed at a lower level.
+    if level == 10 and showPetSkills then
+        for catalogueLevel = 1, 9 do AddLevel(catalogueLevel, true) end
+    end
+    AddLevel(level, false)
     return abilities
 end
 
