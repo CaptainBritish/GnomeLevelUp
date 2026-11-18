@@ -28,7 +28,7 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample,
     for level = first, last do byLevel[level] = {} end
     local nextUnlockLevel, nextUnlockSkills
     local function Add(level, id, texture, name, cost)
-        if not level or level <= 1 or not (id or texture) then return end
+        if not level or level <= 1 or not (id or texture) or ns.IsLevelUpTrainingSpellHidden(id) then return end
         local list = byLevel[level]
         if not list and lookAhead and last > reached and level > last and (not cap or level <= cap) then
             if not nextUnlockLevel or level < nextUnlockLevel then
@@ -379,15 +379,16 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             local levels, nextUnlock, nextSkills = BuildTimelineSkills(
                 startLevel, reachedLevel, lastLevel, cap, source.abilities or {}, source.sample, lookAhead)
             for level = startLevel, lastLevel do
-                local skills = recorded and recorded[level]
+                local skills = recorded and recorded[level] and ns.FilterLevelUpTrainingAbilities(recorded[level])
                 if level > 1 and skills and (level <= reachedLevel or #skills > 0) then levels[level] = skills end
             end
-            if saved and saved.nextUnlockLevel and saved.nextUnlockSkills then
+            local savedNextSkills = saved and saved.nextUnlockSkills and ns.FilterLevelUpTrainingAbilities(saved.nextUnlockSkills)
+            if saved and saved.nextUnlockLevel and savedNextSkills and #savedNextSkills > 0 then
                 local level = saved.nextUnlockLevel
                 if level <= lastLevel and level > reachedLevel and #levels[level] == 0 then
-                    levels[level] = saved.nextUnlockSkills
+                    levels[level] = savedNextSkills
                 elseif lookAhead and level > lastLevel and (not nextUnlock or level <= nextUnlock) and (not cap or level <= cap) then
-                    nextUnlock, nextSkills = level, saved.nextUnlockSkills
+                    nextUnlock, nextSkills = level, savedNextSkills
                 end
             end
             source.levels, source.nextUnlockLevel, source.nextUnlockSkills = levels, nextUnlock, nextSkills

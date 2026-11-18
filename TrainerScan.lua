@@ -6,6 +6,26 @@ local TRAINER_SCHEMA_VERSION = 5
 local TRAINER_CACHE_PRUNE_VERSION = 1
 local TRAINER_SCAN_DELAY = 0.3
 local TRAINER_RECONCILE_DELAY = 0.25
+local craftWindowOpen = false
+
+local function IsBeastTrainingOpen()
+    if not craftWindowOpen or type(GetCraftDisplaySkillLine) ~= "function" then return false end
+    local ok, line = pcall(GetCraftDisplaySkillLine)
+    if not ok or type(line) ~= "string" or line == "" then return false end
+    if line == "Beast Training" or line == BEAST_TRAINING then return true end
+
+    -- Match the client's localized Beast Training name, as OneForAll does.
+    local name
+    if C_Spell and type(C_Spell.GetSpellName) == "function" then
+        local success, value = pcall(C_Spell.GetSpellName, 5149)
+        if success then name = value end
+    end
+    if not name and type(GetSpellInfo) == "function" then
+        local success, value = pcall(GetSpellInfo, 5149)
+        if success then name = value end
+    end
+    return line == name
+end
 
 function ns.GetTrainerCacheStatus()
     local flavor = ns.GetCurrentFlavor and ns.GetCurrentFlavor() or "unknown"
@@ -436,16 +456,27 @@ local function CheckTrainerCatalogue(npcName, capturePrices)
     local _, classToken = UnitClass("player")
     if not classToken then return end
     local prices = capturePrices and {} or nil
+    local source = {
+        npcPresent = npcName ~= nil,
+        npcGUID = UnitGUID("npc"),
+        petGUID = UnitGUID("pet"),
+        playerLevel = UnitLevel("player"),
+        petLevel = UnitLevel("pet"),
+    }
+    if type(GetTrainerType) == "function" then
+        local ok, trainerType = pcall(GetTrainerType)
+        if ok and type(trainerType) == "string" then source.trainerType = trainerType end
+    end
     local newChanges = 0
     for i = 1, GetNumTrainerServices() do
         local name, subtext, status, infoLevel, _, spellID, category, cost, professionCost = ReadService(i)
         if name and spellID and (status == "available" or status == "unavailable" or status == "used")
             and category ~= "profession" and not IsProfessionService(i, professionCost)
-            and not (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(name)) then
+            and not (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(name, spellID)) then
             local level = GetRequiredLevel(i, infoLevel, status)
             local label = subtext and subtext ~= "" and (name .. " (" .. subtext .. ")") or name
             if ns.RecordTrainerObservation({classToken=classToken,spellID=spellID,level=level,
-                name=label,status=status,cost=cost,npcName=npcName}) then
+                name=label,status=status,cost=cost,npcName=npcName,source=source}) then
                 newChanges = newChanges + 1
             end
             if prices and level and level > 0 and cost and cost >= 0 and cost < math.huge and cost == math.floor(cost) then
@@ -454,7 +485,7 @@ local function CheckTrainerCatalogue(npcName, capturePrices)
             end
         end
     end
-    if prices then ns.RecordTrainerPriceScan(classToken, npcName, prices) end
+    if prices then ns.RecordTrainerPriceScan(classToken, npcName, prices, source) end
     if newChanges > 0 then
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("A change in the trainer data has been detected, please type /glu trainerreport and submit the file to me!"))
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Report options: type %s to open the export window and copy report-only JSON.", "|cffffff00/glu trainerreport|r"))
@@ -466,7 +497,10 @@ local function ScanTrainer()
     if not GetNumTrainerServices or not GetTrainerServiceInfo then return end
     local flavor = ns.GetCurrentFlavor()
     if flavor ~= "forever" then return end
+    if IsBeastTrainingOpen() then return end
     local npcName = UnitName("npc")
+    -- Only NPC trainer visits belong in the catalogue and price reports.
+    if not npcName or (UnitIsUnit and UnitIsUnit("npc", "player")) then return end
     local trainerIsProfession = IsProfessionTrainer()
     local capturePrices = ns.IsCompleteTrainerReportingEnabled and ns.IsCompleteTrainerReportingEnabled()
     if not trainerIsProfession and ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData()
@@ -500,7 +534,7 @@ local function ScanTrainer()
                     or IsProfessionService(i, professionCost)
                     or category == "profession"
                 local isWeaponSkill = ns.IsHardcodedWeaponSkill
-                    and (ns.IsHardcodedWeaponSkill(name) or ns.IsHardcodedWeaponSkill(label))
+                    and (ns.IsHardcodedWeaponSkill(name, spellID) or ns.IsHardcodedWeaponSkill(label, spellID))
                 if not isWeaponSkill
                     and (not professionService or (ns.db and ns.db.scanProfessionTrainers)) then
                     local savedEntry, isNew, wasChanged = RecordAbility(
@@ -621,6 +655,9 @@ end
 frame:RegisterEvent("TRAINER_SHOW")
 frame:RegisterEvent("TRAINER_UPDATE")
 frame:RegisterEvent("TRAINER_CLOSED")
+for _, event in ipairs({ "CRAFT_SHOW", "CRAFT_UPDATE", "CRAFT_CLOSE" }) do
+    pcall(frame.RegisterEvent, frame, event)
+end
 frame:RegisterEvent("SPELLS_CHANGED")
 if ns.GetClientFlavor and ns.GetClientFlavor() == "retail" then frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED") end
 frame:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
@@ -628,6 +665,16 @@ frame:RegisterEvent("SKILL_LINES_CHANGED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 frame:SetScript("OnEvent", function(self, event, ...)
+    -- Track window closure even if the player switches GLU's mode while it is open.
+    if event == "CRAFT_SHOW" then
+        craftWindowOpen = true
+        return
+    elseif event == "CRAFT_CLOSE" then
+        craftWindowOpen = false
+        return
+    elseif event == "CRAFT_UPDATE" then
+        return
+    end
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
         if (...) == "player" then
             ns.InvalidateSpellBookSnapshot()

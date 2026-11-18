@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.6
+
+##### Bug Fixes and Optimization
+
+* Updated Hunter pet-trainer data.
+* Great Stamina and Natural Armor rank 1 are now recorded at level 1 and hidden from level-up popups.
+* Improved GLU's handling of Beast Training reports to hopefully stop false-positives.
+* Fixed weapon skills appearing in trainer reports on non-English clients.
+* Added more trainer details to reports to help investigate future issues.
+
 ## 1.6.5
 
 ##### Bug Fixes and Optimization

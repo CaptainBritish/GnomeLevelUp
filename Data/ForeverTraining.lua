@@ -2,7 +2,9 @@ local ADDON_NAME, ns = ...
 
 -- GnomeLevelUp custom Forever class-trainer catalogue.
 -- Names and icons resolve from the game client.
-ns.ForeverTrainingRevision = "1.6.4a-custom-2026-11-17-hunter"
+-- Pet-trainer ranks and levels synchronized with OneForAll's bundled Data/HunterPets.lua.
+-- Beast Training point costs are separate from the NPC gold fees stored here.
+ns.ForeverTrainingRevision = "1.6.6-custom-2026-11-18-hunter-pet-trainers"
 ns.ClassTrainingForever = {
     DRUID = {
         [1] = {
@@ -253,28 +255,24 @@ ns.ClassTrainingForever = {
     HUNTER = {
         [1] = {
             { spellID = 2649, cost = 0, familyID = 2649, rank = 1, hunterPet = true },
+            { spellID = 4187, cost = 10, familyID = 4187, rank = 1, hunterPet = true, hideInLevelUp = true },
+            { spellID = 24545, cost = 10, familyID = 24545, rank = 1, hunterPet = true, hideInLevelUp = true },
             { spellID = 1494, cost = 10, familyID = 1494, rank = 1 },
         },
         [4] = {
             { spellID = 13163, cost = 100, familyID = 13163, rank = 1 },
             { spellID = 1978, cost = 100, familyID = 1978, rank = 1 },
         },
-        [5] = {
-            { spellID = 1742, cost = 8, familyID = 1742, rank = 1, hunterPet = true },
-        },
         [6] = {
             { spellID = 3044, cost = 100, familyID = 3044, rank = 1 },
             { spellID = 1130, cost = 100, familyID = 1130, rank = 1 },
         },
         [8] = {
-            { spellID = 17255, cost = 4, familyID = 17255, rank = 2, hunterPet = true },
             { spellID = 5116, cost = 200, familyID = 5116, rank = 1 },
             { spellID = 3127, cost = 200, familyID = 3127, rank = 1 },
             { spellID = 14260, cost = 200, familyID = 14260, rank = 1 },
         },
         [10] = {
-            { spellID = 4187, cost = 10, familyID = 4187, rank = 1, hunterPet = true },
-            { spellID = 24545, cost = 10, familyID = 24545, rank = 1, hunterPet = true },
             { spellID = 14916, cost = 0, familyID = 2649, rank = 2, requiredIds = { 2649 }, hunterPet = true },
             { spellID = 13165, cost = 400, familyID = 13165, rank = 1 },
             { spellID = 13549, cost = 400, familyID = 1978, rank = 2, requiredIds = { 1978 } },
@@ -404,6 +402,7 @@ ns.ClassTrainingForever = {
             { spellID = 14919, cost = 3600, familyID = 2649, rank = 5, requiredIds = { 14918 }, hunterPet = true },
             { spellID = 24503, cost = 3600, familyID = 24492, rank = 3, requiredIds = { 24502 }, hunterPet = true },
             { spellID = 24506, cost = 3600, familyID = 24488, rank = 3, requiredIds = { 24505 }, hunterPet = true },
+            { spellID = 24507, cost = 7200, familyID = 24488, rank = 4, requiredIds = { 24506 }, hunterPet = true },
         },
         [42] = {
             { spellID = 20909, cost = 22000, familyID = 19306, rank = 3, requiredIds = { 1242634 }, requiredTalentId = 19306 },
@@ -445,7 +444,6 @@ ns.ClassTrainingForever = {
             { spellID = 24449, cost = 7200, familyID = 24446, rank = 4, requiredIds = { 24448 }, hunterPet = true },
             { spellID = 14920, cost = 7200, familyID = 2649, rank = 6, requiredIds = { 14919 }, hunterPet = true },
             { spellID = 24504, cost = 7200, familyID = 24492, rank = 4, requiredIds = { 24503 }, hunterPet = true },
-            { spellID = 24507, cost = 7200, familyID = 24488, rank = 4, requiredIds = { 24506 }, hunterPet = true },
         },
         [52] = {
             { spellID = 20903, cost = 36000, familyID = 19434, rank = 5, requiredIds = { 20902 } },

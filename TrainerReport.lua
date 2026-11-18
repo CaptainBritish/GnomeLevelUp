@@ -41,6 +41,7 @@ local function PositiveInteger(value)
 end
 
 local function CatalogueIndex(classToken)
+    if type(classToken) ~= "string" then return {} end
     if indexByClass[classToken] then return indexByClass[classToken] end
     local index = {}
     for level, entries in pairs(ns.ClassTrainingForever[classToken] or {}) do
@@ -55,6 +56,12 @@ local function CatalogueIndex(classToken)
     return index
 end
 
+local function IsBeastTrainingReport(entry)
+    if type(entry.source) == "table" and entry.source.npcPresent == false then return true end
+    -- Older Beast Training observations have no source details or NPC name.
+    return entry.classToken == "HUNTER" and not entry.npcName and entry.status == "used"
+end
+
 local function Store()
     if type(GnomeLevelUpDB) ~= "table" then return end
     local store = GnomeLevelUpDB.trainerChangeReports
@@ -62,12 +69,23 @@ local function Store()
         store = { schemaVersion = 1, changes = {} }
         GnomeLevelUpDB.trainerChangeReports = store
     end
-    -- Remove old riding false positives once per loaded report table.
+    -- Remove excluded skills and resolved level differences once per loaded report table.
     local changes = store.changes
     if changes ~= lastFilteredChanges then
         for key, entry in pairs(changes) do
-            if type(entry) == "table" and ns.IsTrainerRidingSpell(entry.spellID) then
-                changes[key] = nil
+            if type(entry) == "table" then
+                local knownLevels = CatalogueIndex(entry.classToken)[entry.spellID]
+                if IsBeastTrainingReport(entry) or ns.IsTrainerRidingSpell(entry.spellID)
+                    or (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(entry.name, entry.spellID))
+                    or (knownLevels and knownLevels[entry.observedLevel]) then
+                    changes[key] = nil
+                end
+            end
+        end
+        for key, scan in pairs(store.priceScans or {}) do
+            if type(scan) == "table" and (IsBeastTrainingReport(scan)
+                or (scan.classToken == "HUNTER" and not scan.npcName)) then
+                store.priceScans[key] = nil
             end
         end
         lastFilteredChanges = changes
@@ -84,8 +102,9 @@ function ns.IsCompleteTrainerReportingEnabled()
         and ns.IsDebugEnabled and ns.IsDebugEnabled() and ns.GetCurrentFlavor() == "forever"
 end
 
-function ns.RecordTrainerPriceScan(classToken, npcName, rows)
+function ns.RecordTrainerPriceScan(classToken, npcName, rows, source)
     if not ns.IsCompleteTrainerReportingEnabled() or not next(rows) then return end
+    if type(source) == "table" and source.npcPresent == false then return end
     local store = Store()
     if not store then return end
     local _, build = GetBuildInfo()
@@ -102,15 +121,19 @@ function ns.RecordTrainerPriceScan(classToken, npcName, rows)
         store.priceScans[key] = scan
     end
     scan.lastSeen = type(time) == "function" and time() or nil
+    scan.source = source
     for spellKey, row in pairs(rows) do scan.spells[spellKey] = row end
 end
 
 function ns.RecordTrainerObservation(observation)
     if type(observation) ~= "table" or not ns.db or ns.db.monitorTrainerChanges == false
         or ns.db.enabled == false or not ns.GetCurrentFlavor or ns.GetCurrentFlavor() ~= "forever" then return false end
+    if IsBeastTrainingReport(observation) then return false end
     local classToken, spellID, level = observation.classToken, observation.spellID, observation.level
     if not ns.ClassTrainingForever or not ns.ClassTrainingForever[classToken]
-        or not PositiveInteger(spellID) or ns.IsTrainerRidingSpell(spellID) or not PositiveInteger(level) or level > 100 then return false end
+        or not PositiveInteger(spellID) or ns.IsTrainerRidingSpell(spellID)
+        or (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(observation.name, spellID))
+        or not PositiveInteger(level) or level > 100 then return false end
     local knownLevels = CatalogueIndex(classToken)[spellID]
     if knownLevels and knownLevels[level] then return false end
     local store = Store()
@@ -139,6 +162,7 @@ function ns.RecordTrainerObservation(observation)
     entry.name = Text(observation.name, 200)
     entry.npcName = Text(observation.npcName, 100)
     entry.status = Text(observation.status, 20)
+    entry.source = observation.source
     entry.clientLocale = type(GetLocale) == "function" and GetLocale() or nil
     entry.faction = type(UnitFactionGroup) == "function" and UnitFactionGroup("player") or nil
     if type(UnitRace) == "function" then local _, race = UnitRace("player"); entry.race = race end

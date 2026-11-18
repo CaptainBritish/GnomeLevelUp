@@ -5825,6 +5825,7 @@ frame:SetScript("OnEnter", nil)
 local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, milestone, previousFastest, secondaryStats, cataloguePreview)
     local db = ns.db or {}
     if db.enabled == false then return end
+    trainerAbilities = ns.FilterLevelUpTrainingAbilities(trainerAbilities)
 
     local speed = Speed()
 

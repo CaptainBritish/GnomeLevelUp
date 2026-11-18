@@ -90,14 +90,17 @@ local RANGED_WEAPON_SPELLS = {
 }
 
 local HARD_CODED_WEAPON_NAMES = {}
+local HARD_CODED_WEAPON_IDS = {}
 for _, definitions in pairs(ns.WeaponSkillsForever) do
     for _, definition in ipairs(definitions) do
         HARD_CODED_WEAPON_NAMES[NormalizeSkillName(definition.name)] = true
+        HARD_CODED_WEAPON_IDS[definition.spellID] = true
     end
 end
 
-function ns.IsHardcodedWeaponSkill(name)
-    return HARD_CODED_WEAPON_NAMES[NormalizeSkillName(name)] == true
+function ns.IsHardcodedWeaponSkill(name, spellID)
+    return HARD_CODED_WEAPON_IDS[spellID] == true
+        or HARD_CODED_WEAPON_NAMES[NormalizeSkillName(name)] == true
 end
 
 local knownWeaponSkills

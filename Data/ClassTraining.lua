@@ -154,11 +154,28 @@ local function GetClassSources()
     return static, scanned
 end
 
+function ns.IsLevelUpTrainingSpellHidden(spellID)
+    if not spellID or ns.GetCurrentFlavor() ~= "forever" then return false end
+    for _, entry in ipairs(ns.ClassTrainingForever.HUNTER[1]) do
+        if entry.spellID == spellID then return entry.hideInLevelUp == true end
+    end
+    return false
+end
+
+function ns.FilterLevelUpTrainingAbilities(abilities)
+    if ns.GetCurrentFlavor() ~= "forever" then return abilities or {} end
+    local visible = {}
+    for _, ability in ipairs(abilities or {}) do
+        if not ns.IsLevelUpTrainingSpellHidden(ability.id) then visible[#visible + 1] = ability end
+    end
+    return visible
+end
+
 function ns.GetBundledTimelineTraining(level)
     local static = GetClassSources()
     local eligible = {}
     for _, entry in ipairs(static and static[level] or {}) do
-        if type(entry) == "table" and entry.spellID and ns.IsTrainingEntryEligible(entry)
+        if type(entry) == "table" and entry.spellID and not entry.hideInLevelUp and ns.IsTrainingEntryEligible(entry)
             and (not entry.profession or (ns.db and ns.db.scanProfessionTrainers))
             and (not entry.requiredTalentId or ns.IsSpellKnownAcrossClients(entry.requiredTalentId)) then
             -- An upcoming icon only needs the spell ID, even while its name loads.
@@ -299,7 +316,7 @@ function ns.GetTrainerAbilitiesForLevel(level)
             local hunterPet = isHunter and ns.IsHunterPetTrainingEntry(item.entry)
             local include = hunterPet and showPetSkills or not hunterPet and not petOnly
             local talent = item.entry.requiredTalentId
-            if include and (not talent or ns.IsSpellKnownAcrossClients(talent)) then
+            if include and not item.entry.hideInLevelUp and (not talent or ns.IsSpellKnownAcrossClients(talent)) then
                 local ability = BuildTrainerAbility(item, level)
                 if not ns.db.showOnlyNewSkills or ability.isNewAbility then abilities[#abilities + 1] = ability end
             end
@@ -361,7 +378,7 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
             or (not onlyCurrentLevel and not hunterPetSkill)
         local hiddenHunterPetSkill = hunterPetSkill
             and ns.db and ns.db.showHunterPetSkills == false
-        if talentMatches and levelMatches and displayLevel <= currentLevel
+        if not entry.hideInLevelUp and talentMatches and levelMatches and displayLevel <= currentLevel
             and not hiddenHunterPetSkill and not learned and not ns.IsTrainerSkillKnown(catalogEntry.entry, known) then
             local ability = BuildTrainerAbility(catalogEntry, displayLevel)
             local baseName, rank = ability.trainingFamily, ability.trainingRank
