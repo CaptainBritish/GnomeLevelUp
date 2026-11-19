@@ -141,7 +141,12 @@ end
 function ns.CaptureErrorTrace(err)
     local stack = Read(debugstack, 2, 24, 8)
     if not stack and debug then stack = Read(debug.traceback, "", 2) end
-    return { message = SafeValue(1000, err) or "<unavailable error>", stack = SafeValue(4500, stack) }
+    local failure = { message = SafeValue(1000, err) or "<unavailable error>", stack = SafeValue(4500, stack) }
+    -- Let WoW and installed error collectors see caught Lua errors before the
+    -- stack unwinds, while still allowing GLU's cleanup/recovery to finish.
+    local handler = type(geterrorhandler) == "function" and geterrorhandler()
+    if type(handler) == "function" then pcall(handler, err) end
+    return failure
 end
 
 local function SaveError(code, reason, details, failure)
@@ -169,7 +174,7 @@ function ns.RecordError(code, reason, details, failure)
     if ns.db and ns.db.enabled == false then return end
     -- Reporting is best effort so a broken optional diagnostic cannot block recovery.
     local ok = pcall(SaveError, code, reason, details or {}, failure)
-    if not ok then return end
+    if not ok or failure then return end
     local now = Read(GetTime) or 0
     if lastPrompt[code] and now - lastPrompt[code] < PROMPT_INTERVAL then return end
     lastPrompt[code] = now

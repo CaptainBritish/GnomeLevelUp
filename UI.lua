@@ -6061,7 +6061,6 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
 
     local soundOK, soundError = xpcall(function() ns.PlayLevelUpSound(false, previewState.active) end, ns.CaptureErrorTrace)
     if not soundOK then
-        print("|cffff4040GnomeLevelUp|r: " .. ns.L("Could not play the selected sound. Choose another sound in Options > Sound. Details: %s", tostring(soundError.message)))
         ns.RecordError("sound", "level_up_playback_failed", {
             source = previewState.active and "preview" or "level_up", level = currentLevel,
         }, soundError)
@@ -6119,8 +6118,6 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
             timeToCap = content.isMaxLevel and ns.GetTimeToMaxLevel() or nil})
     end
     if not ok then
-        print("|cffff4040GnomeLevelUp " .. ns.L("error:") .. "|r " .. tostring(err.message))
-        print("|cffff4040GnomeLevelUp:|r " .. ns.L("The level-up popup could not be shown. Try /reload. If it happens again, report the error above."))
         ns.RecordError("popup", "render_failed", {
             source = isPreview and "preview" or "level_up", level = currentLevel, fromLevel = rangeStart,
             milestone = milestone, maximum = content.isMaxLevel,

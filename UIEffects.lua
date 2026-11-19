@@ -16,6 +16,8 @@ local WEATHER_TILES = {
     [3] = { name = "dust", x = -.19, y = -.03 },
 }
 
+local LIGHTNING_RAIN_INTENSITY = 0.9641922712326
+
 function ns.InstallPopupWeather(render, content, background, particles, insetForTheme)
     local distant = particles.distant
     local kind, intensity, nextRead, haze, hazeMask
@@ -219,8 +221,8 @@ function ns.InstallPopupWeather(render, content, background, particles, insetFor
     end
 
     local function UpdateLightning(age, inset)
-        -- Full-intensity rain is the provisional storm signal in Forever.
-        if kind ~= 1 or intensity < 1 then
+        -- Observed storm rain intensity is the provisional lightning signal.
+        if kind ~= 1 or intensity < LIGHTNING_RAIN_INTENSITY then
             if lightning then render.Shown(lightning, false) end
             nextFlash, flashStarted = nil, nil
             return
