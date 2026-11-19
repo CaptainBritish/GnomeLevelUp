@@ -40,6 +40,7 @@ function ns.InstallPopupRenderHelpers(render)
     -- Refresh only when layout or scroll offsets change. Particle ticks read the
     -- cached flag, avoiding repeated screen-coordinate queries for every icon.
     function render.RefreshAbilityVisibility(viewport, offset)
+        local scrolled = offset ~= nil and offset ~= (viewport.effectScroll or 0)
         if offset ~= nil then viewport.effectScroll = offset end
         local row = viewport.row
         if not row then return end
@@ -54,6 +55,9 @@ function ns.InstallPopupRenderHelpers(render)
                 -- Retain partially visible icons and their entrance displacement.
                 visible = x + halfWidth > 0 and x - halfWidth < viewport:GetWidth()
                     and y + halfHeight + 24 > 0 and y - halfHeight - 24 < viewport:GetHeight()
+            end
+            if visible and scrolled and icon.effectVisible == false and render.RevealScrolledAbility then
+                render.RevealScrolledAbility(icon)
             end
             icon.effectVisible = visible
             if not visible then

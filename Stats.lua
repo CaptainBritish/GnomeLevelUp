@@ -239,6 +239,16 @@ function ns.SnapshotSecondaryStats(reuse)
     return stats
 end
 
+function ns.FilterSecondaryStatGains(changes)
+    local gains = {}
+    for _, stat in ipairs(changes or {}) do
+        if type(stat.old) == "number" and type(stat.new) == "number" and stat.new > stat.old then
+            gains[#gains + 1] = stat
+        end
+    end
+    return gains
+end
+
 function ns.DiffSecondaryStats(before, after)
     local previous, changes = {}, {}
     for _, stat in ipairs(before or {}) do previous[stat.key] = stat end
@@ -248,12 +258,17 @@ function ns.DiffSecondaryStats(before, after)
         changes[#changes + 1] = { name = stat.name, key = stat.key, kind = "secondary", unit = stat.unit,
             old = old and old.value or stat.value, new = stat.value }
     end
-    return changes
+    return ns.FilterSecondaryStatGains(changes)
 end
 
 function ns.BuildSecondaryPreviewStats()
     local current = ns.SnapshotSecondaryStats()
-    return ns.DiffSecondaryStats(current, current)
+    local increased = {}
+    for _, stat in ipairs(current) do
+        increased[#increased + 1] = { key = stat.key, name = stat.name, unit = stat.unit,
+            value = stat.value + (stat.unit == "percent" and 25 or 5) }
+    end
+    return ns.DiffSecondaryStats(current, increased)
 end
 
 local function GetVisibleNumber(value)

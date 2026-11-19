@@ -6,6 +6,12 @@
 
 * Updated Hunter pet-trainer data.
 * Great Stamina and Natural Armor rank 1 are now recorded at level 1 and hidden from level-up popups.
+* Fixed the Hunter pet-skill filter preventing popups from opening on other classes.
+* Improved ability icon sizing and spacing to better fill the horizontal popup.
+* Secondary stats now only show increases and scroll within the space used by primary stats.
+* Fixed missing icons when scrolling and improved scrollbar fading.
+* Extended the vertical background below the bottom separator.
+* Tests now show a random selection of secondary stats.
 * Improved GLU's handling of Beast Training reports to hopefully stop false-positives.
 * Fixed weapon skills appearing in trainer reports on non-English clients.
 * Added more trainer details to reports to help investigate future issues.

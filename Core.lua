@@ -2292,6 +2292,11 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
         previous = paceScenario == "slower" and 90 or paceScenario == "best" and 140 or nil
     end
     local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
+    if secondaryStats and #secondaryStats > 1 and (debugSkills or milestoneLevel or maxLevelPreview
+        or abilityCount or paceScenario or portraitTest or weatherTest or previewLevel) then
+        local count = math.random(1, #secondaryStats)
+        while #secondaryStats > count do table.remove(secondaryStats, math.random(1, #secondaryStats)) end
+    end
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
         true, milestoneLevel ~= nil or maxLevelPreview == true or previewLevel ~= nil,
         previous, maxLevelPreview, paceScenario ~= nil,

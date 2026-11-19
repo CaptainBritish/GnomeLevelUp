@@ -156,7 +156,8 @@ end
 
 function ns.IsLevelUpTrainingSpellHidden(spellID)
     if not spellID or ns.GetCurrentFlavor() ~= "forever" then return false end
-    for _, entry in ipairs(ns.ClassTrainingForever.HUNTER[1]) do
+    local training = GetClassSources()
+    for _, entry in ipairs(training and training[1] or {}) do
         if entry.spellID == spellID then return entry.hideInLevelUp == true end
     end
     return false
