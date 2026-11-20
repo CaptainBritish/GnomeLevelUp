@@ -6103,20 +6103,25 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
         milestone = content.screenshotPreview.kind ~= "normal"
     end
     --@end-do-not-package@
+    -- Save the event before optional presentation work can fail or invoke
+    -- Replay. A partially displayed popup must not leave the previous level.
+    local replaySnapshot
+    if not isPreview then
+        replaySnapshot = ns.SaveLevelUpReplay({level = currentLevel, stats = statChanges, abilities = trainerAbilities,
+            weapons = unlearnedWeaponSkills, seconds = timePlayedThisLevel, pets = warlockPetAbilities,
+            previousFastest = previousFastest, rangeStart = rangeStart, secondary = secondaryStats,
+            milestone = milestone == true, maximum = content.isMaxLevel == true})
+    end
     local perf = ns.PerfStart("popup_prepare")
     local ok, err = xpcall(function()
         ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel,
             warlockPetAbilities, milestone, previousFastest, secondaryStats, cataloguePreview)
+        if replaySnapshot then
+            replaySnapshot.timeline = ns.CopyValue(render.GetLevelTimelineReplay())
+            replaySnapshot.timeToCap = content.isMaxLevel and ns.GetTimeToMaxLevel() or nil
+        end
     end, ns.CaptureErrorTrace)
     ns.PerfEnd(perf)
-    if ok and not isPreview then
-        ns.SaveLevelUpReplay({level = currentLevel, stats = statChanges, abilities = trainerAbilities,
-            weapons = unlearnedWeaponSkills, seconds = timePlayedThisLevel, pets = warlockPetAbilities,
-            previousFastest = previousFastest, rangeStart = rangeStart, secondary = secondaryStats,
-            milestone = milestone == true, maximum = content.isMaxLevel == true,
-            timeline = render.GetLevelTimelineReplay(),
-            timeToCap = content.isMaxLevel and ns.GetTimeToMaxLevel() or nil})
-    end
     if not ok then
         ns.RecordError("popup", "render_failed", {
             source = isPreview and "preview" or "level_up", level = currentLevel, fromLevel = rangeStart,

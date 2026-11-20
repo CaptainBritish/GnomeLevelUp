@@ -6,7 +6,9 @@ function ns.SaveLevelUpReplay(record)
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     local saved = GnomeLevelUpCharacterDB.lastLevelUp
     if type(saved) ~= "table" then saved = {}; GnomeLevelUpCharacterDB.lastLevelUp = saved end
-    saved[ns.GetCurrentFlavor()] = ns.CopyValue(record)
+    local snapshot = ns.CopyValue(record)
+    saved[ns.GetCurrentFlavor()] = snapshot
+    return snapshot
 end
 
 function ns.ReplayLastLevelUp()

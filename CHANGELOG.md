@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.6a
+
+##### Bug Fixes and Optimization
+
+* Fixed Replay keeping the previous level-up if the latest popup failed during setup.
+
 ## 1.6.6
 
 ##### Bug Fixes and Optimization
@@ -12,7 +18,6 @@
 * Added more trainer details to reports to help investigate future issues.
 * Removed GLU's built-in error handler and returned it to WoW's built-in one.
 * Removed duplicate error messages from chat.
-* Lightning now appears during heavy rain without requiring maximum weather intensity.
 
 ## 1.6.5
 
