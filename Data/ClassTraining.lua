@@ -57,8 +57,17 @@ end
 
 function ns.LatestTrainingRanks(abilities)
     local latest, shown = {}, {}
+    local bySpellID
+    if ns.GetCurrentFlavor() == "forever" then
+        local _, catalog = ns.GetTrainerCatalogLookups()
+        bySpellID = catalog
+    end
     for _, ability in ipairs(abilities) do
         local family, rank = ability.trainingFamily, ability.trainingRank
+        local current = not ability.preview and bySpellID and bySpellID[ability.id]
+        if current and current.entry and current.entry.familyID then
+            family, rank = "spell:" .. current.entry.familyID, current.entry.rank
+        end
         if not family and not ability.preview then family, rank = ns.GetTrainingRankInfo(ability.name) end
         local previous = family and latest[family]
         if not family or not rank then

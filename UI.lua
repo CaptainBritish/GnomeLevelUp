@@ -1612,7 +1612,7 @@ function render.UpdateStatScroll(count, reset)
     local thumb = content.statSlider:GetThumbTexture()
     if thumb then
         thumb:SetVertexColor(1, 1, 1, .8)
-        thumb:SetSize(8, math.max(12, height * height / content.statRows:GetHeight()))
+        thumb:SetSize(8, render.ScrollThumbLength(height, content.statRows:GetHeight(), 12))
     end
     render.RefreshStatScrollMouse()
 end
@@ -2702,8 +2702,8 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     end
     local thumb = slider:GetThumbTexture()
     if thumb then
-        if vertical then thumb:SetSize(8, math.max(20, viewportHeight * viewportHeight / totalHeight))
-        else thumb:SetSize(24, 8) end
+        if vertical then thumb:SetSize(8, render.ScrollThumbLength(viewportHeight, totalHeight))
+        else thumb:SetSize(math.min(24, viewportWidth * .45), 8) end
     end
     local maximum = shouldScroll and math.max(0, vertical and totalHeight - viewportHeight or totalWidth - viewportWidth) or 0
     row.viewport.scrollMaximum = maximum
@@ -5575,7 +5575,7 @@ local function LayoutFrame(statCount)
         local thumb = main.slider:GetThumbTexture()
         if thumb then
             local height = main.slider:GetHeight()
-            thumb:SetSize(8, math.max(20, height * height / (height + main.sharedMaximum)))
+            thumb:SetSize(8, render.ScrollThumbLength(height, height + main.sharedMaximum))
         end
         ns.RefreshPortraitGeometry(true)
         content.portraitPulse:SetSize(PortraitRingSize() * 1.1, PortraitRingSize() * 1.1)

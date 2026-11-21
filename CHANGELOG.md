@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.7
+
+##### Bug Fixes and Optimization
+
+* Limited scrollbar handle size to prevent inconsistent dragging when only a few abilities overflow.
+* Fixed some skills ignoring the "ignore rank upgrades" rule, some may still persist.
+
 ## 1.6.6a
 
 ##### Bug Fixes and Optimization

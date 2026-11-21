@@ -13,6 +13,14 @@ function ns.InstallPopupRenderHelpers(render)
         if region:GetWidth() ~= width or region:GetHeight() ~= height then region:SetSize(width, height) end
     end
 
+    function render.ScrollThumbLength(trackLength, contentLength, minimum)
+        -- Small overflow must not produce an almost full-length native thumb.
+        -- Keep clearance at both ends so its drag span cannot collapse.
+        trackLength = math.max(1, trackLength)
+        local proportional = trackLength * trackLength / math.max(trackLength, contentLength)
+        return math.min(trackLength * .45, math.max(minimum or 20, proportional))
+    end
+
     -- ClearAllPoints is expensive in particle loops; change anchors only when
     -- the target changes, and update offsets on subsequent frames.
     function render.ParticlePoint(texture, relative, relativePoint, x, y)
