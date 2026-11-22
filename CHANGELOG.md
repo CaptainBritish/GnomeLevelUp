@@ -6,6 +6,9 @@
 
 * Limited scrollbar handle size to prevent inconsistent dragging when only a few abilities overflow.
 * Fixed some skills ignoring the "ignore rank upgrades" rule, some may still persist.
+* Pet trainer data now updates silently, without catalogue-change alerts. Hunter teaching ranks now stay learned when swapping pets, and each pet keeps its own skill list.
+* Fixed stale trainer scans after opening Beast Training or talking to another NPC.
+* Fixed ability scrolling and scrollbar jumps after changing the pet skill display.
 
 ## 1.6.6a
 

@@ -24,6 +24,7 @@ local portraitSettings = {
 }
 local lastPrompt = {}
 local window, reportText, title, instructions
+local displayedReports, pendingCopy
 
 local function Read(func, ...)
     if type(func) ~= "function" then return nil end
@@ -196,6 +197,25 @@ local function SelectReportText()
     reportText:HighlightText()
 end
 
+local function ClearCopiedReport()
+    local reports = ReportStore(false)
+    for index = #(reports or {}), 1, -1 do
+        local entry = reports[index]
+        local copiedCount = displayedReports and displayedReports[entry]
+        if copiedCount then
+            if (entry.count or 1) > copiedCount then
+                entry.count = entry.count - copiedCount
+            else
+                table.remove(reports, index)
+            end
+            lastPrompt[entry.code] = nil
+        end
+    end
+    displayedReports, pendingCopy = nil, nil
+    reportText:SetText("")
+    reportText:ClearFocus()
+end
+
 local function CreateReportWindow()
     window = CreateFrame("Frame", "GnomeLevelUpErrorReport", UIParent, "BackdropTemplate")
     window:SetSize(640, 420)
@@ -234,8 +254,21 @@ local function CreateReportWindow()
     reportText:SetHeight(260)
     reportText:SetScript("OnEscapePressed", function() window:Hide() end)
     reportText:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
+    -- Let the edit box's native copy finish before removing the text. Addons
+    -- cannot call the protected clipboard API from a button's OnClick handler.
+    reportText:SetScript("OnKeyDown", function(self, key)
+        local modifier = (IsControlKeyDown and IsControlKeyDown()) or (IsMetaKeyDown and IsMetaKeyDown())
+        pendingCopy = modifier and key == "C" and self:GetText() ~= "" and self:GetText() or nil
+        if pendingCopy then self:HighlightText() end
+    end)
+    reportText:SetScript("OnKeyUp", function(self, key)
+        if key ~= "C" then return end
+        if pendingCopy and self:GetText() == pendingCopy then ClearCopiedReport() end
+        pendingCopy = nil
+    end)
+    reportText:SetScript("OnEditFocusLost", function() pendingCopy = nil end)
     scroll:SetScrollChild(reportText)
-    window:SetScript("OnHide", function() reportText:ClearFocus() end)
+    window:SetScript("OnHide", function() pendingCopy = nil; reportText:ClearFocus() end)
 end
 
 function ns.OpenDebugReport()
@@ -246,7 +279,9 @@ function ns.OpenDebugReport()
     end
     if not window then CreateReportWindow() end
     title:SetText(ns.L("Debug report"))
-    instructions:SetText(ns.L("Press Ctrl+C to copy."))
+    instructions:SetText(ns.L("Press Ctrl+C to copy. The field clears afterward."))
+    displayedReports, pendingCopy = {}, nil
+    for _, entry in ipairs(ReportStore(false) or {}) do displayedReports[entry] = entry.count or 1 end
     window:Show()
     reportText:SetText(report)
     SelectReportText()

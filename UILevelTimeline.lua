@@ -57,8 +57,11 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample,
             if not entries then return end
             for _, item in ipairs(entries) do
                 local talent = item.entry.requiredTalentId
-                if not talent or ns.IsSpellKnownAcrossClients(talent) then
-                    Add(level, item.id, item.icon, item.name, item.cost)
+                if (not talent or ns.IsSpellKnownAcrossClients(talent))
+                    and not (item.entry.hunterPet and ns.IsHunterPetTeachingKnown and ns.IsHunterPetTeachingKnown(item.id)) then
+                    local cost = item.entry.hunterPet and ns.GetHunterPetTrainerCost
+                        and ns.GetHunterPetTrainerCost(item.id, item.cost) or item.cost
+                    Add(level, item.id, item.icon, item.name, cost)
                 end
             end
         end
@@ -70,7 +73,9 @@ local function BuildTimelineSkills(first, reached, last, cap, abilities, sample,
                 if (level <= last and #byLevel[level] < MAX_SKILLS)
                     or (level > last and (not nextUnlockSkills or #nextUnlockSkills < MAX_SKILLS)) then
                     for _, entry in ipairs(ns.GetBundledTimelineTraining(level)) do
-                        Add(level, entry.spellID, entry.icon, entry.name, entry.cost)
+                        local cost = entry.hunterPet and ns.GetHunterPetTrainerCost
+                            and ns.GetHunterPetTrainerCost(entry.spellID, entry.cost) or entry.cost
+                        Add(level, entry.spellID, entry.icon, entry.name, cost)
                     end
                 end
                 if level >= last and (#byLevel[last] > 0 or nextUnlockLevel == level) then break end

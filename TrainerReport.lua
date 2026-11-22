@@ -3,6 +3,10 @@ local ADDON_NAME, ns = ...
 -- Observations are evidence for the author, never runtime catalogue overrides.
 local MAX_REPORTS = 250
 local MAX_PRICE_SCANS = 128
+-- Cower is learned from beasts and taught with training points, not bought
+-- from an NPC. The client can retain an unrelated "npc" unit while it is open.
+local BEAST_ONLY_SPELLS = { [1742] = true, [1753] = true, [1754] = true,
+    [1755] = true, [1756] = true, [16697] = true }
 local indexByClass = {}
 local lastFilteredChanges
 
@@ -40,6 +44,14 @@ local function PositiveInteger(value)
         and value < math.huge and value == math.floor(value)
 end
 
+-- Keep the pet IDs even after login releases other classes' catalogues.
+local petTrainingSpells = {}
+for _, entries in pairs(ns.ClassTrainingForever and ns.ClassTrainingForever.HUNTER or {}) do
+    for _, entry in ipairs(entries) do
+        if entry.hunterPet and entry.spellID then petTrainingSpells[entry.spellID] = true end
+    end
+end
+
 local function CatalogueIndex(classToken)
     if type(classToken) ~= "string" then return {} end
     if indexByClass[classToken] then return indexByClass[classToken] end
@@ -47,6 +59,7 @@ local function CatalogueIndex(classToken)
     for level, entries in pairs(ns.ClassTrainingForever[classToken] or {}) do
         for _, entry in ipairs(entries) do
             if PositiveInteger(entry.spellID) then
+                if classToken == "HUNTER" and entry.hunterPet then petTrainingSpells[entry.spellID] = true end
                 index[entry.spellID] = index[entry.spellID] or {}
                 index[entry.spellID][tonumber(level)] = true
             end
@@ -56,10 +69,44 @@ local function CatalogueIndex(classToken)
     return index
 end
 
+function ns.IsTrainerPetSkill(classToken, spellID, name)
+    if classToken ~= "HUNTER" then return false end
+    CatalogueIndex(classToken)
+    return BEAST_ONLY_SPELLS[spellID] == true or petTrainingSpells[spellID] == true
+        or (ns.IsHunterPetTeachingSpell and ns.IsHunterPetTeachingSpell(spellID)) == true
+        or (ns.IsHunterPetTrainingEntry and ns.IsHunterPetTrainingEntry({name = name})) == true
+end
+
 local function IsBeastTrainingReport(entry)
+    if entry.classToken == "HUNTER" and BEAST_ONLY_SPELLS[entry.spellID] then return true end
     if type(entry.source) == "table" and entry.source.npcPresent == false then return true end
     -- Older Beast Training observations have no source details or NPC name.
     return entry.classToken == "HUNTER" and not entry.npcName and entry.status == "used"
+end
+
+-- Pet requirements and prices can depend on the active pet. Keep the latest
+-- offered values separately, without replacing the bundled pet unlock levels.
+function ns.SavePetTrainerObservation(observation)
+    if type(GnomeLevelUpDB) ~= "table" or not PositiveInteger(observation.spellID) then return end
+    local spells = GnomeLevelUpDB.petTrainerObservations
+    if type(spells) ~= "table" then spells = {}; GnomeLevelUpDB.petTrainerObservations = spells end
+    if not spells[observation.spellID] then
+        local count = 0
+        for _ in pairs(spells) do count = count + 1 end
+        if count >= MAX_REPORTS then return end
+    end
+    spells[observation.spellID] = {
+        spellID = observation.spellID, name = observation.name,
+        offeredLevel = observation.level or observation.observedLevel,
+        offeredCost = observation.cost or observation.observedCost,
+        status = observation.status, npcName = observation.npcName, source = observation.source,
+        lastSeen = type(time) == "function" and time() or nil,
+    }
+end
+
+local function IsPetObservation(entry)
+    return (type(entry.source) == "table" and entry.source.petTrainer == true)
+        or ns.IsTrainerPetSkill(entry.classToken, entry.spellID, entry.name)
 end
 
 local function Store()
@@ -74,8 +121,9 @@ local function Store()
     if changes ~= lastFilteredChanges then
         for key, entry in pairs(changes) do
             if type(entry) == "table" then
+                if IsPetObservation(entry) then ns.SavePetTrainerObservation(entry) end
                 local knownLevels = CatalogueIndex(entry.classToken)[entry.spellID]
-                if IsBeastTrainingReport(entry) or ns.IsTrainerRidingSpell(entry.spellID)
+                if IsPetObservation(entry) or IsBeastTrainingReport(entry) or ns.IsTrainerRidingSpell(entry.spellID)
                     or (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(entry.name, entry.spellID))
                     or (knownLevels and knownLevels[entry.observedLevel]) then
                     changes[key] = nil
@@ -126,8 +174,14 @@ function ns.RecordTrainerPriceScan(classToken, npcName, rows, source)
 end
 
 function ns.RecordTrainerObservation(observation)
-    if type(observation) ~= "table" or not ns.db or ns.db.monitorTrainerChanges == false
+    if type(observation) ~= "table" or not ns.db
         or ns.db.enabled == false or not ns.GetCurrentFlavor or ns.GetCurrentFlavor() ~= "forever" then return false end
+    if IsPetObservation(observation) then
+        if ns.RecordHunterPetTrainerObservation then ns.RecordHunterPetTrainerObservation(observation) end
+        ns.SavePetTrainerObservation(observation)
+        return false
+    end
+    if ns.db.monitorTrainerChanges == false then return false end
     if IsBeastTrainingReport(observation) then return false end
     local classToken, spellID, level = observation.classToken, observation.spellID, observation.level
     if not ns.ClassTrainingForever or not ns.ClassTrainingForever[classToken]

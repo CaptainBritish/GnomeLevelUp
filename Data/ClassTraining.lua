@@ -125,6 +125,9 @@ function ns.BuildKnownTrainingLookup(spellSnapshot)
 end
 
 function ns.IsTrainerSkillKnown(entry, known)
+    if type(entry) == "table" and entry.hunterPet and ns.IsHunterPetTeachingKnown then
+        return ns.IsHunterPetTeachingKnown(entry.spellID)
+    end
     known = known or { spells = {}, names = {}, ranks = {} }
     local spellID = type(entry) == "table" and entry.spellID
     if spellID then
@@ -186,6 +189,7 @@ function ns.GetBundledTimelineTraining(level)
     local eligible = {}
     for _, entry in ipairs(static and static[level] or {}) do
         if type(entry) == "table" and entry.spellID and not entry.hideInLevelUp and ns.IsTrainingEntryEligible(entry)
+            and not (entry.hunterPet and ns.IsHunterPetTeachingKnown and ns.IsHunterPetTeachingKnown(entry.spellID))
             and (not entry.profession or (ns.db and ns.db.scanProfessionTrainers))
             and (not entry.requiredTalentId or ns.IsSpellKnownAcrossClients(entry.requiredTalentId)) then
             -- An upcoming icon only needs the spell ID, even while its name loads.
@@ -305,7 +309,8 @@ local function BuildTrainerAbility(item, displayLevel)
         name = item.name,
         icon = item.icon,
         id = item.id,
-        cost = item.cost,
+        cost = item.entry.hunterPet and ns.GetHunterPetTrainerCost
+            and ns.GetHunterPetTrainerCost(item.id, item.cost) or item.cost,
         requiredLevel = displayLevel,
         trainingFamily = rank and family or nil,
         trainingRank = rank,
@@ -326,7 +331,9 @@ function ns.GetTrainerAbilitiesForLevel(level)
             local hunterPet = isHunter and ns.IsHunterPetTrainingEntry(item.entry)
             local include = hunterPet and showPetSkills or not hunterPet and not petOnly
             local talent = item.entry.requiredTalentId
-            if include and not item.entry.hideInLevelUp and (not talent or ns.IsSpellKnownAcrossClients(talent)) then
+            if include and not item.entry.hideInLevelUp
+                and not (hunterPet and ns.IsHunterPetTeachingKnown and ns.IsHunterPetTeachingKnown(item.id))
+                and (not talent or ns.IsSpellKnownAcrossClients(talent)) then
                 local ability = BuildTrainerAbility(item, level)
                 if not ns.db.showOnlyNewSkills or ability.isNewAbility then abilities[#abilities + 1] = ability end
             end

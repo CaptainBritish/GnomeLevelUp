@@ -39,6 +39,7 @@ Data\WeaponSkills.lua
 Data\WarlockPetGrimoires.lua
 SpellBookCompat.lua
 WarlockPet.lua
+HunterPet.lua
 Stats.lua
 Core.lua
 Profiles.lua

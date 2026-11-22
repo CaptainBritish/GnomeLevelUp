@@ -1806,17 +1806,14 @@ local function CreateAbilityViewport()
             if viewport.sharedScroll then
                 for _, target in ipairs({content.abilityViewport, content.petAbilityViewport}) do
                     local offset = math.min(value or 0, target.scrollMaximum or 0)
-                    target:UpdateScrollChildRect()
                     target:SetVerticalScroll(offset)
                     if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(target, offset) end
                 end
             else
-                viewport:UpdateScrollChildRect()
                 viewport:SetVerticalScroll(value or 0)
                 if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
             end
         else
-            viewport:UpdateScrollChildRect()
             viewport:SetHorizontalScroll(value or 0)
             if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
         end
@@ -5674,6 +5671,17 @@ local function LayoutFrame(statCount)
     render.FitSparseAbilityIcons(content.petAbilityViewport, content.petAbilityIconPool)
     content.abilityViewport:UpdateScrollChildRect()
     content.petAbilityViewport:UpdateScrollChildRect()
+    -- Pooled icons change the native scroll rectangle when they move into
+    -- their final grid. Restore offsets after layout, without rebuilding that
+    -- rectangle on wheel/drag input and moving the thumb under the cursor.
+    for _, viewport in ipairs({content.abilityViewport, content.petAbilityViewport}) do
+        if not viewport.scrollController or viewport.scrollController == viewport.slider then
+            local slider = viewport.scrollController or viewport.slider
+            local value = math.max(0, math.min(render.AbilityScrollRange(viewport), slider:GetValue()))
+            slider:SetValue(value)
+            slider:GetScript("OnValueChanged")(slider, value)
+        end
+    end
     render.RefreshAbilityVisibility(content.abilityViewport)
     render.RefreshAbilityVisibility(content.petAbilityViewport)
     LayoutBackground()

@@ -1,4 +1,5 @@
 local ADDON_NAME, ns = ...
+local unpack = unpack or table.unpack
 
 -- Version 5 adds cost-aware trainer records. Older caches cannot tell us
 -- whether a missing cost means "free" or "not scanned", so they are rebuilt.
@@ -14,7 +15,7 @@ local function IsBeastTrainingOpen()
     if not ok or type(line) ~= "string" or line == "" then return false end
     if line == "Beast Training" or line == BEAST_TRAINING then return true end
 
-    -- Match the client's localized Beast Training name, as OneForAll does.
+    -- Match the client's localized Beast Training name.
     local name
     if C_Spell and type(C_Spell.GetSpellName) == "function" then
         local success, value = pcall(C_Spell.GetSpellName, 5149)
@@ -467,9 +468,20 @@ local function CheckTrainerCatalogue(npcName, capturePrices)
         local ok, trainerType = pcall(GetTrainerType)
         if ok and type(trainerType) == "string" then source.trainerType = trainerType end
     end
-    local newChanges = 0
+    local trainerType = (source.trainerType or ""):lower()
+    source.petTrainer = classToken == "HUNTER" and
+        (trainerType == "pet" or trainerType == "pets" or trainerType == "pettrainer" or trainerType == "beast")
+    -- Classify the entire list before reporting any row, including unknown pet
+    -- skills that appear before a recognized one. NPC names are not reliable.
+    local services = {}
     for i = 1, GetNumTrainerServices() do
-        local name, subtext, status, infoLevel, _, spellID, category, cost, professionCost = ReadService(i)
+        local name, subtext, status, infoLevel, icon, spellID, category, cost, professionCost = ReadService(i)
+        services[i] = {name, subtext, status, infoLevel, icon, spellID, category, cost, professionCost}
+        if ns.IsTrainerPetSkill and ns.IsTrainerPetSkill(classToken, spellID, name) then source.petTrainer = true end
+    end
+    local newChanges = 0
+    for i, service in ipairs(services) do
+        local name, subtext, status, infoLevel, _, spellID, category, cost, professionCost = unpack(service, 1, 9)
         if name and spellID and (status == "available" or status == "unavailable" or status == "used")
             and category ~= "profession" and not IsProfessionService(i, professionCost)
             and not (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(name, spellID)) then
@@ -491,21 +503,26 @@ local function CheckTrainerCatalogue(npcName, capturePrices)
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Report options: type %s to open the export window and copy report-only JSON.", "|cffffff00/glu trainerreport|r"))
         if ns.PrintTrainerReportLocation then ns.PrintTrainerReportLocation() end
     end
+    return source.petTrainer
 end
 
 local function ScanTrainer()
     if not GetNumTrainerServices or not GetTrainerServiceInfo then return end
     local flavor = ns.GetCurrentFlavor()
     if flavor ~= "forever" then return end
+    if ns.db and ns.db.enabled == false then return end
     if IsBeastTrainingOpen() then return end
     local npcName = UnitName("npc")
     -- Only NPC trainer visits belong in the catalogue and price reports.
     if not npcName or (UnitIsUnit and UnitIsUnit("npc", "player")) then return end
     local trainerIsProfession = IsProfessionTrainer()
     local capturePrices = ns.IsCompleteTrainerReportingEnabled and ns.IsCompleteTrainerReportingEnabled()
+    local _, playerClass = UnitClass("player")
     if not trainerIsProfession and ns.HasBuiltInTrainerData and ns.HasBuiltInTrainerData()
-        and ns.db and (ns.db.monitorTrainerChanges ~= false or capturePrices) then
-        CheckTrainerCatalogue(npcName, capturePrices)
+        and ns.db and (playerClass == "HUNTER" or ns.db.monitorTrainerChanges ~= false or capturePrices) then
+        -- Pet trainer observations always refresh silently, independently of
+        -- diagnostic reporting and legacy development scans.
+        if CheckTrainerCatalogue(npcName, capturePrices) then return end
     end
     if ns.db and ns.db.autoScanTrainers == false
         and not GnomeLevelUpDB.trainerRescanRequired then return end
@@ -584,12 +601,13 @@ local function QueueScan()
     -- Wait briefly so the trainer list has time to finish loading.
     if ns.GetCurrentFlavor and ns.GetCurrentFlavor() ~= "forever" then return end
     if ns.PerfCount then ns.PerfCount("trainer_scan_requests") end
-    if scanQueued then return end
-    scanQueued = true
     local session = trainerSession
+    if scanQueued == session then return end
+    scanQueued = session
+    local npcGUID = UnitGUID("npc")
     C_Timer.After(TRAINER_SCAN_DELAY, function()
-        scanQueued = false
-        if trainerOpen and trainerSession == session then ScanTrainer() end
+        if scanQueued == session then scanQueued = false end
+        if trainerOpen and trainerSession == session and UnitGUID("npc") == npcGUID then ScanTrainer() end
     end)
 end
 
@@ -655,6 +673,9 @@ end
 frame:RegisterEvent("TRAINER_SHOW")
 frame:RegisterEvent("TRAINER_UPDATE")
 frame:RegisterEvent("TRAINER_CLOSED")
+frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+frame:RegisterEvent("GOSSIP_SHOW")
+frame:RegisterEvent("MERCHANT_SHOW")
 for _, event in ipairs({ "CRAFT_SHOW", "CRAFT_UPDATE", "CRAFT_CLOSE" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
@@ -668,6 +689,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
     -- Track window closure even if the player switches GLU's mode while it is open.
     if event == "CRAFT_SHOW" then
         craftWindowOpen = true
+        trainerOpen = false
+        trainerSession = trainerSession + 1
         return
     elseif event == "CRAFT_CLOSE" then
         craftWindowOpen = false
@@ -686,7 +709,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
         and event ~= "SPELLS_CHANGED" and event ~= "LEARNED_SPELL_IN_SKILL_LINE" then
         return
     end
-    if event == "TRAINER_SHOW" then
+    if event == "AUCTION_HOUSE_SHOW" or event == "GOSSIP_SHOW" or event == "MERCHANT_SHOW" then
+        trainerOpen = false
+        trainerSession = trainerSession + 1
+    elseif event == "TRAINER_SHOW" then
         trainerSession = trainerSession + 1
         trainerOpen = true
         QueueScan()
