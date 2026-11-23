@@ -9,6 +9,8 @@
 * Pet trainer data now updates silently, without catalogue-change alerts. Hunter teaching ranks now stay learned when swapping pets, and each pet keeps its own skill list.
 * Fixed stale trainer scans after opening Beast Training or talking to another NPC.
 * Fixed ability scrolling and scrollbar jumps after changing the pet skill display.
+* Fixed layout refreshes resetting the ability scroll position after changing skill options.
+* Matched the width of stats and ability scrollbars while keeping larger mouse hitboxes.
 
 ## 1.6.6a
 

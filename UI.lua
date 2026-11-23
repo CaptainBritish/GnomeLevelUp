@@ -1548,6 +1548,7 @@ content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
 ApplyToTextLayers(content.statsHeader, "SetText", ns.L(content.statPage == "secondary" and "Secondary Stats" or "Stats Gained"))
 RegisterGlowFont(content.statsHeader)
 
+UI_METRICS.scrollbarThickness = 8
 content.statsContainer = CreateFrame("ScrollFrame", nil, content)
 content.statsContainer:SetWidth(TEXT_WIDTH)
 content.statsContainer:SetHeight(1)
@@ -1560,7 +1561,8 @@ content.statSlider = CreateFrame("Slider", nil, content)
 content.statSlider:SetOrientation("VERTICAL")
 content.statSlider:SetPoint("TOPLEFT", content.statsContainer, "TOPRIGHT", 8, 0)
 content.statSlider:SetPoint("BOTTOMLEFT", content.statsContainer, "BOTTOMRIGHT", 8, 0)
-content.statSlider:SetWidth(8)
+content.statSlider:SetWidth(UI_METRICS.scrollbarThickness)
+content.statSlider:SetHitRectInsets(-6, -6, -4, -4)
 content.statSlider:SetMinMaxValues(0, 0)
 content.statSlider:SetValueStep(1)
 content.statSlider:SetObeyStepOnDrag(false)
@@ -1612,7 +1614,7 @@ function render.UpdateStatScroll(count, reset)
     local thumb = content.statSlider:GetThumbTexture()
     if thumb then
         thumb:SetVertexColor(1, 1, 1, .8)
-        thumb:SetSize(8, render.ScrollThumbLength(height, content.statRows:GetHeight(), 12))
+        thumb:SetSize(UI_METRICS.scrollbarThickness, render.ScrollThumbLength(height, content.statRows:GetHeight(), 12))
     end
     render.RefreshStatScrollMouse()
 end
@@ -1789,12 +1791,12 @@ local function CreateAbilityViewport()
 
     local slider = CreateFrame("Slider", nil, viewport)
     slider:EnableMouse(true)
-    slider:SetHitRectInsets(-5, -5, -4, -4)
+    slider:SetHitRectInsets(-6, -6, -5, -5)
     slider:SetFrameLevel(content:GetFrameLevel() + 12)
     slider:SetOrientation("HORIZONTAL")
     slider:SetPoint("BOTTOMLEFT", viewport, "BOTTOMLEFT", 0, 0)
     slider:SetPoint("BOTTOMRIGHT", viewport, "BOTTOMRIGHT", 0, 0)
-    slider:SetHeight(SCROLLBAR_HEIGHT)
+    slider:SetHeight(UI_METRICS.scrollbarThickness)
     slider:SetMinMaxValues(0, 0)
     slider:SetValue(0)
     slider:SetValueStep(1)
@@ -1802,10 +1804,15 @@ local function CreateAbilityViewport()
     local thumb = slider.GetThumbTexture and slider:GetThumbTexture()
     if thumb then thumb:SetVertexColor(1, 1, 1, 0.8) end
     slider:SetScript("OnValueChanged", function(self, value)
+        -- Native range changes can emit temporary values while a list is
+        -- rebuilt. Only settled input updates the position we restore later.
+        if viewport.restoringScroll then return end
+        viewport.requestedScroll = value or 0
         if viewport.verticalLayout then
             if viewport.sharedScroll then
                 for _, target in ipairs({content.abilityViewport, content.petAbilityViewport}) do
                     local offset = math.min(value or 0, target.scrollMaximum or 0)
+                    if target ~= viewport then target.requestedScroll = offset end
                     target:SetVerticalScroll(offset)
                     if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(target, offset) end
                 end
@@ -2541,6 +2548,7 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     local controller = row.viewport.scrollController or row.viewport.slider
     local previousValue = skipAnimation and row.viewport.verticalLayout == vertical and controller:GetValue() or 0
     row.viewport.requestedScroll = previousValue
+    row.viewport.restoringScroll = true
     row.viewport.cellHeight = AbilityCellHeight(NewAbilityIconSize())
     row.viewport.layoutScale = 1
     row.viewport.sharedScroll, row.viewport.scrollController = nil, nil
@@ -2685,22 +2693,22 @@ local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText
     if vertical then
         slider:SetPoint("TOPRIGHT", row.viewport, "TOPRIGHT", -2, 0)
         slider:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", -2, 0)
-        slider:SetWidth(SCROLLBAR_HEIGHT)
+        slider:SetWidth(UI_METRICS.scrollbarThickness)
         track:SetPoint("TOPRIGHT", row.viewport, "TOPRIGHT", -6, 0)
         track:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", -6, 0)
         track:SetWidth(2)
     else
         slider:SetPoint("BOTTOMLEFT", row.viewport, "BOTTOMLEFT", 0, 0)
         slider:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", 0, 0)
-        slider:SetHeight(SCROLLBAR_HEIGHT)
+        slider:SetHeight(UI_METRICS.scrollbarThickness)
         track:SetPoint("BOTTOMLEFT", row.viewport, "BOTTOMLEFT", 0, 0)
         track:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", 0, 0)
         track:SetHeight(2)
     end
     local thumb = slider:GetThumbTexture()
     if thumb then
-        if vertical then thumb:SetSize(8, render.ScrollThumbLength(viewportHeight, totalHeight))
-        else thumb:SetSize(math.min(24, viewportWidth * .45), 8) end
+        if vertical then thumb:SetSize(UI_METRICS.scrollbarThickness, render.ScrollThumbLength(viewportHeight, totalHeight))
+        else thumb:SetSize(math.min(24, viewportWidth * .45), UI_METRICS.scrollbarThickness) end
     end
     local maximum = shouldScroll and math.max(0, vertical and totalHeight - viewportHeight or totalWidth - viewportWidth) or 0
     row.viewport.scrollMaximum = maximum
@@ -5413,6 +5421,8 @@ end
 
 -- Fit the frame to its content so empty sections do not leave excess space.
 local function LayoutFrame(statCount)
+    content.abilityViewport.restoringScroll = true
+    content.petAbilityViewport.restoringScroll = true
     statCount = math.max(statCount, content.statPageRowCount or 0)
     render.MeasureLevelTime()
     local borderInset = ThemeContentInset()
@@ -5553,7 +5563,7 @@ local function LayoutFrame(statCount)
         main.scrollTrack:ClearAllPoints()
         local barX = hasPet and 14 or 10
         main.slider:SetOrientation("VERTICAL")
-        main.slider:SetWidth(SCROLLBAR_HEIGHT)
+        main.slider:SetWidth(UI_METRICS.scrollbarThickness)
         main.scrollTrack:SetWidth(2)
         main.slider:SetPoint("TOP", main, "TOPRIGHT", barX, 0)
         main.slider:SetHeight(math.max(main:GetHeight(), hasPet and pet:GetHeight() or 0))
@@ -5572,7 +5582,7 @@ local function LayoutFrame(statCount)
         local thumb = main.slider:GetThumbTexture()
         if thumb then
             local height = main.slider:GetHeight()
-            thumb:SetSize(8, render.ScrollThumbLength(height, height + main.sharedMaximum))
+            thumb:SetSize(UI_METRICS.scrollbarThickness, render.ScrollThumbLength(height, height + main.sharedMaximum))
         end
         ns.RefreshPortraitGeometry(true)
         content.portraitPulse:SetSize(PortraitRingSize() * 1.1, PortraitRingSize() * 1.1)
@@ -5674,10 +5684,12 @@ local function LayoutFrame(statCount)
     -- Pooled icons change the native scroll rectangle when they move into
     -- their final grid. Restore offsets after layout, without rebuilding that
     -- rectangle on wheel/drag input and moving the thumb under the cursor.
+    content.abilityViewport.restoringScroll = false
+    content.petAbilityViewport.restoringScroll = false
     for _, viewport in ipairs({content.abilityViewport, content.petAbilityViewport}) do
         if not viewport.scrollController or viewport.scrollController == viewport.slider then
             local slider = viewport.scrollController or viewport.slider
-            local value = math.max(0, math.min(render.AbilityScrollRange(viewport), slider:GetValue()))
+            local value = math.max(0, math.min(render.AbilityScrollRange(viewport), viewport.requestedScroll or 0))
             slider:SetValue(value)
             slider:GetScript("OnValueChanged")(slider, value)
         end
