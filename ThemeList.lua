@@ -3,6 +3,15 @@ local ADDON_NAME, ns = ...
 local FONT_ROLES = { stats = true, headings = true, level = true, time = true,
     abilityCosts = true, timeline = true, body = true }
 ns.THEME_FONT_ROLES = FONT_ROLES
+ns.THEME_FONT_PARENTS = {
+    title = "body", statsHeader = "headings", secondaryStatsHeader = "statsHeader",
+    abilitiesHeader = "headings", petAbilitiesHeader = "headings",
+    statLabel = "stats", statOld = "stats", statArrow = "stats", statNew = "stats", statDelta = "stats",
+    recordLabel = "time", recordPrefix = "time", recordOld = "time", recordNew = "time",
+    weaponSkills = "body", noAbilities = "body", petAbilityCosts = "abilityCosts",
+    timelineLevel = "timeline", timelineUnlock = "timeline", closeButton = "body", pinGlyph = "body",
+}
+for role in pairs(ns.THEME_FONT_PARENTS) do FONT_ROLES[role] = true end
 local themeFontLabels = {}
 
 function ns.GetThemeFontLabel(path)
@@ -14,6 +23,7 @@ local function DefaultFontSizes()
     for role in pairs(FONT_ROLES) do sizes[role] = 0 end
     return sizes
 end
+ns.DefaultThemeFontSizes = DefaultFontSizes
 
 local TEXTURE_ROOT = "Interface\\AddOns\\GnomeLevelUp\\Textures\\"
 local function Texture(path)
@@ -214,6 +224,7 @@ local function Appearance(ringName, backgroundStyle)
         backgroundTextureTransforms = Copy(SHARED_TRANSFORMS),
         customFontPath = false,
         themeFontSizes = DefaultFontSizes(),
+        themeFontSizeOffsets = DefaultFontSizes(),
         themeFontSizeOffset = 0,
         frameStrata = "HIGH",
         framePosition = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 90 },
@@ -356,14 +367,16 @@ local function ReadPackFont(addonName, font)
     return path, nil, true
 end
 
-local function ReadPackFontSizes(sizes)
+local function ReadPackFontSizes(sizes, offsets)
     local result = DefaultFontSizes()
     if sizes == nil then return result end
-    if type(sizes) ~= "table" then return InvalidField("fontSizes", "expected a table of popup text roles") end
+    if type(sizes) ~= "table" then return InvalidField(offsets and "fontSizeOffsets" or "fontSizes", "expected a table of popup text roles") end
     for role, size in pairs(sizes) do
-        local field = "fontSizes." .. tostring(role)
-        if not FONT_ROLES[role] then return InvalidField(field, "expected stats, headings, level, time, abilityCosts, timeline or body") end
-        if not InRange(size, 6, 72) then return InvalidField(field, "expected a point size from 6 to 72") end
+        local field = (offsets and "fontSizeOffsets." or "fontSizes.") .. tostring(role)
+        if not FONT_ROLES[role] then return InvalidField(field, "unknown popup text element; see the theme guide") end
+        if not InRange(size, offsets and -8 or 6, offsets and 16 or 72) then
+            return InvalidField(field, offsets and "expected an adjustment from -8 to 16 points" or "expected a point size from 6 to 72")
+        end
         result[role] = size
     end
     return result
@@ -563,6 +576,8 @@ local function RegisterTheme(addonName, id, definition)
     end
     local fontSizes, fontSizeError = ReadPackFontSizes(definition.fontSizes)
     if not fontSizes then return Reject(fontSizeError) end
+    local fontOffsets, fontOffsetError = ReadPackFontSizes(definition.fontSizeOffsets, true)
+    if not fontOffsets then return Reject(fontOffsetError) end
     local fontSizeOffset = Default(definition.fontSizeOffset, 0)
     if not InRange(fontSizeOffset, -8, 16) then return Reject("fontSizeOffset: expected a point adjustment from -8 to 16") end
     local divider, dividerError = ReadPackDivider(addonName, definition.divider)
@@ -593,6 +608,7 @@ local function RegisterTheme(addonName, id, definition)
     resolved.appearance.bgOpacity = opacity
     resolved.appearance.customFontPath = font
     resolved.appearance.themeFontSizes = fontSizes
+    resolved.appearance.themeFontSizeOffsets = fontOffsets
     resolved.appearance.themeFontSizeOffset = fontSizeOffset
     if customFont then
         themeFontLabels[font] = fontName or definition.font:gsub("\\", "/"):match("([^/]+)%.[^.]+$")

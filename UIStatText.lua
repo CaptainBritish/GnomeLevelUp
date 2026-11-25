@@ -7,20 +7,22 @@ function ns.InstallPopupStatMetrics(render, content, GetStatLine, MeasureStatTex
         local counting = ns.db and ns.db.emphasizeStatGains == true
         local threshold = ns.GetStatAbbreviationThreshold()
         local label = ns.GetStatDisplayLabel(data)
-        local key = table.concat({tostring(path),tostring(size),tostring(flags),label,tostring(data.unit),tostring(data.old),tostring(data.new),tostring(counting),tostring(threshold),ns.GetLocale()}, "\031")
+        local partSizes = {}
+        for i=1,5 do partSizes[i] = render.StatPartFontSize(fs,i) end
+        local key = table.concat(partSizes, ":") .. table.concat({tostring(path),tostring(size),tostring(flags),label,tostring(data.unit),tostring(data.old),tostring(data.new),tostring(counting),tostring(threshold),ns.GetLocale()}, "\031")
         if fs.statWordMetricKey == key then return fs.statWordWidths, fs.statWordNatural end
-        local widths = {MeasureStatText(fs, label .. ":")+12, MeasureStatText(fs, ns.FormatStatTotal(data.old, data))+12,
-            MeasureStatText(fs, "->")+12, MeasureStatText(fs, ns.FormatStatTotal(data.new, data)) + 12}
+        local widths = {MeasureStatText(fs, label .. ":", 1)+12, MeasureStatText(fs, ns.FormatStatTotal(data.old, data), 2)+12,
+            MeasureStatText(fs, "->", 3)+12, MeasureStatText(fs, ns.FormatStatTotal(data.new, data), 4) + 12}
         if counting then
-            widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(data.old, data)) + 12)
+            widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(data.old, data), 4) + 12)
             local digits = math.max(#ns.FormatStatInteger(math.abs(data.old)), #ns.FormatStatInteger(math.abs(data.new)))
             for digit = 0, 9 do
                 local value = tonumber(string.rep(tostring(digit), digits)) or 0
-                widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(value, data)) + 12)
-                if math.min(data.old,data.new) < 0 then widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(-value, data))+12) end
+                widths[4] = math.max(widths[4], MeasureStatText(fs, ns.FormatStatTotal(value, data), 4) + 12)
+                if math.min(data.old,data.new) < 0 then widths[4] = math.max(widths[4],MeasureStatText(fs, ns.FormatStatTotal(-value, data), 4)+12) end
             end
             if threshold and math.min(data.old,data.new)<threshold and math.max(data.old,data.new)>=threshold then
-                widths[4] = math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(threshold-1, data))+12)
+                widths[4] = math.max(widths[4],MeasureStatText(fs, ns.FormatStatTotal(threshold-1, data), 4)+12)
             end
             widths[5] = GainCounterWidth(fs, data.new-data.old, data)
         end
@@ -28,13 +30,13 @@ function ns.InstallPopupStatMetrics(render, content, GetStatLine, MeasureStatTex
             and math.min(math.abs(data.old),math.abs(data.new)) < 1000000000 then
             local millions = math.min(999, math.max(1, math.floor(math.max(math.abs(data.old),math.abs(data.new))/1000000)))
             for digit=0,9 do
-                widths[4]=math.max(widths[4],MeasureStatText(fs,ns.FormatStatTotal(millions*1000000+digit*111000, data))+12)
+                widths[4]=math.max(widths[4],MeasureStatText(fs, ns.FormatStatTotal(millions*1000000+digit*111000, data), 4)+12)
             end
         end
         local space = MeasureStatText(fs," ")
         local natural = space * (#widths-1)
         for _, width in ipairs(widths) do natural = natural + width end
-        fs.statWordEndWidth = MeasureStatText(fs, counting and ns.FormatStatGain(data.new-data.old, data) or ns.FormatStatTotal(data.new, data))
+        fs.statWordEndWidth = MeasureStatText(fs, counting and ns.FormatStatGain(data.new-data.old, data) or ns.FormatStatTotal(data.new, data), counting and 5 or 4)
         fs.statWordMetricKey, fs.statWordWidths, fs.statWordNatural = key, widths, natural
         fs.statWordSpace=space
         return widths, natural

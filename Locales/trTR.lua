@@ -5,6 +5,7 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Lines whose text is still in English have not been translated yet.
 
 RegisterLocaleBuilder("trTR", function() return {
+    ["New Guild Record!"] = "Yeni Lonca Rekoru!",
     ["Delete"] = "Sil",
     ["Unknown"] = "Bilinmiyor",
     ["Local"] = "Yerel",

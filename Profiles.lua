@@ -17,6 +17,7 @@ local optional = {
 
 local function NormalizeSettings(settings)
     settings.guildTimeSyncInterval = nil
+    settings.compareAccountLevelTimes = nil
     ns.MigrateTrainerPriceSettings(settings)
     ns.NormalizeAbilityFilters(settings)
     ns.RemoveObsoleteAnimationSounds(settings)
@@ -425,10 +426,12 @@ local function ValidSettings(settings)
             end
         elseif key == "themeHuePreferences" then
             if not ValidThemeHues(value) then return false end
-        elseif key == "themeFontSizes" then
+        elseif key == "themeFontSizes" or key == "themeFontSizeOffsets" then
             if not ValidateLike(value, ns.defaults.themeFontSizes, 0) then return false end
             for _, size in pairs(value) do
-                if size ~= 0 and (size < 6 or size > 72) then return false end
+                if key == "themeFontSizeOffsets" then
+                    if size < -8 or size > 16 then return false end
+                elseif size ~= 0 and (size < 6 or size > 72) then return false end
             end
         elseif key == "themeFontPreferences" then
             if type(value) ~= "table" then return false end

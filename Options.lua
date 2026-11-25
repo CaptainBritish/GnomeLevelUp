@@ -1398,9 +1398,7 @@ local function BuildOptions()
 
     AddSectionHeader("Level History", "level_history")
     AddSettingCheckbox("showLevelTime", LEFT, y)
-    AddSettingCheckbox("compareAccountLevelTimes", LEFT + 270, y)
-    y = y - 34
-    AddSettingCheckbox("guildTimeSync", LEFT, y)
+    AddSettingCheckbox("guildTimeSync", LEFT + 270, y)
     y = y - 34
     local historyFrame = CreateFrame("Frame", nil, body)
     local historyChoices, currentCharacter = ns.GetLevelHistoryCharacters()
@@ -1419,14 +1417,14 @@ local function BuildOptions()
         function() return historyFrame.character end,
         function(value)
             historyFrame.character = value
-            if historyReset then historyReset:SetEnabled(value == currentCharacter) end
+            if historyReset then historyReset:SetEnabled(value ~= nil) end
         end, y, 220)
     AddDropdown("History mode", { { value = "retail", label = "Retail" }, { value = "forever", label = "WoW: Forever" } },
         function() return historyFrame.flavor end,
-        function(value) historyFrame.flavor = value end, y, 180, LEFT + 270, CONTROL_X + 270)
+        function(value) historyFrame.flavor = value end, y, 180, LEFT + 270, CONTROL_X + 270, true)
     y = y - 36
     historyReset = AddButton("Reset this character's times", 220, LEFT, y, function()
-        ns.ResetLevelTimers()
+        ns.ClearCharacterLevelTimes(historyFrame.character)
         ns.RefreshOptionsPanel()
     end)
     y = y - 32
@@ -1435,12 +1433,13 @@ local function BuildOptions()
     LayoutCell("history", y, LEFT, nil, historyFrame, { historyFrame }, false, { optionLabel = "Level History" })
     y = y - 40
     refreshers[#refreshers + 1] = function()
-        historyReset:SetEnabled(historyFrame.character == currentCharacter)
+        if not ns.IsDebugEnabled() then historyFrame.flavor = ns.GetCurrentFlavor() end
+        historyReset:SetEnabled(historyFrame.character ~= nil)
     end
     function ns.RefreshLevelHistoryOptions(showCurrentCharacter)
         if showCurrentCharacter then historyFrame.character = currentCharacter end
         refreshHistoryCharacter()
-        historyReset:SetEnabled(historyFrame.character == currentCharacter)
+        historyReset:SetEnabled(historyFrame.character ~= nil)
         if optionTabs.selected == "level_history" then ReflowSections() end
     end
 

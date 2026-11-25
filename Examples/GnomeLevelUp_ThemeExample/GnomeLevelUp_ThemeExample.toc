@@ -1,6 +1,6 @@
 ## Interface: 16001, 120007, 120105, 120100
 ## Title: GnomeLevelUp - Example Theme Pack
-## Notes: FFIX Blue Atlas theme for GnomeLevelUp.
+## Notes: FFIV Blue Atlas theme for GnomeLevelUp.
 ## Version: 1.0.0
 ## Dependencies: GnomeLevelUp
 

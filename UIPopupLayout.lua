@@ -9,7 +9,8 @@ function ns.CreatePopupHeadingFitter(context)
     return function()
         local TEXT_WIDTH = context.GetTextWidth()
         local scale = ns.GetTextScale("headingTextScale")
-        if scale == 1 and ns.GetThemeFontSize("headings", 18) == 18 then return end
+        content.statsHeader.gluThemeFontRole = content.statPage == "secondary" and "secondaryStatsHeader" or "statsHeader"
+        for _, glow in ipairs(content.statsHeader.glows or {}) do glow.gluThemeFontRole = content.statsHeader.gluThemeFontRole end
         local horizontal = IsHorizontalLayout()
         local specs = {{content.statsHeader, TEXT_WIDTH}}
         if ns.AbilitySectionVisible(content.currentTrainerAbilities) then
@@ -26,7 +27,7 @@ function ns.CreatePopupHeadingFitter(context)
         local parts = {tostring(scale), tostring(ns.GetThemeFontSize("headings", 18))}
         for _, spec in ipairs(specs) do
             local path, _, flags = spec[1]:GetFont()
-            parts[#parts + 1] = table.concat({path or DEFAULT_FONT_PATH, flags or "", spec[1]:GetText(), tostring(spec[2])}, "\031")
+            parts[#parts + 1] = table.concat({path or DEFAULT_FONT_PATH, flags or "", spec[1]:GetText(), tostring(spec[2]), tostring(ns.GetThemeFontSize(spec[1].gluThemeFontRole or "headings", spec[1].gluFontBaseSize))}, "\031")
         end
         local key = table.concat(parts, "\030")
         if render.headingFitKey == key then return end
@@ -35,7 +36,7 @@ function ns.CreatePopupHeadingFitter(context)
             local text, width = spec[1], spec[2]
             if not horizontal or text ~= content.petSpellsHeader then
                 local path, _, flags = text:GetFont()
-                local naturalWidth = render.MeasureTextWidth(path, ns.GetThemeFontSize("headings", text.gluFontBaseSize) * scale, flags, text:GetText())
+                local naturalWidth = render.MeasureTextWidth(path, ns.GetThemeFontSize(text.gluThemeFontRole or "headings", text.gluFontBaseSize) * scale, flags, text:GetText())
                 fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
             end
         end
@@ -43,7 +44,7 @@ function ns.CreatePopupHeadingFitter(context)
         for _, text in ipairs({content.statsHeader, content.spellsHeader, content.petSpellsHeader}) do
             local path, _, flags = text:GetFont()
             local headingFit = horizontal and text == content.petSpellsHeader and 1 or fit
-            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, ns.GetThemeFontSize("headings", text.gluFontBaseSize) * scale * headingFit), flags or "")
+            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, ns.GetThemeFontSize(text.gluThemeFontRole or "headings", text.gluFontBaseSize) * scale * headingFit), flags or "")
             SyncTextGeometry(text)
         end
         render.headingFitKey = key

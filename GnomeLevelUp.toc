@@ -52,6 +52,7 @@ TrainerScan.lua
 TextureCompat.lua
 ThemeRenderer.lua
 LevelReplay.lua
+CharacterNames.lua
 LevelHistory.lua
 GuildRecords.lua
 GuildTimes.lua

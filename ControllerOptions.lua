@@ -503,7 +503,6 @@ local function BuildEntries(key)
                 end },
             Toggle("Don't show until combat ends", "waitForCombatEnd"),
             Toggle("Show time played this level", "showLevelTime"),
-            Toggle("Compare account-wide bests", "compareAccountLevelTimes"),
             Toggle("Show minimap button", "minimapButtonShown", function(v) ns.SetMinimapButtonShown(v) end),
             Toggle("Compact Layout", "compactMode"),
             Toggle("Horizontal layout", "horizontalMode"),

@@ -5,6 +5,7 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Every new UI string needs an entry here and in the other non-English files.
 
 RegisterLocaleBuilder("ruRU", function() return {
+    ["New Guild Record!"] = "Новый рекорд гильдии!",
     ["Delete"] = "Удалить",
     ["Unknown"] = "Неизвестно",
     ["Local"] = "Локально",

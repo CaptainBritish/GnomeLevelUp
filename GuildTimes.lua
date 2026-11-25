@@ -4,24 +4,61 @@ local PREFIX, VERSION = "GLUTimeSync", "T4"
 local queue, jobs, order, peers, synced, confirmations = {}, {}, {}, {}, {}, {}
 local guild, flavor, query, queryUntil, queryDeadline, pending, wait = nil, nil, nil, nil, nil, nil, 0
 local pulses = {}
+local sentClasses = {}
+local completedLevel
 local awaitingAuthority, rosterRequested = {}, nil
 local frame = CreateFrame("Frame")
 frame:Hide()
 
 local function RefreshHistory()
     if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
+    if ns.RefreshGuildRecordCelebration then ns.RefreshGuildRecordCelebration() end
+end
+
+function ns.NoteGuildLevelCompletion(reached, seconds)
+    if not data.ready or not data.Enabled() or not data.ValidInterval(reached - 1, seconds, ns.GetCurrentFlavor()) then return end
+    if not completedLevel or completedLevel.reached ~= reached then
+        local previous = ns.GetGuildLevelRecord(reached - 1, ns.GetCurrentFlavor())
+        completedLevel = { reached = reached, previous = previous and previous.seconds }
+    end
+    completedLevel.seconds = math.floor(seconds)
+end
+
+function ns.GetGuildLevelCelebration(reached, seconds)
+    local record = completedLevel
+    if not data.Enabled() or not record or record.reached ~= reached or type(seconds) ~= "number"
+        or math.floor(seconds) ~= record.seconds or record.previous and record.seconds >= record.previous then return end
+    local current = ns.GetGuildLevelRecord(reached - 1, ns.GetCurrentFlavor())
+    if current and current.seconds < record.seconds then return end
+    if data.IsDeleted(reached - 1, record.seconds, data.OwnName(), ns.GetCurrentFlavor()) then return end
+    return { previous = record.previous, seconds = record.seconds }
 end
 
 local function Queue(key, text, target)
     for _, packet in ipairs(queue) do
-        if packet.key == key then packet.text, packet.target = text, target; return end
+        if packet.key == key then packet.text, packet.target = text, target; return true end
     end
-    if #queue < 128 then queue[#queue + 1] = { key = key, text = text, target = target } end
+    if #queue >= 128 then return false end
+    queue[#queue + 1] = { key = key, text = text, target = target }
     frame:Show()
+    return true
 end
 
 local function Header(kind, token)
     return VERSION .. "\t" .. kind .. "\t" .. flavor .. "\t" .. (token and token .. "\t" or "")
+end
+
+local function QueueClass(owner, classToken, target, token)
+    if not data.ValidClass(classToken) then return end
+    local key = (target or "GUILD") .. ":" .. (token or "") .. ":" .. owner
+    if sentClasses[key] == classToken then return end
+    local count = 0; for _ in pairs(sentClasses) do count = count + 1 end
+    if count >= 4096 then sentClasses = {} end
+    -- Optional metadata is a separate message so older 2.0 clients can still
+    -- read the unchanged record and comparison packets.
+    if Queue("class:" .. key, Header("K", token) .. owner .. "=" .. classToken, target) then
+        sentClasses[key] = classToken
+    end
 end
 
 local function QueueJob(key, job, firstLevel)
@@ -66,6 +103,8 @@ local function NextJobPacket()
                 local entry = parts[job.part]
                 if size + #entry + 1 > 200 then break end
                 entries[#entries + 1], size = entry, size + #entry + 1
+                local level, owner = entry:match("^r:(%d+)=%d+=(.+)$")
+                if owner then QueueClass(owner, data.RecordClass(tonumber(level), owner, flavor), job.target, job.token) end
                 job.part = job.part + 1
             end
             if job.part <= #parts then break end
@@ -130,10 +169,12 @@ function ns.DeleteGuildLevelRecord(level, mode, expectedSeconds, expectedOwner, 
 end
 
 function ns.PublishGuildLevelTime(level, seconds)
-    if not data.Enabled() or not data.ValidInterval(level, seconds, ns.GetCurrentFlavor()) then return end
+    if not data.ready or not data.Enabled() or not data.ValidInterval(level, seconds, ns.GetCurrentFlavor()) then return end
+    if guild ~= data.Identity() or flavor ~= ns.GetCurrentFlavor() then ns.RefreshGuildTimeSync() end
     seconds = math.floor(seconds)
     data.Save(level, seconds, data.OwnName(), ns.GetCurrentFlavor())
     Queue("level:" .. level, VERSION .. "\tP\t" .. ns.GetCurrentFlavor() .. "\t" .. level .. "=" .. seconds)
+    QueueClass(data.OwnName(), data.RecordClass(level, data.OwnName(), ns.GetCurrentFlavor()))
 end
 
 function ns.RefreshGuildTimeSync()
@@ -145,6 +186,8 @@ function ns.RefreshGuildTimeSync()
     guild, flavor = nextGuild, nextFlavor
     queue, jobs, order, peers, confirmations, pulses, pending, wait = {}, {}, {}, {}, {}, {}, nil, 0
     awaitingAuthority = {}
+    sentClasses = {}
+    completedLevel = nil
     query, queryUntil, queryDeadline = nil, nil, nil
     data.RefreshAuthority()
     if guild then StartLoginSync() else frame:Hide(); RefreshHistory() end
@@ -173,13 +216,12 @@ end
 
 local function TargetOnline(target)
     if not target or not GetNumGuildMembers or not GetGuildRosterInfo then return true end
-    local canonical = target:gsub("%s", ""):lower()
+    local canonical = ns.CanonicalCharacterName(target)
     local found = false
     for index = 1, math.min(1000, GetNumGuildMembers() or 0) do
         local member = { GetGuildRosterInfo(index) }
         local name = member[1]
-        if name and not name:find("-", 1, true) then name = name .. "-" .. GetRealmName() end
-        if name and name:gsub("%s", ""):lower() == canonical then found = true; return member[9] ~= false end
+        if name and ns.CanonicalCharacterName(name) == canonical then found = true; return member[9] ~= false end
     end
     return not found -- A partial roster must not discard a valid reply.
 end
@@ -304,9 +346,21 @@ frame:SetScript("OnEvent", function(_, event, prefix, text, channel, sender)
     end
     if prefix ~= PREFIX or not data.ready or not data.Enabled() or data.Identity() ~= guild
         or (channel ~= "GUILD" and channel ~= "WHISPER") or type(text) ~= "string" or #text > 255
-        or not data.ValidOwner(sender) or sender == data.OwnName() or sender == UnitName("player") then return end
-    local kind, mode, rest = text:match("^T4\t([SNRPCXV])\t(%a+)\t(.+)$")
+        or not data.ValidOwner(sender)
+        or ns.CanonicalCharacterName(sender) == ns.CanonicalCharacterName(data.OwnName()) then return end
+    local kind, mode, rest = text:match("^T4\t([SNRPCXVK])\t(%a+)\t(.+)$")
     if mode ~= flavor then return end
+    if kind == "K" then
+        local values = rest
+        if channel == "WHISPER" then
+            local token
+            token, values = rest:match("^(%x+)\t(.+)$")
+            if not token or not ValidTransaction(sender, token) then return end
+        end
+        local owner, classToken = values:match("^([^=]+)=(%u+)$")
+        if data.UpdateClass(owner, classToken, flavor) then RefreshHistory() end
+        return
+    end
     local token, values
     if kind == "S" or kind == "N" or kind == "R" then
         token, values = rest:match("^(%x+)\t(.+)$")
@@ -386,6 +440,7 @@ frame:SetScript("OnEvent", function(_, event, prefix, text, channel, sender)
             pulses[entry.level] = GetTime()
             changed = data.Save(entry.level, best, owner, flavor) or changed
             Queue("comparison:" .. entry.level, Header("C") .. entry.level .. "=" .. best .. "=" .. owner)
+            QueueClass(owner, data.RecordClass(entry.level, owner, flavor))
             wait = math.max(wait, .5 + math.random() * 2)
         end
     end
@@ -395,6 +450,7 @@ frame:SetScript("OnEvent", function(_, event, prefix, text, channel, sender)
         if best then
             data.Save(level, best, owner, flavor)
             Queue("comparison:" .. level, Header("C") .. level .. "=" .. best .. "=" .. owner)
+            QueueClass(owner, data.RecordClass(level, owner, flavor))
             wait = math.max(wait, .5 + math.random() * 2)
         end
     end

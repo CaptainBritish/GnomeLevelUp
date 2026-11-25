@@ -266,6 +266,7 @@ do
     local glyphStyle
     local fallbackGlyphs = { xbox = "Y", playstation = "△", nintendo = "X" }
     function render.RefreshPinGlyph(style)
+        glyphText:SetFont(DEFAULT_FONT_PATH, ns.GetThemeFontSize("pinGlyph", 12), "")
         if glyphStyle == style then return end
         glyphStyle = style
         local hint = fallbackGlyphs[style]
@@ -401,7 +402,7 @@ local function RefreshCloseButtonLabel()
     render.RefreshPinGlyph(closeButton.gluGamePadEnabled and style or "none")
     if style == "none" then
         closeIcon:Hide()
-        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
+        closeText:SetFont(DEFAULT_FONT_PATH, ns.GetThemeFontSize("closeButton", 12), "")
         closeText:SetText("X")
         closeText:Show()
         return
@@ -416,7 +417,7 @@ local function RefreshCloseButtonLabel()
         -- The text fallback keeps controller mode usable on clients that have
         -- the gamepad API but do not expose the new atlas regions to addons.
         closeIcon:Hide()
-        closeText:SetFont(DEFAULT_FONT_PATH, 12, "")
+        closeText:SetFont(DEFAULT_FONT_PATH, ns.GetThemeFontSize("closeButton", 12), "")
         closeText:SetText(style == "nintendo" and "A" or "B")
         closeText:Show()
     end
@@ -846,20 +847,26 @@ local function RegisterFontElement(fs, sizeOverride, flagsOverride)
 end
 
 function ns.ApplyFont(fontPath)
+    if ns.RefreshThemeTypography then ns.RefreshThemeTypography() end
     fontPath = ns.GetPopupFontPath(fontPath)
     for _, entry in ipairs(content.fontElements) do
+        if entry.fs == content.statsHeader or entry.fs.gluHeaderOwner == content.statsHeader then
+            entry.fs.gluThemeFontRole = content.statPage == "secondary" and "secondaryStatsHeader" or "statsHeader"
+        end
         local scale = entry.fs.gluFontScaleKey and ns.GetTextScale(entry.fs.gluFontScaleKey) or 1
         entry.fs:SetFont(fontPath, ns.GetThemeFontSize(entry.fs.gluThemeFontRole or "body", entry.size) * scale, entry.flags)
         if entry.fs.gluStatText then entry.fs.gluFixedStatHeight = nil end
     end
     if render.RefreshSectionDividers then render.RefreshSectionDividers() end
-    local statScale = ns.GetTextScale("statTextScale") * ns.GetThemeFontSize("stats", 20) / 20
+    local statSize = ns.GetThemeFontSize("stats", 20)
+    for _, role in ipairs({"statLabel", "statOld", "statArrow", "statNew", "statDelta"}) do statSize = math.max(statSize, ns.GetThemeFontSize(role, 20)) end
+    local statScale = ns.GetTextScale("statTextScale") * statSize / 20
     local statSizeChanged = render.appliedStatScale ~= statScale
     render.appliedStatScale = statScale
     STAT_LINE_HEIGHT = math.max(UI_METRICS.minimumStatLineHeight, math.ceil(UI_METRICS.statLineHeight * statScale))
     render.fitKey, render.headingFitKey = nil, nil
     for _, fs in ipairs(content.statLinePool or {}) do
-        fs.statWordLayoutKey = nil
+        fs.statWordLayoutKey, fs.statWordMetricKey = nil, nil
         fs.slideFrame:SetHeight(STAT_LINE_HEIGHT)
     end
     if render.SyncScaledText then render.SyncScaledText() end
@@ -867,6 +874,7 @@ function ns.ApplyFont(fontPath)
     content.levelTimeMetricKey = nil
     if render.MeasureLevelTime then render.MeasureLevelTime() end
     if render.StylePaceRecord then render.StylePaceRecord() end
+    RefreshCloseButtonLabel()
     if ns.RefreshVisualEffects then ns.RefreshVisualEffects() end
     if frame:IsShown() and ns.RefreshPopupLayout then ns.RefreshPopupLayout() end
 end
@@ -913,6 +921,7 @@ local function EnsureGlowLayers(main)
         glow:SetAlpha(CurrentShadowAlpha(main))
         glow:SetShown(main:IsShown())
         main.glows[i] = glow
+        glow.gluHeaderOwner = main
         glow.gluFontScaleKey = main.gluFontScaleKey
         glow.gluThemeFontRole = main.gluThemeFontRole
         RegisterFontElement(glow, main.gluStatText and 20 or main.gluFontBaseSize)
@@ -977,12 +986,18 @@ local function RegisterGlowFont(main, size, flags)
         or main == content.levelTimeText and "timeTextScale"
         or (main == content.levelText or main == content.statsHeader or main == content.spellsHeader
             or main == content.petSpellsHeader) and "headingTextScale" or nil
-    main.gluThemeFontRole = main.gluStatText and "stats"
+    main.gluThemeFontRole = main.gluThemeFontRole or main.gluStatText and "stats"
         or main == content.levelText and "level"
         or main == content.levelTimeText and "time"
-        or (main == content.statsHeader or main == content.spellsHeader or main == content.petSpellsHeader) and "headings"
+        or main == content.statsHeader and "statsHeader"
+        or main == content.spellsHeader and "abilitiesHeader"
+        or main == content.petSpellsHeader and "petAbilitiesHeader"
+        or main == content.title and "title"
+        or main == content.weaponSkillsText and "weaponSkills"
+        or main == content.noAbilitiesText and "noAbilities"
         or "body"
     for _, glow in ipairs(main.glows) do
+        glow.gluHeaderOwner = main
         glow.gluFontScaleKey = main.gluFontScaleKey
         glow.gluThemeFontRole = main.gluThemeFontRole
     end
@@ -1724,7 +1739,7 @@ local function NewAbilityIconSize()
         * (IsHorizontalLayout() and 1.1 or 1)
 end
 local function AbilityCostHeight()
-    return ns.GetPopupAbilityCostSize() + 3
+    return math.max(ns.GetPopupAbilityCostSize(), ns.GetPopupAbilityCostSize("petAbilityCosts")) + 3
 end
 local ABILITY_COST_GAP = 1
 local ABILITY_COST_TOP_PADDING = 0
@@ -2214,6 +2229,7 @@ local function GetStatLine(index)
     counter:SetJustifyH("LEFT")
     counter:SetJustifyV("MIDDLE")
     counter:SetWordWrap(false)
+    counter.gluThemeFontRole = "statDelta"
     counter:SetHeight(STAT_LINE_HEIGHT)
     RegisterGlowFont(counter, 20, "")
     ApplyToTextLayers(counter, "SetFont", fontPath, ns.GetThemeFontSize("stats", 20) * ns.GetTextScale("statTextScale"), "")
@@ -2550,19 +2566,35 @@ function render.MeasureTextWidth(fontPath, fontSize, fontFlags, text)
     return width
 end
 
-local function MeasureStatText(textRegion, text)
+UI_METRICS.statFontRoles = {"statLabel", "statOld", "statArrow", "statNew", "statDelta"}
+function render.StatPartFontSize(fs, index)
+    local _, size = fs:GetFont()
+    return size * ns.GetThemeFontSize(UI_METRICS.statFontRoles[index], 20) / ns.GetThemeFontSize("stats", 20)
+end
+
+function render.UseStatWords()
+    if ns.db and ns.db.equalStatWidths then return true end
+    for _,role in ipairs(UI_METRICS.statFontRoles) do
+        if ns.GetThemeFontSize(role,20) ~= ns.GetThemeFontSize("stats",20) then return true end
+    end
+    return false
+end
+
+local function MeasureStatText(textRegion, text, part)
     local fontPath, fontSize, fontFlags = textRegion:GetFont()
+    if part then fontSize = render.StatPartFontSize(textRegion, part) end
     return render.MeasureTextWidth(fontPath, fontSize, fontFlags, text)
 end
 
 local function GainCounterWidth(fs, target, stat)
     local path, size, flags = fs:GetFont()
+    size = render.StatPartFontSize(fs, 5)
     local digits = #ns.FormatStatInteger(math.abs(target))
     if fs.gainWidthPath ~= path or fs.gainWidthSize ~= size or fs.gainWidthFlags ~= flags or fs.gainWidthDigits ~= digits or fs.gainWidthUnit ~= (stat and stat.unit) then
         local width = 0
         for digit = 0, 9 do
             local number = string.rep(tostring(digit), digits)
-            width = math.max(width, MeasureStatText(fs, ns.FormatStatGain(tonumber(number), stat)), MeasureStatText(fs, ns.FormatStatGain(-tonumber(number), stat)))
+            width = math.max(width, MeasureStatText(fs, ns.FormatStatGain(tonumber(number), stat), 5), MeasureStatText(fs, ns.FormatStatGain(-tonumber(number), stat), 5))
         end
         -- Native FontStrings can ellipsize a box sized exactly to glyph
         -- advances. Leave room for rounding, kerning and the glow outline.
@@ -2643,6 +2675,9 @@ end
 local function StatTextWidth(fs, data, tracking)
     if data.gainOnly then return MeasureStatText(fs, BuildStatLineText(data)) end
     if ns.db and ns.db.equalStatWidths then local _,width=render.StatWordMetrics(fs,data);return math.max(width,fs.statWordTarget or 0) end
+    for i=1,5 do
+        if render.StatPartFontSize(fs,i) ~= select(2,fs:GetFont()) then local _, width = render.StatWordMetrics(fs,data); return width end
+    end
     local counting = ns.db and ns.db.emphasizeStatGains
     local width = counting and CountingBaseWidth(fs, data, tracking)
         or MeasureStatText(fs, BuildStatLineText(data, tracking, nil, counting))
@@ -2672,21 +2707,24 @@ FitStatFont = function(availableWidth, compact)
             for _, text in ipairs({ fs, fs.gainCounter }) do
                 if text then
                     local path, current, flags = text:GetFont()
-                    local needsSize = current ~= size
+                    local targetSize = text == fs.gainCounter and size * ns.GetThemeFontSize("statDelta",20) / ns.GetThemeFontSize("stats",20) or size
+                    local needsSize = current ~= targetSize
                     for _, glow in ipairs(text.glows) do
                         local _, glowSize = glow:GetFont()
-                        if glowSize ~= size then needsSize = true; break end
+                        if glowSize ~= targetSize then needsSize = true; break end
                     end
                     if path and needsSize then
-                        ApplyToTextLayers(text, "SetFont", path, size, flags or "")
+                        ApplyToTextLayers(text, "SetFont", path, targetSize, flags or "")
                         changed = true
                     end
                 end
             end
         end
     end
-    local parts = { tostring(availableWidth), tostring(compact), tostring(ns.db and ns.db.emphasizeStatGains),
-        tostring(ns.db and ns.db.equalStatWidths), tostring(ns.GetTextScale("statTextScale")), tostring(ns.GetStatAbbreviationThreshold()), ns.GetLocale() }
+    local parts = { tostring(ns.GetThemeFontSize("stats",20)) }
+    for _,role in ipairs(UI_METRICS.statFontRoles) do parts[#parts+1] = tostring(ns.GetThemeFontSize(role,20)) end
+    parts[#parts+1] = table.concat({ tostring(availableWidth), tostring(compact), tostring(ns.db and ns.db.emphasizeStatGains),
+        tostring(ns.db and ns.db.equalStatWidths), tostring(ns.GetTextScale("statTextScale")), tostring(ns.GetStatAbbreviationThreshold()), ns.GetLocale() }, ":")
     for _, fs in ipairs(content.statLinePool) do
         if fs.statData then
             local path, _, flags = fs:GetFont()
@@ -2760,14 +2798,19 @@ function render.ApplyStatWords(fs, amount, counting)
         for i=1,4 do
             local word = NewText(fs.slideFrame,"GameFontHighlight",2)
             word.gluStatText,word.slideFrame = true,fs.slideFrame
+            word.gluThemeFontRole = UI_METRICS.statFontRoles[i]
             word:SetWordWrap(false);word:SetJustifyH("LEFT")
             RegisterGlowFont(word,20,"")
             fs.statWords[i] = word
         end
     end
     local path,size,flags = fs:GetFont()
-    local wordPath,wordSize,wordFlags = fs.statWords[1]:GetFont()
-    local fontChanged = wordPath ~= path or wordSize ~= size or (wordFlags or "") ~= (flags or "")
+    local fontChanged = false
+    for i, word in ipairs(fs.statWords) do
+        local wordPath,wordSize,wordFlags = word:GetFont()
+        if wordPath ~= path or wordSize ~= render.StatPartFontSize(fs, i) or (wordFlags or "") ~= (flags or "") then fontChanged = true end
+    end
+    if select(2, fs.gainCounter:GetFont()) ~= render.StatPartFontSize(fs, 5) then fontChanged = true end
     if fontChanged then fs.statWordLayoutKey = nil end
     if fs.statWordLayoutKey ~= key then
         local sum=0;for _,width in ipairs(widths) do sum=sum+width end
@@ -2777,7 +2820,7 @@ function render.ApplyStatWords(fs, amount, counting)
             local word=i==5 and fs.gainCounter or fs.statWords[i]
             -- A page can change its text/columns while keeping the same font
             -- and row height. Avoid resetting all eight glow layers needlessly.
-            if fontChanged then ApplyToTextLayers(word,"SetFont",path,size,flags or "") end
+            if fontChanged then ApplyToTextLayers(word,"SetFont",path,render.StatPartFontSize(fs, i),flags or "") end
             if word:GetWidth() ~= widths[i] then ApplyToTextLayers(word,"SetWidth",widths[i]) end
             local height = fs:GetHeight()
             if word:GetHeight() ~= height then ApplyToTextLayers(word,"SetHeight",height) end
@@ -2805,7 +2848,7 @@ end
 ApplyStatLineText = function(fs)
     local d = fs.statData
     local totals = d and not d.gainOnly and d
-    local wordMode = totals and ns.db and ns.db.equalStatWidths == true
+    local wordMode = totals and render.UseStatWords()
     if not wordMode and fs.wordLayoutActive then
         fs.wordLayoutActive=false;fs.statWordLayoutKey=nil
         fs.layoutWidth,fs.counterBaseWidth,fs.renderedGainText=nil,nil,nil
@@ -4082,8 +4125,9 @@ function render.StylePaceRecord()
     local record = content.levelTimeRecord
     if not record or not record:IsShown() then return end
     local path, size, flags = content.levelTimeText:GetFont()
+    size = content.levelTimeBaseFontSize + (IsHorizontalLayout() and 2 or 1)
     for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
-        ApplyToTextLayers(record[key], "SetFont", path, size + (key == "label" and 3 or 0), key == "label" and "THICKOUTLINE" or flags or "")
+        ApplyToTextLayers(record[key], "SetFont", path, ns.GetThemeFontSize(record[key].gluThemeFontRole, size + (key == "label" and 3 / ns.GetTextScale("timeTextScale") or 0)) * ns.GetTextScale("timeTextScale"), key == "label" and "THICKOUTLINE" or flags or "")
     end
 end
 
@@ -4120,20 +4164,21 @@ function render.PositionPaceRecord()
     for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
         local text = record[key]
         ApplyToTextLayers(text, "SetWidth", widths[key] + (key == "label" and 12 or 8))
-        ApplyToTextLayers(text, "SetHeight", key == "label" and render.LevelTimeFontSize() + 13 or content.levelTimeNaturalHeight or 18)
+        ApplyToTextLayers(text, "SetHeight", math.max(select(2,text:GetFont()) + 10, content.levelTimeNaturalHeight or 18))
     end
     render.AlignPaceRecord(record.transition or 0)
     record.label:ClearAllPoints()
     record.label:SetPoint("BOTTOM", record, "BOTTOM", 0, (content.levelTimeNaturalHeight or 18) - (IsHorizontalLayout() and 4 or 0))
 end
 
-function render.PreparePaceRecord(seconds, previous)
+function render.PreparePaceRecord(seconds, previous, guild)
     local record = content.levelTimeRecord
     if not record then
         record = CreateFrame("Frame", nil, content)
         record:SetAllPoints(content.levelTimeText)
         for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
             local text = NewText(record, "GameFontHighlightSmall", 1.5)
+            text.gluThemeFontRole = ({label="recordLabel",prefix="recordPrefix",oldTime="recordOld",newTime="recordNew"})[key]
             text.glowAlpha = 0.08
             ApplyToTextLayers(text, "SetWordWrap", false)
             RegisterGlowFont(text)
@@ -4143,14 +4188,17 @@ function render.PreparePaceRecord(seconds, previous)
     end
     record.transition = 0
     record:Show()
-    ApplyToTextLayers(record.label, "SetText", ns.L("New Best Time!"))
+    ApplyToTextLayers(record.label, "SetText", ns.L(guild and "New Guild Record!" or "New Best Time!"))
     ApplyToTextLayers(record.prefix, "SetText", ns.L("Time to Level: %s", ""):match("^(.-)%s*$"))
-    ApplyToTextLayers(record.oldTime, "SetText", ns.FormatLevelClock(previous))
+    ApplyToTextLayers(record.oldTime, "SetText", previous and ns.FormatLevelClock(previous) or "-")
     ApplyToTextLayers(record.newTime, "SetText", ns.FormatLevelClock(seconds))
     local path, size, flags = content.levelTimeText:GetFont()
+    size = content.levelTimeBaseFontSize + (IsHorizontalLayout() and 2 or 1)
     for _, key in ipairs({"label", "prefix", "oldTime", "newTime"}) do
-        ApplyToTextLayers(record[key], "SetFont", path, size + (key == "label" and 3 or 0), key == "label" and "THICKOUTLINE" or flags or "")
-        ApplyToTextLayers(record[key], "SetTextColor", .25, 1, .25)
+        ApplyToTextLayers(record[key], "SetFont", path, ns.GetThemeFontSize(record[key].gluThemeFontRole, size + (key == "label" and 3 / ns.GetTextScale("timeTextScale") or 0)) * ns.GetTextScale("timeTextScale"), key == "label" and "THICKOUTLINE" or flags or "")
+        if guild and key == "label" then ApplyToTextLayers(record[key], "SetTextColor", 1, .82, .30)
+        elseif guild then ApplyToTextLayers(record[key], "SetTextColor", .60, .85, 1)
+        else ApplyToTextLayers(record[key], "SetTextColor", .25, 1, .25) end
     end
     render.PositionPaceRecord()
 end
@@ -4167,7 +4215,7 @@ function render.UpdatePaceTransition(age, moving)
     local eased = t * t * (3 - 2 * t)
     local expansion = moving and math.max(0, math.min(1, (elapsed - .56) / .22)) or 1
     expansion = expansion * expansion * (3 - 2 * expansion)
-    local extra = (render.LevelTimeFontSize() + 13 - (IsHorizontalLayout() and 4 or 0)) * expansion
+    local extra = (select(2,record.label:GetFont()) + 10 - (IsHorizontalLayout() and 4 or 0)) * expansion
     if math.abs((content.paceRowExtra or 0) - extra) > .01 then
         content.paceRowExtra = extra
         if render.ResizeTimeRow then render.ResizeTimeRow() end
@@ -4185,11 +4233,12 @@ end
 function render.UpdateLevelTime()
     content.paceRowExtra, render.timeRowOrigin = 0, nil
     local seconds, previous = tonumber(content.currentLevelPlayedTime), tonumber(content.previousFastestLevelTime)
+    local guild = not content.levelRangeStart and content.guildRecordComparison
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     SetLineAlpha(content.levelTimeText, EntranceAlpha(entranceTimeline and entranceTimeline.levelTime,
         effectAge, true))
     local maxLevel = content.isMaxLevel and ns.db.maxLevelCelebration ~= false
-    if maxLevel and (ns.db.showLevelTime or content.pacePreview) then
+    if maxLevel and not guild and (ns.db.showLevelTime or content.pacePreview) then
         local total
         if content.replayRecord then total = content.replayRecord.timeToCap
         else total = ns.GetTimeToMaxLevel() end
@@ -4213,7 +4262,8 @@ function render.UpdateLevelTime()
             or ns.L("Time to Level: %s", ns.FormatLevelClock(seconds))
         ApplyToTextLayers(content.levelTimeText, "SetText", text)
         render.MeasureLevelTime()
-        if faster then render.PreparePaceRecord(seconds, previous) end
+        if guild then render.PreparePaceRecord(seconds, guild.previous, true)
+        elseif faster then render.PreparePaceRecord(seconds, previous) end
     else
         ApplyToTextLayers(content.levelTimeText, "SetText", "")
     end
@@ -4227,8 +4277,17 @@ function ns.RefreshLevelPaceDisplay()
     UpdateVisualEffects()
 end
 
+function ns.RefreshGuildRecordCelebration()
+    if not frame:IsShown() or content.guildRecordFixed or not content.currentReachedLevel then return end
+    local comparison = ns.GetGuildLevelCelebration and ns.GetGuildLevelCelebration(content.currentReachedLevel, content.currentLevelPlayedTime)
+    if (comparison ~= nil) == (content.guildRecordComparison ~= nil) then return end
+    content.guildRecordComparison = comparison
+    ns.RefreshLevelPaceDisplay()
+end
+
 function ns.ClearLevelPaceComparison()
     content.previousFastestLevelTime = nil
+    content.guildRecordComparison = nil
     ns.RefreshLevelPaceDisplay()
 end
 
@@ -4626,6 +4685,7 @@ function render.ReleasePopupData()
     content.secondaryStatChanges, content.statPageRowCount, content.statPage = nil, nil, nil
     render.UpdateStatScroll(0, true)
     content.currentLevelPlayedTime, content.previousFastestLevelTime, content.pacePreview, content.paceRowExtra = nil, nil, nil, nil
+    content.guildRecordComparison, content.guildRecordFixed = nil, nil
     if content.levelTimeRecord then content.levelTimeRecord:Hide() end
     content.currentStatChanges = nil
     content.replayRecord = nil
@@ -5529,7 +5589,7 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     end
 end
 
-function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest, weatherTest, cataloguePreview)
+function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest, weatherTest, cataloguePreview, guildComparison)
     ns.EnsureDatabase()
     render.screenshotRequest = nil
     ns.SetClosingClickThrough(false)
@@ -5538,6 +5598,9 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     if frame.fadeOutGroup:IsPlaying() then frame.fadeOutGroup:Stop() end
     render.CancelClosing()
     content.replayRecord = replayRecord
+    content.guildRecordFixed = isPreview == true
+    content.guildRecordComparison = guildComparison or replayRecord and replayRecord.guildComparison
+        or not isPreview and ns.GetGuildLevelCelebration and ns.GetGuildLevelCelebration(currentLevel, timePlayedThisLevel) or nil
     content.portraitLoadTest = isPreview and portraitTest or nil
     content.weatherTest = isPreview and weatherTest or nil
     --@do-not-package@
@@ -5572,6 +5635,7 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
         replaySnapshot = ns.SaveLevelUpReplay({level = currentLevel, stats = statChanges, abilities = trainerAbilities,
             weapons = unlearnedWeaponSkills, seconds = timePlayedThisLevel, pets = warlockPetAbilities,
             previousFastest = previousFastest, rangeStart = rangeStart, secondary = secondaryStats,
+            guildComparison = content.guildRecordComparison,
             milestone = milestone == true, maximum = content.isMaxLevel == true})
     end
     local perf = ns.PerfStart("popup_prepare")

@@ -14,10 +14,20 @@ local function ValidTime(value)
 end
 
 local function CharacterIdentity()
-    local name = type(UnitName) == "function" and UnitName("player") or "Player"
-    local realm = type(GetRealmName) == "function" and GetRealmName() or "Realm"
+    local wire, name, realm = ns.GetPlayerCharacterNames()
     local guid = type(UnitGUID) == "function" and UnitGUID("player")
-    return guid or (name .. "-" .. realm), name .. " - " .. realm
+    return guid or wire, ns.GetCurrentFlavor() == "forever" and name or name .. " - " .. realm
+end
+
+local function RefreshStoredNames(characters)
+    if ns.GetCurrentFlavor() ~= "forever" or not GetNumGuildMembers or not GetGuildRosterInfo then return end
+    for index = 1, math.min(1000, GetNumGuildMembers() or 0) do
+        local member = { GetGuildRosterInfo(index) }
+        local character = member[17] and characters[member[17]]
+        if type(character) == "table" and type(member[1]) == "string" then
+            character.name = ns.FormatCharacterName(member[1])
+        end
+    end
 end
 
 local function Store()
@@ -44,6 +54,13 @@ function ns.SyncLevelHistory()
     local _, classToken = UnitClass("player")
     character.classToken = classToken or character.classToken
     local legacy = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
+    -- A logged-out character still has its own older SavedVariables file.
+    -- Apply account-side resets before importing those records on its next login.
+    local reset = tonumber(character.timesResetRevision) or 0
+    if (tonumber(legacy.levelHistoryResetRevision) or 0) < reset then
+        legacy.levelTimes, legacy.levelBests, legacy.fastestLevelTimes = nil, nil, nil
+        legacy.levelHistoryResetRevision = reset
+    end
     for _, flavor in ipairs({ "retail", "forever" }) do
         local record = FlavorRecord(character, flavor)
         local times = type(legacy.levelTimes) == "table" and legacy.levelTimes[flavor]
@@ -82,24 +99,44 @@ function ns.RecordAccountLevelPace(seconds)
     if not ValidTime(record.fastest) or seconds < record.fastest then record.fastest = seconds end
 end
 
-function ns.ResetAccountCharacterTimers()
-    local key = CharacterIdentity()
-    Store()[key] = nil
+function ns.ResetAccountCharacterTimers(key)
+    local current = CharacterIdentity()
+    key = key or current
+    local characters = Store()
+    local character = characters[key]
+    if type(character) ~= "table" then return false end
+    character.flavors = {}
+    character.timesResetRevision = (tonumber(character.timesResetRevision) or 0) + 1
+    if key == current and type(GnomeLevelUpCharacterDB) == "table" then
+        GnomeLevelUpCharacterDB.levelTimes, GnomeLevelUpCharacterDB.levelBests, GnomeLevelUpCharacterDB.fastestLevelTimes = nil, nil, nil
+        GnomeLevelUpCharacterDB.levelHistoryResetRevision = character.timesResetRevision
+    end
     samples = nil
     if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
+    return true
 end
 
 -- Reset saved records without touching LevelUp's pending event or /played cache.
 function ns.ClearRecordedLevelTimes()
+    ns.SyncLevelHistory()
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     GnomeLevelUpCharacterDB.levelTimes, GnomeLevelUpCharacterDB.fastestLevelTimes, GnomeLevelUpCharacterDB.levelBests = nil, nil, nil
     ns.ResetAccountCharacterTimers()
+end
+
+function ns.ClearCharacterLevelTimes(key)
+    if not key then return false end
+    local current = ns.SyncLevelHistory()
+    if key == current then ns.ResetLevelTimers(); return true end
+    return ns.ResetAccountCharacterTimers(key)
 end
 
 function ns.RecordCompletedLevel(reachedLevel, seconds)
     reachedLevel, seconds = tonumber(reachedLevel), tonumber(seconds)
     if not reachedLevel or reachedLevel % 1 ~= 0 or reachedLevel < 2
         or not seconds or seconds ~= seconds or seconds < 0 or seconds == math.huge then return end
+    ns.SyncLevelHistory()
+    if ns.NoteGuildLevelCompletion then ns.NoteGuildLevelCompletion(reachedLevel, seconds) end
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     local history = GnomeLevelUpCharacterDB.levelTimes
     if type(history) ~= "table" then history = {}; GnomeLevelUpCharacterDB.levelTimes = history end
@@ -142,9 +179,44 @@ function ns.GetTimeToMaxLevel()
     return total < math.huge and total or nil
 end
 
+--@do-not-package@
+function ns.SetDebugLevelRecord(level, seconds)
+    if not ns.IsDebugEnabled() then return false end
+    level, seconds = tonumber(level), tonumber(seconds)
+    local cap = HistoryLevelCap(ns.GetCurrentFlavor())
+    if not level or level % 1 ~= 0 or level < 2 or level > cap or not seconds
+        or seconds ~= seconds or seconds < 1 or seconds > 365 * 86400 then return false end
+    level = level - 1 -- Match the reached-level labels; storage uses the interval's start.
+    seconds = math.floor(seconds)
+    ns.SyncLevelHistory()
+    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
+    local db, mode = GnomeLevelUpCharacterDB, ns.GetCurrentFlavor()
+    db.levelTimes = type(db.levelTimes) == "table" and db.levelTimes or {}
+    db.levelBests = type(db.levelBests) == "table" and db.levelBests or {}
+    db.fastestLevelTimes = type(db.fastestLevelTimes) == "table" and db.fastestLevelTimes or {}
+    db.levelTimes[mode] = type(db.levelTimes[mode]) == "table" and db.levelTimes[mode] or {}
+    db.levelBests[mode] = type(db.levelBests[mode]) == "table" and db.levelBests[mode] or {}
+    local replaced = db.levelBests[mode][level]
+    db.levelTimes[mode][level], db.levelBests[mode][level] = seconds, seconds
+    local fastest = db.fastestLevelTimes[mode]
+    if fastest == replaced or not ValidTime(fastest) then fastest = nil end
+    for _, value in pairs(db.levelBests[mode]) do
+        if ValidTime(value) and value >= 1 and (not fastest or value < fastest) then fastest = value end
+    end
+    db.fastestLevelTimes[mode] = fastest
+    local _, character = ns.SyncLevelHistory()
+    local record = FlavorRecord(character, mode)
+    record.times[level], record.bests[level], record.fastest = seconds, seconds, fastest
+    if ns.PublishGuildLevelTime then ns.PublishGuildLevelTime(level, seconds) end
+    if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
+    return true
+end
+--@end-do-not-package@
+
 function ns.RecordLevelPace(seconds)
     seconds = tonumber(seconds)
     if not seconds or seconds ~= seconds or seconds == math.huge or seconds < 1 then return nil end
+    ns.SyncLevelHistory()
     seconds = math.floor(seconds)
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     local records = GnomeLevelUpCharacterDB.fastestLevelTimes
@@ -155,7 +227,7 @@ function ns.RecordLevelPace(seconds)
     if samples and ns.IsDebugEnabled() then
         -- A diagnostic seed changes the comparison, never the saved best time.
         comparison = SAMPLE_LEVEL_SECONDS
-    elseif ns.db and ns.db.compareAccountLevelTimes then
+    else
         comparison = ns.GetAccountFastestLevelTime()
     end
     ns.RecordAccountLevelPace(seconds)
@@ -190,11 +262,12 @@ end
 
 function ns.GetLevelHistoryCharacters()
     local current = ns.SyncLevelHistory()
+    RefreshStoredNames(Store())
     local choices = {}
     for key, character in pairs(Store()) do
         if type(character) == "table" and type(character.name) == "string"
             and (HasRecordedIntervals(character) or key == current and samples and ns.IsDebugEnabled()) then
-            choices[#choices + 1] = { value = key, label = character.name }
+            choices[#choices + 1] = { value = key, label = ns.FormatCharacterName(character.name, nil, ns.GetCurrentFlavor() ~= "forever") }
         end
     end
     table.sort(choices, function(a, b)
@@ -223,7 +296,9 @@ end
 
 function ns.GetLevelHistoryView(key, flavor)
     local current = ns.SyncLevelHistory()
+    if ns.GuildRecords then ns.GuildRecords.Store(false) end
     local characters = Store()
+    RefreshStoredNames(characters)
     key = characters[key] and key or current
     local character = characters[key]
     local record = FlavorRecord(character, flavor)
@@ -248,11 +323,18 @@ function ns.GetLevelHistoryView(key, flavor)
         end
         if row.time then view.total, view.count = view.total + row.time, view.count + 1 end
         view.rows[#view.rows + 1] = row
-        local guild = key == current and ns.GetGuildLevelRecord and ns.GetGuildLevelRecord(level, flavor)
+        local guild, guildKey
+        if key == current and ns.GetGuildLevelRecord then
+            guild = ns.GetGuildLevelRecord(level, flavor)
+            guildKey = ns.GuildRecords.Identity()
+        elseif ns.GuildRecords then
+            guild, guildKey = ns.GuildRecords.CharacterRecord(key, level, flavor)
+        end
         if guild then
-            view.rows[#view.rows + 1] = { level = level, time = guild.seconds,
+            row.guildRecord = { level = level, time = guild.seconds,
                 owner = guild.owner, guild = true, flavor = flavor,
-                guildKey = ns.GuildRecords.Identity(),
+                classToken = guild.classToken,
+                guildKey = guildKey,
                 receivedFrom = guild.receivedFrom, receivedAt = guild.receivedAt }
         end
     end
@@ -269,8 +351,10 @@ local function FormatTime(seconds)
     return ValidTime(seconds) and ns.FormatLevelClock(seconds) or "-"
 end
 
-local HISTORY_LABELS = { "Level", "Recorded time", "Personal best" }
-local HISTORY_COLUMN_STARTS = { 0, .30, .65 }
+local HISTORY_LABELS = { "Level", "Recorded time", "Personal best", "Guild record" }
+local HISTORY_COLUMN_STARTS = { 0, .12, .34, .67 }
+local HISTORY_COLUMN_WIDTHS = { .12, .22, .33, .33 }
+local UNKNOWN_CLASS_COLOR = { .55, .55, .55 }
 
 local function ConfirmGuildRecordDeletion(record)
     if not ns.CanDeleteGuildRecords or not ns.CanDeleteGuildRecords()
@@ -291,8 +375,8 @@ end
 local function UpdateHistorySummary(frame, view, width)
     frame.summary = frame.summary or frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     frame.summary:SetText((view.sample and ("|cffffcc33" .. ns.L("Sample history (not saved)") .. "|r\n") or "")
-        .. view.name .. "\n" .. ns.L("Recorded: %d / %d", view.count, view.cap - 1)
-        .. "   " .. ns.L("Total: %s", FormatTime(view.total)))
+        .. ns.FormatCharacterName(view.name, nil, ns.GetCurrentFlavor() ~= "forever") .. "\n"
+        .. ns.L("Recorded: %d / %d", view.count, view.cap - 1) .. "   " .. ns.L("Total: %s", FormatTime(view.total)))
     frame.summary:ClearAllPoints()
     frame.summary:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
     return ns.WrapOptionsText(frame.summary, width - 16) + 20
@@ -304,144 +388,126 @@ local function LayoutHistoryHeaders(frame, width, top)
     for column, label in ipairs(HISTORY_LABELS) do
         local header = frame.headers[column] or frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         frame.headers[column] = header
-        header:SetText(ns.L(label))
-        header:ClearAllPoints()
+        header:SetText(ns.L(label));header:ClearAllPoints()
         header:SetPoint("TOPLEFT", frame, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[column], -top)
-        local columnWidth = width * (column == 1 and .30 or .35) - 16
-        headerHeight = math.max(headerHeight, ns.WrapOptionsText(header, columnWidth))
+        headerHeight = math.max(headerHeight, ns.WrapOptionsText(header, width * HISTORY_COLUMN_WIDTHS[column] - 16))
     end
     return top + headerHeight + 8
 end
 
+local function ShowRecordTooltip(owner, record, guild)
+    if not GameTooltip or not record then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(ns.L("Level") .. " " .. tostring(record.level + 1))
+    GameTooltip:AddLine(ns.L(guild and "Guild record" or "Personal best") .. ": "
+        .. FormatTime(guild and record.time or record.accountBest), .4, .85, 1)
+    if record.owner then GameTooltip:AddLine(ns.FormatCharacterName(record.owner), 1, 1, 1) end
+    if guild and ns.IsDebugEnabled() then
+        local source = record.receivedFrom
+        local kind = source and (ns.CanonicalCharacterName(source) == ns.CanonicalCharacterName(ns.GuildRecords.OwnName()) and "Local"
+            or ns.CanonicalCharacterName(source) == ns.CanonicalCharacterName(record.owner) and "Direct" or "Relayed") or "Unknown"
+        GameTooltip:AddLine(ns.L("Received from: %s", source and ns.FormatCharacterName(source) or ns.L("Unknown")), .7, .7, .7)
+        local clock, stamp = date or os and os.date, record.receivedAt
+        local received = type(stamp) == "number" and stamp > 0 and clock and clock("%Y-%m-%d %H:%M:%S", stamp) or ns.L("Unknown")
+        GameTooltip:AddLine(ns.L("Received at: %s", received), .7, .7, .7)
+        GameTooltip:AddLine(ns.L("Record source: %s", ns.L(kind)), .7, .7, .7)
+    end
+    GameTooltip:Show()
+end
+
+local function HideTooltip() if GameTooltip then GameTooltip:Hide() end end
+
 local function CreateHistoryRow(frame)
     local row = CreateFrame("Frame", nil, frame)
-    row.background = row:CreateTexture(nil, "BACKGROUND")
-    row.background:SetAllPoints(row)
+    row.background = row:CreateTexture(nil, "BACKGROUND");row.background:SetAllPoints(row)
     row.bestHighlight = row:CreateTexture(nil, "BORDER", nil, -1)
-    row.bestHighlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+    row.guildShade = row:CreateTexture(nil, "BORDER", nil, -1)
     row.bar = row:CreateTexture(nil, "BORDER")
-    row.bar:SetColorTexture(.15, .65, .7, .12)
-    row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-    row.bar:SetHeight(2)
+    row.bar:SetColorTexture(.15, .65, .7, .12);row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0);row.bar:SetHeight(2)
     row.texts = {}
-    for column = 1, 3 do
-        row.texts[column] = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    end
+    for column = 1, 4 do row.texts[column] = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall") end
     row.ownerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.ownerText:SetTextColor(.65, .75, .68)
-    row.delete = CreateFrame("Button", nil, row)
-    row.delete:SetSize(24, 20)
-    row.delete:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -3)
+    row.guildOwnerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.guildHit = CreateFrame("Frame", nil, row);row.guildHit:EnableMouse(true)
+    row.guildHit:SetScript("OnEnter", function(self) ShowRecordTooltip(self, row.data.guildRecord, true) end)
+    row.guildHit:SetScript("OnLeave", HideTooltip)
+    row.delete = CreateFrame("Button", nil, row.guildHit)
+    row.delete:SetSize(24, 20);row.delete:SetPoint("TOPRIGHT", row.guildHit, "TOPRIGHT", -2, -3)
     row.delete.label = row.delete:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.delete.label:SetAllPoints(row.delete)
-    row.delete.label:SetText("[X]")
-    row.delete.label:SetTextColor(1, .4, .4)
+    row.delete.label:SetAllPoints(row.delete);row.delete.label:SetText("[X]");row.delete.label:SetTextColor(1, .4, .4)
     row.delete:SetScript("OnClick", function()
-        local record = row.data
-        if record and record.guild and ns.DeleteGuildLevelRecord then
-            ConfirmGuildRecordDeletion(record)
-        end
+        if row.data and row.data.guildRecord then ConfirmGuildRecordDeletion(row.data.guildRecord) end
     end)
     row.delete:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(ns.L("Delete this record for all online users."))
-        GameTooltip:Show()
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");GameTooltip:SetText(ns.L("Delete this record for all online users."));GameTooltip:Show()
     end)
-    row.delete:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    row.delete:SetScript("OnLeave", HideTooltip)
     row:EnableMouse(true)
-    row:SetScript("OnEnter", function(self)
-        if not GameTooltip then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.texts[1]:GetText())
-        GameTooltip:AddLine(ns.L(self.data.guild and "Guild record" or "Personal best") .. ": "
-            .. FormatTime(self.data.guild and self.data.time or self.data.accountBest), .4, .85, 1)
-        if self.data.owner then GameTooltip:AddLine(self.data.owner, 1, 1, 1) end
-        if self.data.guild and ns.IsDebugEnabled() then
-            local source = self.data.receivedFrom
-            local kind = source and (source == ns.GuildRecords.OwnName() and "Local"
-                or source == self.data.owner and "Direct" or "Relayed") or "Unknown"
-            GameTooltip:AddLine(ns.L("Received from: %s", source or ns.L("Unknown")), .7, .7, .7)
-            local clock = date or os and os.date
-            local stamp = self.data.receivedAt
-            local received = type(stamp) == "number" and stamp > 0 and clock and clock("%Y-%m-%d %H:%M:%S", stamp) or ns.L("Unknown")
-            GameTooltip:AddLine(ns.L("Received at: %s", received), .7, .7, .7)
-            GameTooltip:AddLine(ns.L("Record source: %s", ns.L(kind)), .7, .7, .7)
-        end
-        GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-    row:SetScript("OnHide", function() if GameTooltip then GameTooltip:Hide() end end)
+    row:SetScript("OnEnter", function(self) ShowRecordTooltip(self, self.data, false) end)
+    row:SetScript("OnLeave", HideTooltip);row:SetScript("OnHide", HideTooltip)
     return row
 end
 
 local function LayoutHistoryRow(row, record, index, width, top, longestTime, classColor)
     row.data = record
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", 0, -top)
-    -- Keep the realm in the tooltip; the list only needs the character's name.
-    local recordHolder = record.owner and (record.owner:match("^(.-) %- ") or record.owner)
-    local canDelete = record.guild and record.flavor == ns.GetCurrentFlavor()
-        and ns.CanDeleteGuildRecords and ns.CanDeleteGuildRecords()
+    row:ClearAllPoints();row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", 0, -top)
+    local guild = record.guildRecord
+    local canDelete = guild and guild.guildKey == ns.GuildRecords.Identity()
+        and guild.flavor == ns.GetCurrentFlavor() and ns.CanDeleteGuildRecords and ns.CanDeleteGuildRecords()
     row.delete:SetShown(canDelete == true)
-    local ownerWidth = width * .35 - 16 - (canDelete and 26 or 0)
-    row.ownerText:ClearAllPoints()
-    row.ownerText:SetPoint("TOPLEFT", row, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[3], -22)
-    row.ownerText:SetText(recordHolder or "")
-    row.ownerText:SetShown(recordHolder ~= nil)
-    local height = recordHolder and math.max(28, 28 + ns.WrapOptionsText(row.ownerText, ownerWidth)) or 28
+    local height = 28
+    for column, owner in pairs({ [3] = record.owner or false, [4] = guild and guild.owner or false }) do
+        local text = column == 3 and row.ownerText or row.guildOwnerText
+        text:ClearAllPoints();text:SetPoint("TOPLEFT", row, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[column], -22)
+        text:SetText(owner and ns.FormatCharacterName(owner) or "");text:SetShown(owner ~= false)
+        if owner then
+            height = math.max(height, 28 + ns.WrapOptionsText(text, width * HISTORY_COLUMN_WIDTHS[column] - 16 - (column == 4 and canDelete and 26 or 0)))
+        end
+    end
     row:SetSize(width, height)
     row.background:SetColorTexture(1, 1, 1, index % 2 == 0 and .045 or .015)
-    if record.guild then row.background:SetColorTexture(.55, .30, .85, .13) end
-    row.ownerText:SetTextColor(record.guild and .8 or .65, record.guild and .65 or .75, record.guild and 1 or .68)
-    row.bar:SetColorTexture(record.guild and .65 or .15, record.guild and .40 or .65, record.guild and 1 or .7, .12)
+    row.bestHighlight:ClearAllPoints();row.bestHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", width * HISTORY_COLUMN_STARTS[3], 0)
+    row.bestHighlight:SetSize(width * HISTORY_COLUMN_WIDTHS[3], height)
     row.bestHighlight:SetShown(record.ownBest == true and classColor ~= nil)
-    if record.ownBest and classColor then
-        row.bestHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", width * HISTORY_COLUMN_STARTS[3], 0)
-        row.bestHighlight:SetColorTexture(classColor[1], classColor[2], classColor[3], .30)
-    end
-    row.bar:SetWidth(math.max(1, width * (record.time or 0) / longestTime))
-    row.bar:SetShown(record.time ~= nil)
-    local values = {
-        tostring(record.level) .. " - " .. tostring(record.level + 1),
-        FormatTime(record.time), FormatTime(record.accountBest),
-    }
-    if record.guild then values[3] = ns.L("Guild record") end
-    for column, text in ipairs(row.texts) do
+    if record.ownBest and classColor then row.bestHighlight:SetColorTexture(classColor[1], classColor[2], classColor[3], .30) end
+    row.guildHit:ClearAllPoints();row.guildHit:SetPoint("TOPLEFT", row, "TOPLEFT", width * HISTORY_COLUMN_STARTS[4], 0)
+    row.guildHit:SetSize(width * HISTORY_COLUMN_WIDTHS[4], height);row.guildHit:SetShown(guild ~= nil)
+    row.guildShade:ClearAllPoints();row.guildShade:SetPoint("TOPLEFT", row.guildHit, "TOPLEFT")
+    row.guildShade:SetSize(width * HISTORY_COLUMN_WIDTHS[4], height);row.guildShade:SetShown(guild ~= nil)
+    local color = guild and ns.CLASS_COLORS[guild.classToken] or UNKNOWN_CLASS_COLOR
+    local r,g,b = color[1],color[2],color[3]
+    local textR,textG,textB = r+(1-r)*.18,g+(1-g)*.18,b+(1-b)*.18
+    row.guildShade:SetColorTexture(r*.82,g*.82,b*.82,.20)
+    row.guildOwnerText:SetTextColor(textR,textG,textB);row.ownerText:SetTextColor(.65,.75,.68)
+    row.bar:SetWidth(math.max(1, width * (record.time or 0) / longestTime));row.bar:SetShown(record.time ~= nil)
+    local values = { tostring(record.level + 1), FormatTime(record.time), FormatTime(record.accountBest), FormatTime(guild and guild.time) }
+    for column,text in ipairs(row.texts) do
         text:ClearAllPoints()
-        local columnStart = 8 + width * HISTORY_COLUMN_STARTS[column]
-        if column == 3 and recordHolder then
-            text:SetPoint("TOPLEFT", row, "TOPLEFT", columnStart, -5)
-        else
-            text:SetPoint("LEFT", row, "LEFT", columnStart, 0)
-        end
-        text:SetWidth(width * (column == 1 and .30 or .35) - 16 - (column == 3 and canDelete and 26 or 0))
-        text:SetWordWrap(false)
-        text:SetJustifyH("LEFT")
-        text:SetText(values[column])
-        if record.guild then text:SetTextColor(.8, .65, 1)
-        elseif column == 3 then text:SetTextColor(.4, 1, .55)
-        else text:SetTextColor(.9, .9, .9) end
+        text:SetPoint("TOPLEFT", row, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[column], -5)
+        text:SetWidth(width * HISTORY_COLUMN_WIDTHS[column] - 16 - (column == 4 and canDelete and 26 or 0))
+        text:SetWordWrap(false);text:SetJustifyH("LEFT");text:SetText(values[column])
+        if column == 4 and guild then text:SetTextColor(textR,textG,textB)
+        elseif column == 3 then text:SetTextColor(.4,1,.55)
+        else text:SetTextColor(.9,.9,.9) end
     end
     row:Show()
     return height
 end
 
--- Rows stay in the native Options scroll frame and are reused between visits.
 function ns.LayoutLevelHistory(frame, width)
-    local view = ns.GetLevelHistoryView(frame.character, frame.flavor or ns.GetCurrentFlavor())
+    local mode = ns.IsDebugEnabled() and frame.flavor or ns.GetCurrentFlavor()
+    local view = ns.GetLevelHistoryView(frame.character, mode or ns.GetCurrentFlavor())
     local top = LayoutHistoryHeaders(frame, width, UpdateHistorySummary(frame, view, width))
-    local classColor = ns.CLASS_COLORS and ns.CLASS_COLORS[view.classToken]
-    if not classColor then classColor = ns.GetClassColor("title") end
+    local classColor = ns.CLASS_COLORS and ns.CLASS_COLORS[view.classToken] or ns.GetClassColor("title")
     local longestTime = 1
-    for _, record in ipairs(view.rows) do longestTime = math.max(longestTime, record.time or 0) end
+    for _,record in ipairs(view.rows) do longestTime = math.max(longestTime, record.time or 0) end
     frame.rows = frame.rows or {}
-    for index, record in ipairs(view.rows) do
-        local row = frame.rows[index] or CreateHistoryRow(frame)
-        frame.rows[index] = row
+    for index,record in ipairs(view.rows) do
+        local row = frame.rows[index] or CreateHistoryRow(frame);frame.rows[index] = row
         top = top + LayoutHistoryRow(row, record, index, width, top, longestTime, classColor)
     end
-    for index = #view.rows + 1, #frame.rows do frame.rows[index]:Hide() end
-    frame:SetHeight(top + 8)
-    return top + 8
+    for index = #view.rows+1,#frame.rows do frame.rows[index]:Hide() end
+    frame:SetHeight(top+8)
+    return top+8
 end

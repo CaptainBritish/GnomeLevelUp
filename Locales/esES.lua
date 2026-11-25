@@ -204,6 +204,7 @@ RegisterLocaleBuilder("esES", ns.BuildSpanishLocale)
 -- Register the startup message before selecting the initial language.
 -- Core applies the saved choice at ADDON_LOADED.
 RegisterLocaleBuilder("esES", function() return {
+    ["New Guild Record!"] = "¡Nuevo récord de hermandad!",
     ["Delete"] = "Eliminar",
     ["Unknown"] = "Desconocido",
     ["Local"] = "Local",

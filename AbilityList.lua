@@ -237,7 +237,8 @@ function ns.InstallAbilityList(render, content, frame, style)
         -- letting neighboring prices overlap (including compact/scroll layouts).
         local cellWidth = normalIconSize
         local rowIconSize = normalIconSize
-        local costFontSize = ns.GetPopupAbilityCostSize()
+        local costRole = row == content.petAbilityRow and "petAbilityCosts" or "abilityCosts"
+        local costFontSize = ns.GetPopupAbilityCostSize(costRole)
         local showCosts = style.TrainerCostsVisible()
         local showInlineCosts = style.TrainerCostsVisible(true)
         for i, spell in ipairs(abilities) do
@@ -258,6 +259,7 @@ function ns.InstallAbilityList(render, content, frame, style)
             if formattedCost then
                 local fontPath, fontSize, fontFlags = icon.costText:GetFont()
                 icon.costFont.size = ns.GetAbilityCostSize()
+                icon.costText.gluThemeFontRole = costRole
                 if fontSize ~= costFontSize then
                     icon.costText:SetFont(fontPath or style.DEFAULT_FONT_PATH, costFontSize, fontFlags)
                 end
@@ -305,7 +307,7 @@ function ns.InstallAbilityList(render, content, frame, style)
             if singleColumn then
                 local header = content.petSpellsHeader
                 local path, _, flags = header:GetFont()
-                local size = math.max(1, ns.GetThemeFontSize("headings", header.gluFontBaseSize) * ns.GetTextScale("headingTextScale"))
+                local size = math.max(1, ns.GetThemeFontSize(header.gluThemeFontRole or "headings", header.gluFontBaseSize) * ns.GetTextScale("headingTextScale"))
                 viewportWidth = math.max(viewportWidth, math.ceil(render.MeasureTextWidth(path, size, flags, header:GetText())) + 8)
             end
             row.viewport.horizontalWidth = viewportWidth

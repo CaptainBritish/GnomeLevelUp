@@ -48,15 +48,16 @@ local defaults = {
     compactMode = false,
     horizontalMode = true,
     showLevelTime = true,
-    compareAccountLevelTimes = false,
     guildTimeSync = true,
     showSecondaryStats = false,
     secondaryStatStartPercent = 50,
     statTextScale = 1,
     headingTextScale = 1,
     timeTextScale = 1,
-    themeFontSizes = { stats = 0, headings = 0, level = 0, time = 0, abilityCosts = 0, timeline = 0, body = 0 },
+    themeFontSizes = ns.DefaultThemeFontSizes(),
+    themeFontSizeOffsets = ns.DefaultThemeFontSizes(),
     themeFontSizeOffset = 0,
+    themeFontDefinition = "",
     themeFontPreferences = {},
     ignoreMouseoverDelay = false,
     ignoreMouseoverDelayUserSet = false,
@@ -247,11 +248,18 @@ end
 
 function ns.GetThemeFontSize(role, baseSize)
     local sizes = ns.db and ns.db.themeFontSizes
-    local size = type(sizes) == "table" and tonumber(sizes[role])
-    if size and size == size and size >= 6 and size <= 72 then return size end
+    local offsets = ns.db and ns.db.themeFontSizeOffsets
+    local elementOffset = 0
+    while role do
+        local size = type(sizes) == "table" and tonumber(sizes[role])
+        if size and size == size and size >= 6 and size <= 72 then return math.max(6, size + elementOffset) end
+        local delta = type(offsets) == "table" and tonumber(offsets[role]) or 0
+        if delta and delta == delta then elementOffset = elementOffset + math.max(-8, math.min(16, delta)) end
+        role = ns.THEME_FONT_PARENTS[role]
+    end
     local offset = tonumber(ns.db and ns.db.themeFontSizeOffset) or 0
     if offset ~= offset then offset = 0 end
-    return math.max(6, baseSize + math.max(-8, math.min(16, offset)))
+    return math.max(6, baseSize + math.max(-8, math.min(16, offset)) + elementOffset)
 end
 function ns.SetTextScale(key, value)
     ns.EnsureDatabase()
@@ -349,8 +357,8 @@ function ns.GetAbilityCostSize()
     return math.floor(math.max(8, math.min(20, size)))
 end
 
-function ns.GetPopupAbilityCostSize()
-    return ns.GetThemeFontSize("abilityCosts", ns.GetAbilityCostSize())
+function ns.GetPopupAbilityCostSize(role)
+    return ns.GetThemeFontSize(role or "abilityCosts", ns.GetAbilityCostSize())
 end
 
 function ns.TrainerCostsEnabled()
@@ -494,8 +502,6 @@ SharedToggle("showLevelTime", "Show time played this level", function(value)
     if value then ns.RequestLevelPlayedTime() end
     ns.RefreshLevelPaceDisplay()
 end, "Show the level timer and celebrate new best times.")
-SharedToggle("compareAccountLevelTimes", "Compare account-wide bests", nil,
-    "Compare new level times with your fastest recorded level across characters in the same game mode.")
 SharedToggle("guildTimeSync", "Share level times with guild", function()
     if ns.RefreshGuildTimeSync then ns.RefreshGuildTimeSync() end
     if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
@@ -613,7 +619,7 @@ ns.APPEARANCE_SETTING_KEYS = {
     "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
-    "themeFontSizes", "themeFontSizeOffset",
+    "themeFontSizes", "themeFontSizeOffsets", "themeFontSizeOffset",
     "abilityCostSize", "horizontalAbilityCostSize",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding",
     "scale",
@@ -623,7 +629,7 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
     "guildTimeSync",
-    "themeFontSizes", "themeFontSizeOffset", "themeFontPreferences",
+    "themeFontSizes", "themeFontSizeOffsets", "themeFontSizeOffset", "themeFontPreferences",
     "showLevelTimeline", "showTimelineNextUnlock", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
@@ -639,7 +645,7 @@ ns.RESETTABLE_SETTING_KEYS = {
     "portraitRingSettle", "dividerReveal",
     "playSound", "useThemeSounds", "muteNativeDing", "soundChoice", "useThemeLevelUpSound", "levelUpSoundCustomized",
     "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
-    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "compareAccountLevelTimes", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
+    "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
     "showNewAbilities", "showLatestTrainingRanks", "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
@@ -757,6 +763,27 @@ ns.FlushAppearanceRefresh = function()
 end
 -- Refresh themes and individual appearance settings through the same path.
 ns.ApplyCurrentAppearance = RefreshAppearanceAfterThemeChange
+
+-- Theme authors can change typography between releases. Refresh those authored
+-- values without resetting the player's font, colours, placement or text scales.
+function ns.RefreshThemeTypography()
+    local theme = ns.db and ns.FindBackgroundTheme and ns.FindBackgroundTheme(ns.db.backgroundTheme)
+    local appearance = theme and theme.appearance
+    if not appearance then return end
+    local roles, parts = {}, { tostring(ns.db.backgroundTheme), tostring(appearance.themeFontSizeOffset or 0) }
+    for role in pairs(ns.THEME_FONT_ROLES) do roles[#roles + 1] = role end
+    table.sort(roles)
+    for _, role in ipairs(roles) do
+        parts[#parts + 1] = role .. ":" .. tostring(appearance.themeFontSizes and appearance.themeFontSizes[role] or 0)
+            .. ":" .. tostring(appearance.themeFontSizeOffsets and appearance.themeFontSizeOffsets[role] or 0)
+    end
+    local signature = table.concat(parts, "|")
+    if ns.db.themeFontDefinition == signature then return end
+    ns.db.themeFontSizes = CopySetting(appearance.themeFontSizes or defaults.themeFontSizes)
+    ns.db.themeFontSizeOffsets = CopySetting(appearance.themeFontSizeOffsets or defaults.themeFontSizeOffsets)
+    ns.db.themeFontSizeOffset = appearance.themeFontSizeOffset or 0
+    ns.db.themeFontDefinition = signature
+end
 
 function ns.FindBackgroundTheme(value)
     for _, theme in ipairs(ns.CUSTOM_BACKGROUND_THEMES or {}) do
@@ -911,6 +938,7 @@ function ns.RestoreModernAppearance()
     ns.db.portraitRingChoice = "NONE"
     ns.db.customFontPath = nil
     ns.db.themeFontSizes = CopySetting(defaults.themeFontSizes)
+    ns.db.themeFontSizeOffsets = CopySetting(defaults.themeFontSizeOffsets)
     ns.db.themeFontSizeOffset = 0
     RestoreThemeFont()
     LoadSelectedThemeHues()
@@ -1283,6 +1311,7 @@ local function InitDB()
     ns.NormalizeTrellisSideTransforms(ns.db)
     if GnomeLevelUpDB.horizontalMode then GnomeLevelUpDB.compactMode = true end
     GnomeLevelUpDB.schemaVersion = DATABASE_SCHEMA_VERSION
+    GnomeLevelUpDB.compareAccountLevelTimes = nil
 end
 ns.InitDB = InitDB
 
@@ -2352,7 +2381,7 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     local previous
     if paceScenario then
         seconds = 110
-        previous = paceScenario == "slower" and 90 or paceScenario == "best" and 140 or nil
+        previous = paceScenario == "slower" and 90 or (paceScenario == "best" or paceScenario == "guild") and 140 or nil
     end
     local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
     if secondaryStats and #secondaryStats > 1 and (debugSkills or milestoneLevel or maxLevelPreview
@@ -2363,7 +2392,8 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
         true, milestoneLevel ~= nil or maxLevelPreview == true or previewLevel ~= nil,
         previous, maxLevelPreview, paceScenario ~= nil,
-        rangeStart, secondaryStats, nil, portraitTest, weatherTest, previewLevel ~= nil)
+        rangeStart, secondaryStats, nil, portraitTest, weatherTest, previewLevel ~= nil,
+        paceScenario == "guild" and { previous = 140, seconds = 110 } or nil)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
 end
 
@@ -2472,6 +2502,19 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
     msg = (msg or ""):lower()
     msg = msg:match("^%s*(.-)%s*$") -- trim
 
+    --@do-not-package@
+    if msg == "debugrecord" or msg:match("^debugrecord%s") then
+        if not ns.IsDebugEnabled() then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+            return
+        end
+        local level, seconds = msg:match("^debugrecord%s+(%d+)%s+([%d%.]+)$")
+        if level and seconds and ns.SetDebugLevelRecord(tonumber(level), tonumber(seconds)) then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Level %d", tonumber(level)) .. " - " .. ns.FormatLevelClock(tonumber(seconds)))
+        else print("|cff3fe0ffGnomeLevelUp|r: /glu debugrecord <level> <timeinseconds>") end
+        return
+    end
+    --@end-do-not-package@
     if msg == "debugwelcome" then
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
@@ -2503,10 +2546,10 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
             return
         end
         local scenario = msg:match("^debugtime%s+(%a+)$")
-        if scenario == "new" or scenario == "slower" or scenario == "best" then
+        if scenario == "new" or scenario == "slower" or scenario == "best" or scenario == "guild" then
             ns.PreviewLevelUp(false, nil, nil, 3, scenario)
         else
-            print("|cff3fe0ffGnomeLevelUp|r: /glu debugtime <new|slower|best>")
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugtime <new|slower|best|guild>")
         end
     elseif msg == "debugportrait" or msg:match("^debugportrait%s") then
         local scenario = msg:match("^debugportrait%s+(%a+)$")
@@ -2688,8 +2731,11 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu dumptraining - print cached skills and learned status")
         print("  /glu dumpskills    - print Skills-tab, equipped, and trainable weapon data")
         print("  /glu testtrainer   - print the current unlearned skill list")
-        print("  /glu debugtime <new|slower|best> - preview level-time scenarios (debug mode)")
+        print("  /glu debugtime <new|slower|best|guild> - preview personal or guild time records (debug mode)")
         print("  /glu debugwelcome - preview the GnomeLevelUp 2.0 welcome message (debug mode)")
+        --@do-not-package@
+        print("  /glu debugrecord <level> <timeinseconds> - set a real personal record and share it with your guild (debug mode)")
+        --@end-do-not-package@
         print("  /glu debugportrait <delay|fail|unmasked> - test the 3D portrait fallback or preview without the circular mask (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")

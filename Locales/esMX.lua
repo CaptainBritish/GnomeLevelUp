@@ -8,6 +8,7 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Reuse Spanish vocabulary while keeping independent enable/disable flags.
 RegisterLocaleBuilder("esMX", ns.BuildSpanishLocale)
 RegisterLocaleBuilder("esMX", function() return {
+    ["New Guild Record!"] = "¡Nuevo récord de hermandad!",
     ["Delete"] = "Eliminar",
     ["Unknown"] = "Desconocido",
     ["Local"] = "Local",
