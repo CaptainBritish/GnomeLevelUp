@@ -113,7 +113,7 @@ local function BuildOptions()
             if path and path ~= "" then
                 FONT_CHOICES[#FONT_CHOICES + 1] = {
                     value = path,
-                    label = name,
+                    label = ns.GetThemeFontLabel(path) or name,
                     previewFont = path,
                 }
             end
@@ -965,8 +965,7 @@ local function BuildOptions()
     AddDropdown("Font", FONT_CHOICES,
         function() return ns.db.customFontPath or FONT_CHOICES[1].value end,
         function(value)
-            ns.db.customFontPath = value ~= ns.DEFAULT_FONT_PATH and value or nil
-            ns.ApplyFont(ns.db.customFontPath)
+            ns.SetPopupFont(value)
         end, fontStrataRow, 140, LEFT + 270 + APPEARANCE_SHIFT, CONTROL_X + 270)
     y = fontStrataRow - 36
 
@@ -1400,6 +1399,8 @@ local function BuildOptions()
     AddSectionHeader("Level History", "level_history")
     AddSettingCheckbox("showLevelTime", LEFT, y)
     AddSettingCheckbox("compareAccountLevelTimes", LEFT + 270, y)
+    y = y - 34
+    AddSettingCheckbox("guildTimeSync", LEFT, y)
     y = y - 34
     local historyFrame = CreateFrame("Frame", nil, body)
     local historyChoices, currentCharacter = ns.GetLevelHistoryCharacters()

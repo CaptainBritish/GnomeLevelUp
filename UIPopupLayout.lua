@@ -9,7 +9,7 @@ function ns.CreatePopupHeadingFitter(context)
     return function()
         local TEXT_WIDTH = context.GetTextWidth()
         local scale = ns.GetTextScale("headingTextScale")
-        if scale == 1 then return end
+        if scale == 1 and ns.GetThemeFontSize("headings", 18) == 18 then return end
         local horizontal = IsHorizontalLayout()
         local specs = {{content.statsHeader, TEXT_WIDTH}}
         if ns.AbilitySectionVisible(content.currentTrainerAbilities) then
@@ -23,7 +23,7 @@ function ns.CreatePopupHeadingFitter(context)
         if includePets and #(content.currentWarlockPetAbilities or {}) > 0 then
             specs[#specs + 1] = {content.petSpellsHeader, horizontal and TrainingWidth(content.petAbilityViewport) or TEXT_WIDTH}
         end
-        local parts = {tostring(scale)}
+        local parts = {tostring(scale), tostring(ns.GetThemeFontSize("headings", 18))}
         for _, spec in ipairs(specs) do
             local path, _, flags = spec[1]:GetFont()
             parts[#parts + 1] = table.concat({path or DEFAULT_FONT_PATH, flags or "", spec[1]:GetText(), tostring(spec[2])}, "\031")
@@ -35,7 +35,7 @@ function ns.CreatePopupHeadingFitter(context)
             local text, width = spec[1], spec[2]
             if not horizontal or text ~= content.petSpellsHeader then
                 local path, _, flags = text:GetFont()
-                local naturalWidth = render.MeasureTextWidth(path, text.gluFontBaseSize * scale, flags, text:GetText())
+                local naturalWidth = render.MeasureTextWidth(path, ns.GetThemeFontSize("headings", text.gluFontBaseSize) * scale, flags, text:GetText())
                 fit = math.min(fit, math.max(1, width - 8) / math.max(1, naturalWidth))
             end
         end
@@ -43,7 +43,7 @@ function ns.CreatePopupHeadingFitter(context)
         for _, text in ipairs({content.statsHeader, content.spellsHeader, content.petSpellsHeader}) do
             local path, _, flags = text:GetFont()
             local headingFit = horizontal and text == content.petSpellsHeader and 1 or fit
-            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, text.gluFontBaseSize * scale * headingFit), flags or "")
+            ApplyToTextLayers(text, "SetFont", path or DEFAULT_FONT_PATH, math.max(1, ns.GetThemeFontSize("headings", text.gluFontBaseSize) * scale * headingFit), flags or "")
             SyncTextGeometry(text)
         end
         render.headingFitKey = key

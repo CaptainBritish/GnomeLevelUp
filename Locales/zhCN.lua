@@ -5,6 +5,21 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Every new UI string needs an entry here and in the other non-English files.
 
 RegisterLocaleBuilder("zhCN", function() return {
+    ["Delete"] = "删除",
+    ["Unknown"] = "未知",
+    ["Local"] = "本地",
+    ["Direct"] = "直接",
+    ["Relayed"] = "转发",
+    ["Received from: %s"] = "接收自：%s",
+    ["Received at: %s"] = "接收时间：%s",
+    ["Record source: %s"] = "纪录来源：%s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "警告：你即将为当前在线的所有用户删除这条纪录。此操作无法撤销。",
+    ["Delete this record for all online users."] = "为所有在线用户删除这条纪录。",
+
+    ["Share level times with guild"] = "与公会共享升级用时",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "与使用GLU的公会成员共享已完成等级的用时，并在等级历史中显示公会纪录。",
+    ["Guild record"] = "公会纪录",
+
     ["%s (recommended for gamepad)"] = "%s（推荐用于手柄）",
     ["%s hue"] = "%s色调",
     ["%s rotation"] = "%s旋转",

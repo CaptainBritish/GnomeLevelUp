@@ -6,7 +6,6 @@ ignore:
   - .github
   - .git
   - .vscode
-  - .git
   - changes.txt
   - Tools
   - Examples

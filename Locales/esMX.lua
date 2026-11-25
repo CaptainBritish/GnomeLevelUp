@@ -8,6 +8,21 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Reuse Spanish vocabulary while keeping independent enable/disable flags.
 RegisterLocaleBuilder("esMX", ns.BuildSpanishLocale)
 RegisterLocaleBuilder("esMX", function() return {
+    ["Delete"] = "Eliminar",
+    ["Unknown"] = "Desconocido",
+    ["Local"] = "Local",
+    ["Direct"] = "Directo",
+    ["Relayed"] = "Retransmitido",
+    ["Received from: %s"] = "Recibido de: %s",
+    ["Received at: %s"] = "Recibido el: %s",
+    ["Record source: %s"] = "Origen del récord: %s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "Advertencia: vas a eliminar este récord para todos los usuarios conectados en este momento. Esta acción es irreversible.",
+    ["Delete this record for all online users."] = "Eliminar este récord para todos los usuarios conectados.",
+
+    ["Share level times with guild"] = "Compartir tiempos de nivel con la hermandad",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "Comparte los tiempos de niveles completados con miembros de la hermandad que usan GLU y muestra sus récords en el historial de niveles.",
+    ["Guild record"] = "Récord de hermandad",
+
     ["%s (recommended for gamepad)"] = "%s (recomendado para control)",
     ["Controller glyphs"] = "Iconos de botones del control",
     ["Controller menu frame strata"] = "Capa de visualización del menú del control",

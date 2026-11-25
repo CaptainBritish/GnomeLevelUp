@@ -24,7 +24,7 @@ function ns.IsTrainerRidingSpell(spellID)
     return RIDING_SPELLS[spellID] == true
 end
 local reportWindow, reportEdit, copyHint
-local copyArmed, copyText
+local copyControls
 local revision = ns.ForeverTrainingRevision or "1.4.0-custom"
 local REPORT_PATH = "WTF/Account/<account>/SavedVariables/" .. ADDON_NAME .. ".lua"
 
@@ -84,26 +84,6 @@ local function IsBeastTrainingReport(entry)
     return entry.classToken == "HUNTER" and not entry.npcName and entry.status == "used"
 end
 
--- Pet requirements and prices can depend on the active pet. Keep the latest
--- offered values separately, without replacing the bundled pet unlock levels.
-function ns.SavePetTrainerObservation(observation)
-    if type(GnomeLevelUpDB) ~= "table" or not PositiveInteger(observation.spellID) then return end
-    local spells = GnomeLevelUpDB.petTrainerObservations
-    if type(spells) ~= "table" then spells = {}; GnomeLevelUpDB.petTrainerObservations = spells end
-    if not spells[observation.spellID] then
-        local count = 0
-        for _ in pairs(spells) do count = count + 1 end
-        if count >= MAX_REPORTS then return end
-    end
-    spells[observation.spellID] = {
-        spellID = observation.spellID, name = observation.name,
-        offeredLevel = observation.level or observation.observedLevel,
-        offeredCost = observation.cost or observation.observedCost,
-        status = observation.status, npcName = observation.npcName, source = observation.source,
-        lastSeen = type(time) == "function" and time() or nil,
-    }
-end
-
 local function IsPetObservation(entry)
     return (type(entry.source) == "table" and entry.source.petTrainer == true)
         or ns.IsTrainerPetSkill(entry.classToken, entry.spellID, entry.name)
@@ -121,7 +101,6 @@ local function Store()
     if changes ~= lastFilteredChanges then
         for key, entry in pairs(changes) do
             if type(entry) == "table" then
-                if IsPetObservation(entry) then ns.SavePetTrainerObservation(entry) end
                 local knownLevels = CatalogueIndex(entry.classToken)[entry.spellID]
                 if IsPetObservation(entry) or IsBeastTrainingReport(entry) or ns.IsTrainerRidingSpell(entry.spellID)
                     or (ns.IsHardcodedWeaponSkill and ns.IsHardcodedWeaponSkill(entry.name, entry.spellID))
@@ -178,7 +157,6 @@ function ns.RecordTrainerObservation(observation)
         or ns.db.enabled == false or not ns.GetCurrentFlavor or ns.GetCurrentFlavor() ~= "forever" then return false end
     if IsPetObservation(observation) then
         if ns.RecordHunterPetTrainerObservation then ns.RecordHunterPetTrainerObservation(observation) end
-        ns.SavePetTrainerObservation(observation)
         return false
     end
     if ns.db.monitorTrainerChanges == false then return false end
@@ -279,7 +257,7 @@ end
 function ns.ClearTrainerReports(keepWindowOpen)
     if GnomeLevelUpDB then GnomeLevelUpDB.trainerChangeReports = nil end
     if not reportWindow then return end
-    copyArmed, copyText = false, nil
+    copyControls.Reset()
     reportEdit:SetText("")
     reportEdit:ClearFocus()
     if keepWindowOpen then
@@ -298,23 +276,12 @@ function ns.OpenTrainerReport()
     end
     ns.PrintTrainerReportLocation()
     if not reportWindow then
-        reportWindow = CreateFrame("Frame", "GnomeLevelUpTrainerReport", UIParent, "BackdropTemplate")
-        reportWindow:SetSize(640, 500)
-        reportWindow:SetPoint("CENTER")
-        reportWindow:SetFrameStrata("DIALOG")
-        reportWindow:SetClampedToScreen(true)
-        reportWindow:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",tile=true,tileSize=32,edgeSize=24,
-            insets={left=8,right=8,top=8,bottom=8}})
-        CreateFrame("Button", nil, reportWindow, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -2, -2)
-        local title = reportWindow:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        title:SetPoint("TOPLEFT", 20, -18)
+        local title, instructions
+        reportWindow, title, instructions = ns.CreateReportWindow({
+            name = "GnomeLevelUpTrainerReport", height = 500, strata = "DIALOG",
+            inset = 20, titleY = -18, textWidth = 600,
+        })
         title:SetText(ns.L("Export trainer report"))
-        local instructions = reportWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        instructions:SetPoint("TOPLEFT", 20, -48)
-        instructions:SetWidth(600)
-        instructions:SetWordWrap(true)
-        instructions:SetJustifyH("LEFT")
         instructions:SetText(ns.L("After /reload or logout, send the saved file to the addon author on GitHub or Curseforge. It includes your GnomeLevelUp settings. Alternatively, copy the report-only JSON below."))
         local pathText = reportWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         pathText:SetPoint("TOPLEFT", instructions, "BOTTOMLEFT", 0, -10)
@@ -331,13 +298,7 @@ function ns.OpenTrainerReport()
         copy:SetSize(160, 26)
         copy:SetPoint("LEFT", reload, "RIGHT", 10, 0)
         copy:SetText(ns.L("Copy"))
-        copy:SetScript("OnClick", function()
-            if reportEdit:GetText() == "" then return end
-            copyArmed, copyText = true, nil
-            reportEdit:SetFocus()
-            reportEdit:HighlightText()
-            copyHint:SetText(ns.L("Press Ctrl+C to copy. The field clears afterward."))
-        end)
+        copy:SetScript("OnClick", function() copyControls.SelectText() end)
         local clear = CreateFrame("Button", nil, reportWindow, "UIPanelButtonTemplate")
         clear:SetSize(160, 26)
         clear:SetPoint("LEFT", copy, "RIGHT", 10, 0)
@@ -349,46 +310,19 @@ function ns.OpenTrainerReport()
         copyHint:SetWordWrap(true)
         copyHint:SetJustifyH("LEFT")
         copyHint:SetText("")
-        local scroll = CreateFrame("ScrollFrame", nil, reportWindow, "UIPanelScrollFrameTemplate")
+        local scroll
+        reportEdit, scroll = ns.CreateReportTextBox(reportWindow, 570, function(self) self:ClearFocus() end)
         scroll:SetPoint("TOPLEFT", copyHint, "BOTTOMLEFT", 0, -8)
         scroll:SetPoint("BOTTOMRIGHT", reportWindow, "BOTTOMRIGHT", -40, 20)
-        reportEdit = CreateFrame("EditBox", nil, scroll)
-        reportEdit:SetMultiLine(true)
-        reportEdit:SetAutoFocus(false)
-        reportEdit:SetMaxLetters(0)
-        reportEdit:SetFontObject(ChatFontNormal)
-        reportEdit:SetWidth(570)
-        reportEdit:SetHeight(260)
-        reportEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        -- Clipboard writes are restricted to secure UI code. Let the edit box
-        -- perform its native copy, then clear on key release after Ctrl+C.
-        reportEdit:SetScript("OnKeyDown", function(self, key)
-            local modifier = (IsControlKeyDown and IsControlKeyDown())
-                or (IsMetaKeyDown and IsMetaKeyDown())
-            copyText = copyArmed and modifier and key == "C" and self:GetText() or nil
-            if copyText then self:HighlightText() end
-        end)
-        reportEdit:SetScript("OnKeyUp", function(self, key)
-            if key ~= "C" or not copyText then return end
-            if copyText ~= "" and self:GetText() == copyText then
-                self:SetText("")
-                self:ClearFocus()
-            end
-            copyArmed, copyText = false, nil
-            copyHint:SetText("")
-        end)
-        reportEdit:SetScript("OnEditFocusLost", function()
-            copyArmed, copyText = false, nil
-            copyHint:SetText("")
-        end)
-        scroll:SetScrollChild(reportEdit)
-        reportWindow:SetScript("OnHide", function()
-            copyArmed, copyText = false, nil
-            reportEdit:ClearFocus()
-            copyHint:SetText("")
-        end)
+        copyControls = ns.InstallReportCopyControls(reportWindow, reportEdit, {
+            requireButton = true,
+            onSelect = function()
+                copyHint:SetText(ns.L("Press Ctrl+C to copy. The field clears afterward."))
+            end,
+            onReset = function() copyHint:SetText("") end,
+        })
     end
-    copyArmed, copyText = false, nil
+    copyControls.Reset()
     copyHint:SetText("")
     reportWindow:Show()
     reportEdit:SetText(ns.GetTrainerReportJSON())

@@ -124,6 +124,7 @@ function ns.RecordCompletedLevel(reachedLevel, seconds)
         sample.bests[level] = math.min(sample.bests[level] or SAMPLE_LEVEL_SECONDS, seconds)
     end
     ns.SyncLevelHistory()
+    if ns.PublishGuildLevelTime then ns.PublishGuildLevelTime(reachedLevel - 1, seconds) end
     if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
 end
 
@@ -247,6 +248,13 @@ function ns.GetLevelHistoryView(key, flavor)
         end
         if row.time then view.total, view.count = view.total + row.time, view.count + 1 end
         view.rows[#view.rows + 1] = row
+        local guild = key == current and ns.GetGuildLevelRecord and ns.GetGuildLevelRecord(level, flavor)
+        if guild then
+            view.rows[#view.rows + 1] = { level = level, time = guild.seconds,
+                owner = guild.owner, guild = true, flavor = flavor,
+                guildKey = ns.GuildRecords.Identity(),
+                receivedFrom = guild.receivedFrom, receivedAt = guild.receivedAt }
+        end
     end
     return view
 end
@@ -263,6 +271,22 @@ end
 
 local HISTORY_LABELS = { "Level", "Recorded time", "Personal best" }
 local HISTORY_COLUMN_STARTS = { 0, .30, .65 }
+
+local function ConfirmGuildRecordDeletion(record)
+    if not ns.CanDeleteGuildRecords or not ns.CanDeleteGuildRecords()
+        or not StaticPopupDialogs or not StaticPopup_Show then return end
+    StaticPopupDialogs.GLU_DELETE_GUILD_RECORD = {
+        text = ns.L("Warning: You are about to remove this record for everyone online right now. This is not reversable."),
+        button1 = ns.L("Delete"), button2 = ns.L("Cancel"),
+        OnAccept = function(_, data)
+            if data then ns.DeleteGuildLevelRecord(data.level, data.flavor, data.time, data.owner, data.guildKey) end
+        end,
+        timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+    }
+    -- Copy the selection: pooled rows can be reused while the dialog is open.
+    StaticPopup_Show("GLU_DELETE_GUILD_RECORD", nil, nil,
+        { level = record.level, flavor = record.flavor, time = record.time, owner = record.owner, guildKey = record.guildKey })
+end
 
 local function UpdateHistorySummary(frame, view, width)
     frame.summary = frame.summary or frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -305,13 +329,45 @@ local function CreateHistoryRow(frame)
     end
     row.ownerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.ownerText:SetTextColor(.65, .75, .68)
+    row.delete = CreateFrame("Button", nil, row)
+    row.delete:SetSize(24, 20)
+    row.delete:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -3)
+    row.delete.label = row.delete:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.delete.label:SetAllPoints(row.delete)
+    row.delete.label:SetText("[X]")
+    row.delete.label:SetTextColor(1, .4, .4)
+    row.delete:SetScript("OnClick", function()
+        local record = row.data
+        if record and record.guild and ns.DeleteGuildLevelRecord then
+            ConfirmGuildRecordDeletion(record)
+        end
+    end)
+    row.delete:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(ns.L("Delete this record for all online users."))
+        GameTooltip:Show()
+    end)
+    row.delete:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.texts[1]:GetText())
-        GameTooltip:AddLine(ns.L("Personal best") .. ": " .. FormatTime(self.data.accountBest), .4, .85, 1)
+        GameTooltip:AddLine(ns.L(self.data.guild and "Guild record" or "Personal best") .. ": "
+            .. FormatTime(self.data.guild and self.data.time or self.data.accountBest), .4, .85, 1)
         if self.data.owner then GameTooltip:AddLine(self.data.owner, 1, 1, 1) end
+        if self.data.guild and ns.IsDebugEnabled() then
+            local source = self.data.receivedFrom
+            local kind = source and (source == ns.GuildRecords.OwnName() and "Local"
+                or source == self.data.owner and "Direct" or "Relayed") or "Unknown"
+            GameTooltip:AddLine(ns.L("Received from: %s", source or ns.L("Unknown")), .7, .7, .7)
+            local clock = date or os and os.date
+            local stamp = self.data.receivedAt
+            local received = type(stamp) == "number" and stamp > 0 and clock and clock("%Y-%m-%d %H:%M:%S", stamp) or ns.L("Unknown")
+            GameTooltip:AddLine(ns.L("Received at: %s", received), .7, .7, .7)
+            GameTooltip:AddLine(ns.L("Record source: %s", ns.L(kind)), .7, .7, .7)
+        end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -325,7 +381,10 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime, cla
     row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", 0, -top)
     -- Keep the realm in the tooltip; the list only needs the character's name.
     local recordHolder = record.owner and (record.owner:match("^(.-) %- ") or record.owner)
-    local ownerWidth = width * .35 - 16
+    local canDelete = record.guild and record.flavor == ns.GetCurrentFlavor()
+        and ns.CanDeleteGuildRecords and ns.CanDeleteGuildRecords()
+    row.delete:SetShown(canDelete == true)
+    local ownerWidth = width * .35 - 16 - (canDelete and 26 or 0)
     row.ownerText:ClearAllPoints()
     row.ownerText:SetPoint("TOPLEFT", row, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[3], -22)
     row.ownerText:SetText(recordHolder or "")
@@ -333,6 +392,9 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime, cla
     local height = recordHolder and math.max(28, 28 + ns.WrapOptionsText(row.ownerText, ownerWidth)) or 28
     row:SetSize(width, height)
     row.background:SetColorTexture(1, 1, 1, index % 2 == 0 and .045 or .015)
+    if record.guild then row.background:SetColorTexture(.55, .30, .85, .13) end
+    row.ownerText:SetTextColor(record.guild and .8 or .65, record.guild and .65 or .75, record.guild and 1 or .68)
+    row.bar:SetColorTexture(record.guild and .65 or .15, record.guild and .40 or .65, record.guild and 1 or .7, .12)
     row.bestHighlight:SetShown(record.ownBest == true and classColor ~= nil)
     if record.ownBest and classColor then
         row.bestHighlight:SetPoint("TOPLEFT", row, "TOPLEFT", width * HISTORY_COLUMN_STARTS[3], 0)
@@ -344,6 +406,7 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime, cla
         tostring(record.level) .. " - " .. tostring(record.level + 1),
         FormatTime(record.time), FormatTime(record.accountBest),
     }
+    if record.guild then values[3] = ns.L("Guild record") end
     for column, text in ipairs(row.texts) do
         text:ClearAllPoints()
         local columnStart = 8 + width * HISTORY_COLUMN_STARTS[column]
@@ -352,11 +415,12 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime, cla
         else
             text:SetPoint("LEFT", row, "LEFT", columnStart, 0)
         end
-        text:SetWidth(width * (column == 1 and .30 or .35) - 16)
+        text:SetWidth(width * (column == 1 and .30 or .35) - 16 - (column == 3 and canDelete and 26 or 0))
         text:SetWordWrap(false)
         text:SetJustifyH("LEFT")
         text:SetText(values[column])
-        if column == 3 then text:SetTextColor(.4, 1, .55)
+        if record.guild then text:SetTextColor(.8, .65, 1)
+        elseif column == 3 then text:SetTextColor(.4, 1, .55)
         else text:SetTextColor(.9, .9, .9) end
     end
     row:Show()

@@ -49,11 +49,15 @@ local defaults = {
     horizontalMode = true,
     showLevelTime = true,
     compareAccountLevelTimes = false,
+    guildTimeSync = true,
     showSecondaryStats = false,
     secondaryStatStartPercent = 50,
     statTextScale = 1,
     headingTextScale = 1,
     timeTextScale = 1,
+    themeFontSizes = { stats = 0, headings = 0, level = 0, time = 0, abilityCosts = 0, timeline = 0, body = 0 },
+    themeFontSizeOffset = 0,
+    themeFontPreferences = {},
     ignoreMouseoverDelay = false,
     ignoreMouseoverDelayUserSet = false,
     clickThrough = false,
@@ -240,6 +244,15 @@ function ns.GetTextScale(key)
     if value ~= value or value == math.huge or value == -math.huge then value = 1 end
     return math.max(.5, math.min(2, value))
 end
+
+function ns.GetThemeFontSize(role, baseSize)
+    local sizes = ns.db and ns.db.themeFontSizes
+    local size = type(sizes) == "table" and tonumber(sizes[role])
+    if size and size == size and size >= 6 and size <= 72 then return size end
+    local offset = tonumber(ns.db and ns.db.themeFontSizeOffset) or 0
+    if offset ~= offset then offset = 0 end
+    return math.max(6, baseSize + math.max(-8, math.min(16, offset)))
+end
 function ns.SetTextScale(key, value)
     ns.EnsureDatabase()
     for _, spec in ipairs(ns.TEXT_SIZE_SETTINGS) do
@@ -334,6 +347,10 @@ function ns.GetAbilityCostSize()
     local size = tonumber(ns.db and ns.db[key])
     if not size or size ~= size then size = defaults[key] end
     return math.floor(math.max(8, math.min(20, size)))
+end
+
+function ns.GetPopupAbilityCostSize()
+    return ns.GetThemeFontSize("abilityCosts", ns.GetAbilityCostSize())
 end
 
 function ns.TrainerCostsEnabled()
@@ -479,6 +496,10 @@ SharedToggle("showLevelTime", "Show time played this level", function(value)
 end, "Show the level timer and celebrate new best times.")
 SharedToggle("compareAccountLevelTimes", "Compare account-wide bests", nil,
     "Compare new level times with your fastest recorded level across characters in the same game mode.")
+SharedToggle("guildTimeSync", "Share level times with guild", function()
+    if ns.RefreshGuildTimeSync then ns.RefreshGuildTimeSync() end
+    if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
+end, "Share completed level times with guild members using GLU and show guild records in Level History.")
 SharedToggle("ignoreMouseoverDelay", "Ignore mouseover delay", function(value)
     ns.db.ignoreMouseoverDelayUserSet = true
     if value and ns.levelUpFrame and ns.levelUpFrame:IsShown() then ns.RescheduleFadeOut(0.15) end
@@ -592,6 +613,7 @@ ns.APPEARANCE_SETTING_KEYS = {
     "portraitRingSettle", "dividerReveal",
     "playerPortraitPosition", "playerPortraitScale", "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "backgroundStyle", "backgroundFillMode",
     "backgroundTextureColors", "backgroundTextureTransforms", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
+    "themeFontSizes", "themeFontSizeOffset",
     "abilityCostSize", "horizontalAbilityCostSize",
     "frameStrata", "framePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding",
     "scale",
@@ -600,6 +622,8 @@ ns.APPEARANCE_SETTING_KEYS = {
 -- Keep the reset paths on the same copy-and-restore implementation. The
 -- appearance subset is also reused by custom theme application.
 ns.RESETTABLE_SETTING_KEYS = {
+    "guildTimeSync",
+    "themeFontSizes", "themeFontSizeOffset", "themeFontPreferences",
     "showLevelTimeline", "showTimelineNextUnlock", "timelineSteps", "timelineSkillCount", "timelineOpacity", "timelineColour", "timelineClassColour",
     "abilityCostSize", "horizontalAbilityCostSize",
     "themeHuePreferences",
@@ -841,12 +865,43 @@ function ns.ApplyPortraitRingChoice(value)
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
+local function FontPreferenceKey()
+    if ns.db.backgroundMode == "CUSTOM" and ns.db.backgroundTheme then return ns.db.backgroundTheme end
+    return "MODERN"
+end
+
+local function RememberThemeFont()
+    local preferences = ns.db.themeFontPreferences
+    local key = FontPreferenceKey()
+    if preferences[key] == nil then
+        local count = 0
+        for _ in pairs(preferences) do count = count + 1 end
+        if count >= 128 then return end
+    end
+    preferences[key] = ns.db.customFontPath or false
+end
+
+local function RestoreThemeFont()
+    local saved = ns.db.themeFontPreferences[FontPreferenceKey()]
+    if saved ~= nil then
+        if saved == false then ns.db.customFontPath = nil else ns.db.customFontPath = saved end
+    end
+end
+
+function ns.SetPopupFont(path)
+    EnsureDatabase()
+    ns.db.customFontPath = path ~= ns.DEFAULT_FONT_PATH and path or nil
+    RememberThemeFont()
+    ns.ApplyFont(ns.db.customFontPath)
+end
+
 function ns.RestoreModernAppearance()
     EnsureDatabase()
     ns.InvalidateColorPicker()
     ns.RememberThemeHues()
-    -- Modern starts without a portrait ring. Keep portrait artwork, position
-    -- and font choices when switching backgrounds.
+    RememberThemeFont()
+    -- Portrait artwork and placement belong to the player. Fonts are restored
+    -- separately so a theme's typography cannot replace Modern's selection.
     ns.db.backgroundMode = "MODERN"
     ns.db.bgOpacity = 0.80
     ns.db.backgroundTheme = nil
@@ -854,6 +909,10 @@ function ns.RestoreModernAppearance()
     ns.db.portraitRingEnabled = false
     ns.db.portraitRingTexture = nil
     ns.db.portraitRingChoice = "NONE"
+    ns.db.customFontPath = nil
+    ns.db.themeFontSizes = CopySetting(defaults.themeFontSizes)
+    ns.db.themeFontSizeOffset = 0
+    RestoreThemeFont()
     LoadSelectedThemeHues()
     RefreshAppearanceAfterThemeChange(true)
 end
@@ -885,6 +944,7 @@ function ns.ApplyBackgroundTheme(value)
     end
 
     ns.RememberThemeHues()
+    RememberThemeFont()
     -- A locked location belongs to the player, not the selected theme.
     local locationLocked = ns.db.lockFramePosition == true
     local lockedPosition = locationLocked and CopySetting(ns.db.framePosition)
@@ -911,6 +971,7 @@ function ns.ApplyBackgroundTheme(value)
     end
     ns.db.backgroundMode = "CUSTOM"
     ns.db.backgroundTheme = value
+    RestoreThemeFont()
     ns.db.backgroundChoice = theme.backgroundName
     ns.db.frameChoice = theme.frameName or theme.backgroundName
     LoadSelectedThemeHues()
@@ -1344,6 +1405,7 @@ end
 function ns.ResetAppearanceToDefaults()
     ns.InvalidateColorPicker()
     ResetSettingKeys(ns.APPEARANCE_SETTING_KEYS)
+    ns.db.themeFontPreferences = {}
     ns.db.classColourPortraitBackground = defaults.classColourPortraitBackground
     -- Explicitly clear legacy and composed-theme selectors so old texture
     -- pieces cannot remain active after the reset.
@@ -1542,6 +1604,7 @@ end
 function ns.ApplyAddonState(updateBanner)
     EnsureDatabase()
     local active = ns.db.enabled ~= false
+    if ns.RefreshGuildTimeSync then ns.RefreshGuildTimeSync() end
 
     -- Native Ding muting is independent from Blizzard toast visibility.
     if ns.SetGnomeLevelUpSoundMuted then
@@ -2409,7 +2472,13 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
     msg = (msg or ""):lower()
     msg = msg:match("^%s*(.-)%s*$") -- trim
 
-    if msg == "firsttime" then
+    if msg == "debugwelcome" then
+        if not ns.IsDebugEnabled() then
+            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+            return
+        end
+        if ns.ShowVersionWelcome then ns.ShowVersionWelcome(true) end
+    elseif msg == "firsttime" then
         if ns.OpenFirstTimeSetup then ns.OpenFirstTimeSetup() end
     elseif msg == "controlleroptions" then
         if ns.ToggleControllerOptions then ns.ToggleControllerOptions(true, true) end
@@ -2620,6 +2689,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu dumpskills    - print Skills-tab, equipped, and trainable weapon data")
         print("  /glu testtrainer   - print the current unlearned skill list")
         print("  /glu debugtime <new|slower|best> - preview level-time scenarios (debug mode)")
+        print("  /glu debugwelcome - preview the GnomeLevelUp 2.0 welcome message (debug mode)")
         print("  /glu debugportrait <delay|fail|unmasked> - test the 3D portrait fallback or preview without the circular mask (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")

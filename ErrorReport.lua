@@ -24,7 +24,7 @@ local portraitSettings = {
 }
 local lastPrompt = {}
 local window, reportText, title, instructions
-local displayedReports, pendingCopy
+local displayedReports, copyControls
 
 local function Read(func, ...)
     if type(func) ~= "function" then return nil end
@@ -192,11 +192,6 @@ function ns.GetDebugReportJSON()
     end
 end
 
-local function SelectReportText()
-    reportText:SetFocus()
-    reportText:HighlightText()
-end
-
 local function ClearCopiedReport()
     local reports = ReportStore(false)
     for index = #(reports or {}), 1, -1 do
@@ -211,64 +206,26 @@ local function ClearCopiedReport()
             lastPrompt[entry.code] = nil
         end
     end
-    displayedReports, pendingCopy = nil, nil
-    reportText:SetText("")
-    reportText:ClearFocus()
+    displayedReports = nil
 end
 
 local function CreateReportWindow()
-    window = CreateFrame("Frame", "GnomeLevelUpErrorReport", UIParent, "BackdropTemplate")
-    window:SetSize(640, 420)
-    window:SetPoint("CENTER")
-    window:SetFrameStrata("FULLSCREEN_DIALOG")
-    window:SetClampedToScreen(true)
-    window:EnableMouse(true)
-    window:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24,
-        insets = { left = 8, right = 8, top = 8, bottom = 8 },
+    window, title, instructions = ns.CreateReportWindow({
+        name = "GnomeLevelUpErrorReport", height = 420, strata = "FULLSCREEN_DIALOG",
+        inset = 22, titleY = -20, textWidth = 580,
     })
-    local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -2, -2)
-    close:SetScript("OnClick", function() window:Hide() end)
-    title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 22, -20)
-    instructions = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    instructions:SetPoint("TOPLEFT", 22, -48)
-    instructions:SetWidth(580)
-    instructions:SetJustifyH("LEFT")
     local copy = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
     copy:SetPoint("BOTTOMLEFT", 22, 18)
     copy:SetSize(140, 28)
     copy:SetText(ns.L("Copy"))
-    copy:SetScript("OnClick", SelectReportText)
-    local scroll = CreateFrame("ScrollFrame", nil, window, "UIPanelScrollFrameTemplate")
+    copy:SetScript("OnClick", function() copyControls.SelectText() end)
+    local scroll
+    reportText, scroll = ns.CreateReportTextBox(window, 565, function() window:Hide() end)
     scroll:SetPoint("TOPLEFT", instructions, "BOTTOMLEFT", 0, -12)
     scroll:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -42, 58)
-    reportText = CreateFrame("EditBox", nil, scroll)
-    reportText:SetMultiLine(true)
-    reportText:SetAutoFocus(false)
-    reportText:SetMaxLetters(0)
-    reportText:SetFontObject(ChatFontNormal)
-    reportText:SetWidth(565)
-    reportText:SetHeight(260)
-    reportText:SetScript("OnEscapePressed", function() window:Hide() end)
-    reportText:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
-    -- Let the edit box's native copy finish before removing the text. Addons
-    -- cannot call the protected clipboard API from a button's OnClick handler.
-    reportText:SetScript("OnKeyDown", function(self, key)
-        local modifier = (IsControlKeyDown and IsControlKeyDown()) or (IsMetaKeyDown and IsMetaKeyDown())
-        pendingCopy = modifier and key == "C" and self:GetText() ~= "" and self:GetText() or nil
-        if pendingCopy then self:HighlightText() end
-    end)
-    reportText:SetScript("OnKeyUp", function(self, key)
-        if key ~= "C" then return end
-        if pendingCopy and self:GetText() == pendingCopy then ClearCopiedReport() end
-        pendingCopy = nil
-    end)
-    reportText:SetScript("OnEditFocusLost", function() pendingCopy = nil end)
-    scroll:SetScrollChild(reportText)
-    window:SetScript("OnHide", function() pendingCopy = nil; reportText:ClearFocus() end)
+    copyControls = ns.InstallReportCopyControls(window, reportText, {
+        onCopied = ClearCopiedReport,
+    })
 end
 
 function ns.OpenDebugReport()
@@ -280,9 +237,10 @@ function ns.OpenDebugReport()
     if not window then CreateReportWindow() end
     title:SetText(ns.L("Debug report"))
     instructions:SetText(ns.L("Press Ctrl+C to copy. The field clears afterward."))
-    displayedReports, pendingCopy = {}, nil
+    copyControls.Reset()
+    displayedReports = {}
     for _, entry in ipairs(ReportStore(false) or {}) do displayedReports[entry] = entry.count or 1 end
     window:Show()
     reportText:SetText(report)
-    SelectReportText()
+    copyControls.SelectText()
 end

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0
+
+##### New Features
+
+* Added a one-time GnomeLevelUp 2.0 welcome message, with a Gnomeregan frame and Lessa's portrait. Use `/glu debugwelcome` with debug enabled to preview it.
+
+* Added guild level-time sharing, enabled by default. Records sync once on login, with a separate comparison when you level up. Guild records appear in purple in Level History. Each character keeps separate guild records, cleared when they leave or change guilds.
+* Guildmates can pass on cached records with the original holder's name, including records from offline and former members.
+* Guild sharing now transfers only differing records and retries temporarily blocked messages.
+* Guild leaders and ranks allowed to edit officer notes can remove shared records with an [X], with a warning before deletion. Saved removal markers prevent old caches from restoring deleted records.
+* Debug mode shows who supplied each guild record and when it was received.
+
+##### Bug Fixes and Optimization
+
+* Cleaned up pet tracking and popup code. Pet data lookups no longer create or prune saved records.
+* Removed duplicate saved pet observations and trainer prices while keeping each pet's skill records.
+* Tidied ability layout and scrolling, and shared the report-window controls while keeping their existing clearing behavior.
+* Improved theme registration errors and added an asset checker and updated guide for theme authors.
+* Custom themes can now declare whether they use custom sounds and choose a bundled or built-in font.
+* Replaced the old example themes with FFIX Blue Atlas, using the supplied silver frame, tiled blue background, custom font and level-up sound.
+* Themes can set popup font sizes and divider artwork. Blue Atlas now has larger text, silver dividers and a matching portrait ring.
+* Font menus now show the font name, and each theme remembers its own font choice.
+
 ## 1.6.7
 
 ##### Bug Fixes and Optimization

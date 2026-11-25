@@ -1,22 +1,22 @@
-# GnomeLevelUp example theme pack
+# FFIX Blue Atlas — GnomeLevelUp example theme
 
 Install `GnomeLevelUp_ThemeExample` next to `GnomeLevelUp` in `Interface/AddOns`.
-Enable both addons with GnomeLevelUp 1.6 or later and restart WoW. Select
-**Moonstone (Example)** or **Emberstone (Example)** under **Appearance → Theme**.
-The controller menu and first-time setup use the same theme list.
-GLU automatically uses the selected theme’s level-up cue if you’ve kept the
-default sound. If you’ve picked another sound, you can keep it or choose
-**Theme sound** in the **Sound** menu. **Use Theme Sounds** controls the theme’s
-other cues separately and is on by default. You can also select any registered
-sound individually as your level-up sound.
+Enable both addons with GnomeLevelUp 2.0 or later and restart WoW. Select
+**FFIX Blue Atlas** under **Appearance → Theme**. The controller menu and
+first-time setup use the same theme list.
+
+This pack contains one theme, using the supplied silver frame, blue tiled
+background, `FinalFantasyIXfontcopy.ttf` and `FFIXTheme.ogg` as its level-up cue.
+It sets `soundsEnabled = true`. GLU uses the cue with the default sound selection;
+players who chose another sound can keep it or select **Theme sound**.
 
 ## Make your own pack
 
 1. Copy this example and give its folder and `.toc` file the same unique name.
 2. Keep `## Dependencies: GnomeLevelUp` in the `.toc` so WoW loads GLU first. Set your own title, version and supported interface numbers.
-3. Copy a matching pair of subfolders from `Textures/` and `Sounds/`. Edit `Textures/<theme>/Theme.lua` for the theme ID, display name, artwork, and layout. Edit `Sounds/<theme>/SoundList.lua` for that theme’s audio. Use the same theme ID in both config files.
-4. List both config files in the `.toc` before `Register.lua`. Repeat for as many themes as you want in the same addon. Keep the addon folder name and each theme ID stable after publishing so updates keep players’ selections.
-5. Test both layouts with `/glu test`. Use `/glu maxlevel` with debug enabled to test the fireworks. ZIP the whole addon folder and upload it as its own CurseForge project. List GnomeLevelUp as a required dependency there as well.
+3. Copy a theme folder from `Textures/` and any font it references under `Fonts/`. Edit its `Theme.lua` for the theme ID, display name, artwork, layout and font. Set `soundsEnabled = false` for an artwork-only theme. For custom audio, set it to `true`, create a `Sounds/` folder and a `SoundList.lua`, and use the same theme ID in both config files.
+4. List `Theme.lua` and any `SoundList.lua` in the `.toc` before `Register.lua`. Repeat for as many themes as you want in the same addon. Keep the addon folder name and each theme ID stable after publishing so updates keep players’ selections.
+5. Run the asset checker below, then test the pack in WoW. ZIP the whole addon folder and upload it as its own CurseForge project. List GnomeLevelUp as a required dependency there as well.
 
 You may reuse, modify and redistribute the example code and textures.
 
@@ -32,8 +32,14 @@ The combined saved key may be up to 80 bytes including the `GLUTheme:` prefix an
 | --- | --- |
 | `label` | The visible name, up to 80 bytes. Your addon can supply a localized label. |
 | `opacity` | Overall opacity from 0 to 1. Defaults to 0.95. |
+| `soundsEnabled` | `true` or `false`. Set `false` for a theme without custom audio; GLU ignores its sound cues and uses the normal fallback. Omitted means `true` for compatibility with older packs. This does not change the player's sound settings. |
 | `sounds` | Optional table of sound cues. Each cue accepts a LibSharedMedia `media` name or a WoW `soundKit` ID. The example’s `Register.lua` builds this table from each `SoundList.lua`. |
-| `frame` | An existing frame key such as `"WOOD_PANEL"`, or a table with `topLeft`, `top`, and `left` texture paths. `cornerSize`, `edgeSize`, and `edgeMaskInset` default to 48, 16, and 5. GLU reuses the supplied textures for the other pieces unless you supply their paths. Optional `cornerSizes`, `transforms`, and `hue` are shown in `Theme.lua`. |
+| `font` | Optional. A relative `.ttf` or `.otf` path, or a built-in font key: `FRIZQT`, `ARIALN`, `MORPHEUS` or `SKURRI`. Omit it for GLU's default font. Selecting the theme applies this font; players can then override it under Appearance → Font. |
+| `fontName` | Optional display name for a bundled font, such as `"Final Fantasy IX"`. The Font menu uses this name; the registration remains unique to your addon. |
+| `fontSizeOffset` | Optional adjustment in points, from -8 to 16, applied to popup text before the player's text scaling. Defaults to 0. Blue Atlas uses 2. |
+| `fontSizes` | Optional table of exact base point sizes (6–72) for `stats`, `headings`, `level`, `time`, `abilityCosts`, `timeline`, and `body`. Each supplied size takes precedence over `fontSizeOffset` for that role. |
+| `divider` | Optional table with a `texture`, `height` (1–32 pixels, default 3), and optional RGB `hue`. Applies to the popup's section dividers. Omit it for the normal dividers. Blue Atlas uses a four-pixel silver bevel cut from its frame. |
+| `frame` | An existing frame key such as `"WOOD_PANEL"`, or a table with `topLeft`, `top`, and `left` texture paths. `cornerSize`, `edgeSize`, and `edgeMaskInset` default to 48, 16, and 5. Optional `backgroundInset` moves the fill inside rounded artwork; it defaults to 0 and accepts values up to `cornerSize`. GLU reuses the supplied textures for the other pieces unless you supply their paths. Optional `cornerSizes`, `transforms`, and `hue` are shown in `Theme.lua`. |
 | `background` | An existing background key such as `"SCRATCHED_STONE"`, or a table with `texture` and `style` (`"tile"`, `"fill"`, or `"stretch"`). Tile is the default. Fill requires the source `width` and `height` to preserve the image proportions. The optional `hue` and `opacity` apply to the background alone. |
 | `portraitRing` | Optional. An existing ring key such as `"STEEL"`, or a table with a `texture` and optional `scale`, `offsetX`, `offsetY`, `hue`, and `glintRadius`. Omit it for the standard solid ring. |
 
@@ -43,7 +49,97 @@ lists. If a selected pack is unavailable, GLU falls back to Modern for the frame
 and background and to the solid ring for any missing ring artwork. It retains
 the saved selection, so the pack can resume when enabled again.
 
+Registration errors identify the addon/theme key, the problem field and the
+expected value, for example `background.width` or `sounds.idleMotes.loopSeconds`.
+Fix the reported field and reload before trying again. A failed registration
+does not add a partial theme to the menus.
+
+## Fonts
+
+FFIX Blue Atlas uses a bundled font, a silver nine-slice frame, a tiled blue
+background and one custom level-up sound.
+Its supplied 109×109 frame was cropped into four 32×32 corners, two 32×16
+horizontal edges and two 16×32 vertical edges. All pieces are 32-bit TGA files
+with their original alpha; the 128×128 background keeps the supplied pixels.
+The fill has a 12-pixel inset to preserve the transparent rounded outer corners.
+
+`Theme.lua` selects the supplied font:
+
+```lua
+font = "Fonts/FinalFantasyIXfontcopy.ttf",
+fontName = "Final Fantasy IX",
+fontSizeOffset = 2,
+-- Optional exact sizes instead of the offset for individual roles:
+-- fontSizes = { stats = 22, headings = 20, time = 16 },
+-- Alternative built-in font example:
+-- font = "ARIALN",
+```
+
+To replace it, put your font in the addon's `Fonts/` folder and update the path.
+Fonts do not need entries in the `.toc`.
+Each theme remembers the player's font choice independently, including Modern.
+The silver portrait ring uses a 256×256 TGA with a transparent centre and outside.
+
+Custom fonts are also registered with LibSharedMedia for the Font menu. Built-in
+fonts retain GLU's locale handling. A bundled font needs its own glyphs for every
+language you intend to support; check accented letters, Cyrillic and other
+scripts in game. If the selected pack is disabled, its bundled font falls back
+to GLU's default without erasing the saved path.
+
+## Check assets before loading WoW
+
+The checker lives in the **GLU source checkout**, under `Tools/`; it is not part
+of the installed release addon. Install Python 3.10+ and its Lua reader once:
+
+```text
+python -m pip install lupa
+python Tools/check_theme_pack.py "Examples/GnomeLevelUp_ThemeExample"
+python Tools/check_theme_pack.py "C:/path/to/MyThemePack"
+```
+
+Use `--toc MyThemePack_Camelot.toc` if your manifest has a client-specific name.
+The checker reads the manifest's Lua files in order, runs the same registration
+validation as GLU, and checks referenced textures, sounds and fonts. It catches
+missing files, filename-case mismatches, paths outside the pack, malformed file
+headers, and background dimensions that disagree with the source image. It
+also warns about 32-bit TGA files that declare no alpha bits.
+
+Use the Lua starter-pack structure. Packs that need additional WoW APIs or XML
+loading cannot be fully checked offline and report an error rather than a
+misleading pass. Only run scripts from packs you trust. The checker limits Lua
+memory and instructions, but is not a general-purpose security sandbox.
+External media names and sound-kit IDs still need an in-game check. Header
+checks do not prove that images decode, fonts contain the right glyphs, or
+sounds play correctly.
+
+## Test in game
+
+1. Select the theme and run `/glu test` for a normal preview and `/glu test count 30` for scrolling.
+2. Run `/glu test <milestone level>` using your configured milestone interval. Use `/glu test 60` for Forever's maximum-level celebration; on Retail, use that client's current level cap. Milestone and maximum-level effects are included automatically; there are no separate `/glu milestone` or `/glu maxlevel` commands.
+3. Check horizontal and vertical layouts, compact mode, long stat names and prices, portrait modes and the timeline. Check the controller menu and first-time setup too.
+4. Check normal and Classic Mode animations, reduced motion and the appearance of transparent edges. Listen for overlapping or excessively loud cues.
+5. Try the theme's default font, then choose another font and confirm it remains selected during previews and reloads. Test any languages the pack supports.
+6. Test automatic theme audio, an explicitly chosen level-up sound, and Use Theme Sounds turned off. An artwork-only theme with `soundsEnabled = false` should use normal fallback audio.
+7. Save a profile, reload, then disable and re-enable the pack. Missing artwork should fall back safely and return when the pack is enabled again.
+
 ## Sound cues
+
+The included theme uses `Sounds/BlueAtlasFFIX/FFIXTheme.ogg` for level-up audio.
+Its `SoundList.lua` is loaded before `Register.lua`:
+
+```lua
+local _, pack = ...
+pack.soundSets = pack.soundSets or {}
+pack.soundSets.blue_atlas_ffix = {
+    folder = "BlueAtlasFFIX",
+    cues = {
+        levelUp = { name = "FFIX Blue Atlas - Level Up", file = "FFIXTheme.ogg" },
+    },
+}
+```
+
+Add any other cues to that table if your theme needs them. Set
+`soundsEnabled = false` in `Theme.lua` to disable all theme audio.
 
 | Key | When it plays |
 | --- | --- |

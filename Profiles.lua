@@ -16,6 +16,7 @@ local optional = {
 }
 
 local function NormalizeSettings(settings)
+    settings.guildTimeSyncInterval = nil
     ns.MigrateTrainerPriceSettings(settings)
     ns.NormalizeAbilityFilters(settings)
     ns.RemoveObsoleteAnimationSounds(settings)
@@ -342,6 +343,7 @@ local function Decode(text)
 end
 
 local ranges = {
+    themeFontSizeOffset = { -8, 16 },
     portraitModelRotation = { -180, 180 }, portraitModelX = { -5, 5 },
     portraitModelY = { -5, 5 }, portraitModelZ = { -5, 5 }, portraitModelScale = { 25, 300 },
     portraitModelMaskSize = { 25, 300 },
@@ -423,6 +425,19 @@ local function ValidSettings(settings)
             end
         elseif key == "themeHuePreferences" then
             if not ValidThemeHues(value) then return false end
+        elseif key == "themeFontSizes" then
+            if not ValidateLike(value, ns.defaults.themeFontSizes, 0) then return false end
+            for _, size in pairs(value) do
+                if size ~= 0 and (size < 6 or size > 72) then return false end
+            end
+        elseif key == "themeFontPreferences" then
+            if type(value) ~= "table" then return false end
+            local count = 0
+            for theme, path in pairs(value) do
+                count = count + 1
+                if count > 128 or type(theme) ~= "string" or #theme > 80 or theme:find("%c") then return false end
+                if path ~= false and (type(path) ~= "string" or #path > 512 or path:find("%c")) then return false end
+            end
         elseif key == "classColorOverrides" then
             if type(value) ~= "table" then return false end
             for token, colors in pairs(value) do

@@ -6,7 +6,7 @@ local media = LibStub and LibStub("LibSharedMedia-3.0", true)
 local soundRoot = "Interface\\AddOns\\" .. addonName .. "\\Sounds\\"
 for _, theme in ipairs(pack.themes or {}) do
     local soundSet = pack.soundSets and pack.soundSets[theme.id]
-    if soundSet then
+    if theme.soundsEnabled ~= false and soundSet then
         local folder = soundRoot .. soundSet.folder .. "\\"
         theme.sounds = {}
         for cue, sound in pairs(soundSet.cues) do

@@ -14,6 +14,8 @@ local UI_METRICS = {
     automaticCloseSpeed = .85, manualCloseSpeed = 2,
     modernCloseSeconds = .60, texturedCloseSeconds = .5, dividerRevealSeconds = .60,
     textMeasurementLimit = 512,
+    scrollbarThickness = 8,
+    scrollbarHitInsetX = 6, statScrollbarHitInsetY = 4, abilityScrollbarHitInsetY = 5,
     verticalPortraitGrowth = 1.25,
     modernVerticalFadeTail = 52, modernVerticalStatsFadeTail = 84, modernVerticalBottomLineGap = 8,
 }
@@ -30,7 +32,7 @@ local FRAME_WIDTH = 460
 local TEXT_WIDTH = FRAME_WIDTH - 60
 local DEFAULT_TEXT_WIDTH = TEXT_WIDTH
 local COMPACT_MAX_SKILLS = 5
-local MODEL_VIEWPORT_RATIO = 0.952 -- 40% larger than the earlier 0.68 viewport
+local MODEL_VIEWPORT_RATIO = 0.952
 local PLAYER_PORTRAIT_SIZE = 90
 local CLASS_ICON_SIZE = PLAYER_PORTRAIT_SIZE
 local PORTRAIT_RING_PADDING = 6
@@ -847,10 +849,11 @@ function ns.ApplyFont(fontPath)
     fontPath = ns.GetPopupFontPath(fontPath)
     for _, entry in ipairs(content.fontElements) do
         local scale = entry.fs.gluFontScaleKey and ns.GetTextScale(entry.fs.gluFontScaleKey) or 1
-        entry.fs:SetFont(fontPath, entry.size * scale, entry.flags)
+        entry.fs:SetFont(fontPath, ns.GetThemeFontSize(entry.fs.gluThemeFontRole or "body", entry.size) * scale, entry.flags)
         if entry.fs.gluStatText then entry.fs.gluFixedStatHeight = nil end
     end
-    local statScale = ns.GetTextScale("statTextScale")
+    if render.RefreshSectionDividers then render.RefreshSectionDividers() end
+    local statScale = ns.GetTextScale("statTextScale") * ns.GetThemeFontSize("stats", 20) / 20
     local statSizeChanged = render.appliedStatScale ~= statScale
     render.appliedStatScale = statScale
     STAT_LINE_HEIGHT = math.max(UI_METRICS.minimumStatLineHeight, math.ceil(UI_METRICS.statLineHeight * statScale))
@@ -911,6 +914,7 @@ local function EnsureGlowLayers(main)
         glow:SetShown(main:IsShown())
         main.glows[i] = glow
         glow.gluFontScaleKey = main.gluFontScaleKey
+        glow.gluThemeFontRole = main.gluThemeFontRole
         RegisterFontElement(glow, main.gluStatText and 20 or main.gluFontBaseSize)
     end
 end
@@ -973,7 +977,15 @@ local function RegisterGlowFont(main, size, flags)
         or main == content.levelTimeText and "timeTextScale"
         or (main == content.levelText or main == content.statsHeader or main == content.spellsHeader
             or main == content.petSpellsHeader) and "headingTextScale" or nil
-    for _, glow in ipairs(main.glows) do glow.gluFontScaleKey = main.gluFontScaleKey end
+    main.gluThemeFontRole = main.gluStatText and "stats"
+        or main == content.levelText and "level"
+        or main == content.levelTimeText and "time"
+        or (main == content.statsHeader or main == content.spellsHeader or main == content.petSpellsHeader) and "headings"
+        or "body"
+    for _, glow in ipairs(main.glows) do
+        glow.gluFontScaleKey = main.gluFontScaleKey
+        glow.gluThemeFontRole = main.gluThemeFontRole
+    end
     RegisterFontElement(main, size, flags)
 end
 
@@ -1548,7 +1560,6 @@ content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
 ApplyToTextLayers(content.statsHeader, "SetText", ns.L(content.statPage == "secondary" and "Secondary Stats" or "Stats Gained"))
 RegisterGlowFont(content.statsHeader)
 
-UI_METRICS.scrollbarThickness = 8
 content.statsContainer = CreateFrame("ScrollFrame", nil, content)
 content.statsContainer:SetWidth(TEXT_WIDTH)
 content.statsContainer:SetHeight(1)
@@ -1562,7 +1573,8 @@ content.statSlider:SetOrientation("VERTICAL")
 content.statSlider:SetPoint("TOPLEFT", content.statsContainer, "TOPRIGHT", 8, 0)
 content.statSlider:SetPoint("BOTTOMLEFT", content.statsContainer, "BOTTOMRIGHT", 8, 0)
 content.statSlider:SetWidth(UI_METRICS.scrollbarThickness)
-content.statSlider:SetHitRectInsets(-6, -6, -4, -4)
+content.statSlider:SetHitRectInsets(-UI_METRICS.scrollbarHitInsetX, -UI_METRICS.scrollbarHitInsetX,
+    -UI_METRICS.statScrollbarHitInsetY, -UI_METRICS.statScrollbarHitInsetY)
 content.statSlider:SetMinMaxValues(0, 0)
 content.statSlider:SetValueStep(1)
 content.statSlider:SetObeyStepOnDrag(false)
@@ -1633,7 +1645,12 @@ local function CreateSectionDivider(parent)
 end
 
 local function SetSectionDividerColor(divider, color)
-    divider.texture:SetVertexColor(color[1], color[2], color[3], ns.db and ns.db.useClassColors and .7 or 1)
+    local themed = ns.GetSelectedThemeDivider()
+    if themed then
+        divider.texture:SetVertexColor(themed.hue[1], themed.hue[2], themed.hue[3], 1)
+    else
+        divider.texture:SetVertexColor(color[1], color[2], color[3], ns.db and ns.db.useClassColors and .7 or 1)
+    end
 end
 
 content.statsHeaderDivider = CreateSectionDivider(content)
@@ -1643,6 +1660,19 @@ content.abilitiesDivider = CreateSectionDivider(content)
 content.petDivider = CreateSectionDivider(content)
 content.petHeaderDivider = CreateSectionDivider(content)
 content.weaponDivider = CreateSectionDivider(content)
+function render.RefreshSectionDividers()
+    local themed = ns.GetSelectedThemeDivider()
+    SECTION_DIVIDER_HEIGHT = themed and themed.height or 3
+    if render.SetAbilityDividerHeight then render.SetAbilityDividerHeight(SECTION_DIVIDER_HEIGHT) end
+    local color = ns.db and ns.db.colors and ns.db.colors.divider or WHITE_COLOR
+    for _, divider in ipairs({content.statsHeaderDivider, content.statsBottomDivider, content.timeBottomDivider,
+        content.abilitiesDivider, content.petDivider, content.petHeaderDivider, content.weaponDivider}) do
+        divider:SetHeight(SECTION_DIVIDER_HEIGHT)
+        divider.texture:SetTexture(themed and themed.texture or SEPARATOR_TEXTURE)
+        divider.texture:SetHeight(SECTION_DIVIDER_HEIGHT)
+        SetSectionDividerColor(divider, color)
+    end
+end
 content.statsHeaderDivider:SetPoint("TOP", content.statsHeader, "BOTTOM", 0, -SectionGap())
 content.statsContainer:SetPoint("TOP", content.statsHeaderDivider, "BOTTOM", 0, -SectionGap())
 
@@ -1663,7 +1693,7 @@ content.levelTimeBaseFontSize = select(2, content.levelTimeText:GetFont())
 ApplyToTextLayers(content.levelTimeText, "SetShown", false)
 
 function render.LevelTimeFontSize()
-    return (content.levelTimeBaseFontSize + (IsHorizontalLayout() and 2 or 1)) * ns.GetTextScale("timeTextScale")
+    return ns.GetThemeFontSize("time", content.levelTimeBaseFontSize + (IsHorizontalLayout() and 2 or 1)) * ns.GetTextScale("timeTextScale")
 end
 
 function render.MeasureLevelTime()
@@ -1694,7 +1724,7 @@ local function NewAbilityIconSize()
         * (IsHorizontalLayout() and 1.1 or 1)
 end
 local function AbilityCostHeight()
-    return ns.GetAbilityCostSize() + 3
+    return ns.GetPopupAbilityCostSize() + 3
 end
 local ABILITY_COST_GAP = 1
 local ABILITY_COST_TOP_PADDING = 0
@@ -1761,148 +1791,48 @@ end
 
 local SCROLLBAR_HEIGHT = 10
 
-function render.AbilityScrollRange(viewport)
-    if viewport.scrollController then return content.abilityViewport.sharedMaximum or 0 end
-    return viewport.scrollMaximum or 0
-end
+ns.InstallAbilityList(render, content, frame, {
+    metrics = UI_METRICS,
+    GetTextWidth = function() return TEXT_WIDTH end,
+    IsPortraitPreparing = function() return portraitPreparing end,
+    IsHorizontalLayout = IsHorizontalLayout,
+    NewAbilityIconSize = NewAbilityIconSize,
+    NormalAbilityIconSize = NormalAbilityIconSize,
+    Speed = Speed,
+    AbilityCellHeight = AbilityCellHeight,
+    AbilityIconGap = AbilityIconGap,
+    TrainerCostsVisible = TrainerCostsVisible,
+    AbilityCostHeight = AbilityCostHeight,
+    IsCompactLayout = IsCompactLayout,
+    UseHorizontalAbilityScroll = UseHorizontalAbilityScroll,
+    ApplyToTextLayers = ApplyToTextLayers,
+    ABILITY_ICON_SIZE = ABILITY_ICON_SIZE,
+    ABILITY_COST_GAP = ABILITY_COST_GAP,
+    ABILITY_COST_TOP_PADDING = ABILITY_COST_TOP_PADDING,
+    COMPACT_MAX_SKILLS = COMPACT_MAX_SKILLS,
+    DEFAULT_FONT_PATH = DEFAULT_FONT_PATH,
+    BASE_STAT_STAGGER_BASE = BASE_STAT_STAGGER_BASE,
+    BASE_STAT_STAGGER_STEP = BASE_STAT_STAGGER_STEP,
+    BASE_STAT_SLIDE_DURATION = BASE_STAT_SLIDE_DURATION,
+    SCROLLBAR_HEIGHT = SCROLLBAR_HEIGHT,
+    ABILITY_POP_DISTANCE = 24,
+    SECTION_DIVIDER_HEIGHT = SECTION_DIVIDER_HEIGHT,
+})
 
-function render.ScrollAbilities(viewport, steps)
-    if frame.closingInputSuppressed or ns.db and ns.db.clickThrough then return end
-    local maximum = render.AbilityScrollRange(viewport)
-    if maximum <= 0 then return end
-    local slider = viewport.scrollController or viewport.slider
-    local value = slider:GetValue() + steps * (viewport.scrollStep or 40)
-    slider:SetValue(math.max(0, math.min(maximum, value)))
-    -- Apply the native offset even if SetValue did not emit OnValueChanged.
-    slider:GetScript("OnValueChanged")(slider, slider:GetValue())
-end
-
-local function CreateAbilityViewport()
-    local viewport = CreateFrame("ScrollFrame", nil, content)
-    viewport:SetWidth(TEXT_WIDTH)
-    if viewport.SetClipsChildren then viewport:SetClipsChildren(true) end
-
-    local track = viewport:CreateTexture(nil, "BACKGROUND")
-    track:SetColorTexture(1, 1, 1, 0.15)
-    track:SetPoint("BOTTOMLEFT", viewport, "BOTTOMLEFT", 0, 0)
-    track:SetPoint("BOTTOMRIGHT", viewport, "BOTTOMRIGHT", 0, 0)
-    track:SetHeight(2)
-    viewport.scrollTrack = track
-
-    local slider = CreateFrame("Slider", nil, viewport)
-    slider:EnableMouse(true)
-    slider:SetHitRectInsets(-6, -6, -5, -5)
-    slider:SetFrameLevel(content:GetFrameLevel() + 12)
-    slider:SetOrientation("HORIZONTAL")
-    slider:SetPoint("BOTTOMLEFT", viewport, "BOTTOMLEFT", 0, 0)
-    slider:SetPoint("BOTTOMRIGHT", viewport, "BOTTOMRIGHT", 0, 0)
-    slider:SetHeight(UI_METRICS.scrollbarThickness)
-    slider:SetMinMaxValues(0, 0)
-    slider:SetValue(0)
-    slider:SetValueStep(1)
-    slider:SetThumbTexture("Interface\\Buttons\\WHITE8X8")
-    local thumb = slider.GetThumbTexture and slider:GetThumbTexture()
-    if thumb then thumb:SetVertexColor(1, 1, 1, 0.8) end
-    slider:SetScript("OnValueChanged", function(self, value)
-        -- Native range changes can emit temporary values while a list is
-        -- rebuilt. Only settled input updates the position we restore later.
-        if viewport.restoringScroll then return end
-        viewport.requestedScroll = value or 0
-        if viewport.verticalLayout then
-            if viewport.sharedScroll then
-                for _, target in ipairs({content.abilityViewport, content.petAbilityViewport}) do
-                    local offset = math.min(value or 0, target.scrollMaximum or 0)
-                    if target ~= viewport then target.requestedScroll = offset end
-                    target:SetVerticalScroll(offset)
-                    if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(target, offset) end
-                end
-            else
-                viewport:SetVerticalScroll(value or 0)
-                if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
-            end
-        else
-            viewport:SetHorizontalScroll(value or 0)
-            if render.RefreshAbilityVisibility then render.RefreshAbilityVisibility(viewport, value or 0) end
-        end
-        if ns.WakeAbilityEffects then ns.WakeAbilityEffects() end
-    end)
-    slider:SetObeyStepOnDrag(false)
-    viewport:EnableMouseWheel(true)
-    local function ScrollWithWheel(_, delta)
-        render.ScrollAbilities(viewport, -delta)
-    end
-    viewport:SetScript("OnMouseWheel", ScrollWithWheel)
-    slider:EnableMouseWheel(true)
-    slider:SetScript("OnMouseWheel", ScrollWithWheel)
-    slider:Hide()
-    viewport.slider = slider
-    viewport.scrollTrack:Hide()
-
-    local row = CreateFrame("Frame", nil, viewport)
-    row:SetSize(TEXT_WIDTH, ABILITY_ICON_SIZE)
-    row:SetPoint("TOPLEFT", viewport, "TOPLEFT", 0, 0)
-    viewport:SetScrollChild(row)
-    viewport.row = row
-    row.viewport = viewport
-    row:EnableMouseWheel(true)
-    row:SetScript("OnMouseWheel", ScrollWithWheel)
-    viewport:Hide()
-    return viewport, row
-end
-
-content.abilityViewport, content.abilityRow = CreateAbilityViewport()
+content.abilityViewport, content.abilityRow = render.CreateAbilityViewport()
 content.abilityIconPool = {}
 content.currentTrainerAbilities = {}
 
 content.petSpellsHeader = NewText(content, "GameFontNormalLarge", 2)
 ApplyToTextLayers(content.petSpellsHeader, "SetText", ns.L("Grimoires"))
 RegisterGlowFont(content.petSpellsHeader)
-content.petAbilityViewport, content.petAbilityRow = CreateAbilityViewport()
+content.petAbilityViewport, content.petAbilityRow = render.CreateAbilityViewport()
 content.petAbilityIconPool = {}
 content.currentWarlockPetAbilities = {}
 ApplyToTextLayers(content.petSpellsHeader, "Hide")
 content.petAbilityViewport:Hide()
 
-if type(frame.EnableGamePadStick) == "function" and type(frame.IsMouseOver) == "function" then
-    local target, stickX, stickY
-    local function SetTarget(viewport)
-        if target == viewport then return end
-        if (target == nil) ~= (viewport == nil) then frame:EnableGamePadStick(viewport ~= nil) end
-        target, stickX, stickY = viewport, 0, 0
-    end
-    frame:SetScript("OnGamePadStick", function(_, stick, x, y)
-        if stick == "RightStick" or stick == "Right" then stickX, stickY = x, y end
-    end)
-    frame:HookScript("OnUpdate", function(_, elapsed)
-        if frame.closingInputSuppressed or not ns.db or ns.db.clickThrough or not frame:IsMouseOver()
-            or (ns.IsControllerOptionsShown and ns.IsControllerOptionsShown()) then
-            SetTarget(nil)
-            return
-        end
-        local main, pet = content.abilityViewport, content.petAbilityViewport
-        local mainScrolls = main:IsShown() and render.AbilityScrollRange(main) > 0
-        local petScrolls = pet:IsShown() and render.AbilityScrollRange(pet) > 0
-        local statsScroll = (content.statScrollMaximum or 0) > 0
-        if not (mainScrolls or petScrolls or statsScroll) or not frame.gluControllerActive then
-            SetTarget(nil)
-            return
-        end
-        if statsScroll and (content.statsContainer:IsMouseOver() or not (mainScrolls or petScrolls)) then
-            SetTarget(content.statsContainer)
-        elseif petScrolls and (pet:IsMouseOver() or not mainScrolls) then
-            SetTarget(pet)
-        else
-            SetTarget(main)
-        end
-        local axis = (target == content.statsContainer or target.verticalLayout) and -stickY or stickX
-        if math.abs(axis) >= .25 then
-            local step = axis * math.min(elapsed, .05) * 8
-            if target == content.statsContainer then render.ScrollStats(target, -step)
-            else render.ScrollAbilities(target, step) end
-        end
-    end)
-    frame:HookScript("OnHide", function() SetTarget(nil) end)
-end
+render.InstallAbilityController()
 
 content.weaponSkillsText = NewText(content, "GameFontHighlightSmall", 1.5)
 content.weaponSkillsText:SetWidth(TEXT_WIDTH)
@@ -2066,6 +1996,9 @@ ns.InstallPopupRenderHelpers(render)
 local ApplyStatLineText
 local activeLineAnims = {}
 local activeIconAnims = {}
+function render.IsAbilityIconAnimating(icon)
+    return activeIconAnims[icon] ~= nil
+end
 
 local function SetLineAlpha(fs, alpha)
     fs.lineAlpha = alpha
@@ -2173,12 +2106,6 @@ end
 local ABILITY_POP_DISTANCE = 24
 local statSlideDriver = CreateFrame("Frame", nil, content.statsContainer)
 
-local function AbilityIconColumns(cellWidth)
-    local gap = AbilityIconGap()
-    local columns = math.max(1, math.floor((TEXT_WIDTH + gap) / (cellWidth + gap)))
-    return IsCompactLayout() and math.min(COMPACT_MAX_SKILLS, columns) or columns
-end
-
 local function StopLineAnimation(fs)
     activeLineAnims[fs] = nil
     if not next(activeLineAnims) then statSlideDriver:SetScript("OnUpdate", nil) end
@@ -2279,7 +2206,7 @@ local function GetStatLine(index)
     ApplyToTextLayers(fs, "SetJustifyH", "CENTER")
     ApplyToTextLayers(fs, "SetWordWrap", false)
     RegisterGlowFont(fs, 20, "")
-    ApplyToTextLayers(fs, "SetFont", fontPath, 20 * ns.GetTextScale("statTextScale"), "")
+    ApplyToTextLayers(fs, "SetFont", fontPath, ns.GetThemeFontSize("stats", 20) * ns.GetTextScale("statTextScale"), "")
     if not ns.db or ns.db.showTextShadow ~= false then EnsureGlowLayers(fs) end
     local counter = NewText(holder, "GameFontHighlight", 2)
     counter.slideFrame = holder
@@ -2289,7 +2216,7 @@ local function GetStatLine(index)
     counter:SetWordWrap(false)
     counter:SetHeight(STAT_LINE_HEIGHT)
     RegisterGlowFont(counter, 20, "")
-    ApplyToTextLayers(counter, "SetFont", fontPath, 20 * ns.GetTextScale("statTextScale"), "")
+    ApplyToTextLayers(counter, "SetFont", fontPath, ns.GetThemeFontSize("stats", 20) * ns.GetTextScale("statTextScale"), "")
     if not ns.db or ns.db.showTextShadow ~= false then EnsureGlowLayers(counter) end
     fs.gainCounter = counter
     ApplyToTextLayers(counter, "Hide")
@@ -2360,6 +2287,9 @@ local function StopIconAnimation(icon)
     activeIconAnims[icon] = nil
     if icon.animationGroup then icon.animationGroup:Stop() end
 end
+
+render.StartIconPop = StartIconPop
+render.StopIconAnimation = StopIconAnimation
 
 function render.RevealScrolledAbility(icon)
     -- Clipped native animations can leave a pooled icon transparent. Once it
@@ -2433,7 +2363,7 @@ function render.ShowPreviousRank(icon)
     end
 end
 
-local function GetAbilityIcon(index, row, pool)
+function render.GetAbilityIcon(index, row, pool)
     row = row or content.abilityRow
     pool = pool or content.abilityIconPool
     if pool[index] then return pool[index] end
@@ -2458,7 +2388,8 @@ local function GetAbilityIcon(index, row, pool)
     costText:SetJustifyH("CENTER")
     costText:SetJustifyV("TOP")
     costText:SetWordWrap(false)
-    btn.costFont = RegisterFontElement(costText, 11)
+    costText.gluThemeFontRole = "abilityCosts"
+    btn.costFont = RegisterFontElement(costText, ns.GetAbilityCostSize())
     costText:SetTextColor(1, 1, 1, 1)
     costText:Hide()
     btn.costText = costText
@@ -2511,396 +2442,6 @@ local function GetAbilityIcon(index, row, pool)
 
     pool[index] = btn
     return btn
-end
-
-local function EmptyTrainerSkillsMessage()
-    -- An empty unlearned list can also mean everything is already learned.
-    -- Check the full class catalog before asking the player to scan a trainer.
-    if ns.GetCurrentFlavor() == "forever" then
-        local hasClassData = false
-        for _, item in ipairs(ns.GetTrainerCatalogIndex()) do
-            if type(item.entry) ~= "table" or not item.entry.profession then
-                hasClassData = true
-                break
-            end
-        end
-        if not hasClassData then
-            return ns.L("No trainer data for this class.\nVisit your class trainer."), 2
-        end
-    end
-    return ns.L(ns.db and ns.db.showOnlyCurrentLevelSkills
-        and "No new skills this level" or "No unlearned skills available")
-end
-
-local function UpdateAbilityIcons(row, pool, emptyText, abilities, showEmptyText, skipAnimation)
-    row.viewport.effectPool = pool
-    local newIconSize = NewAbilityIconSize()
-    local normalIconSize = NormalAbilityIconSize()
-    local count = #abilities
-    row.viewport.abilityCount = count
-    local speed = Speed()
-    local staggerBase = BASE_STAT_STAGGER_BASE / speed
-    local staggerStep = BASE_STAT_STAGGER_STEP / speed
-    local popDuration = BASE_STAT_SLIDE_DURATION / speed
-    local vertical = IsHorizontalLayout()
-    local singleColumn = vertical and row == content.petAbilityRow
-    row.viewport.visibleSlots = singleColumn and 3 or 9
-    local controller = row.viewport.scrollController or row.viewport.slider
-    local previousValue = skipAnimation and row.viewport.verticalLayout == vertical and controller:GetValue() or 0
-    row.viewport.requestedScroll = previousValue
-    row.viewport.restoringScroll = true
-    row.viewport.cellHeight = AbilityCellHeight(NewAbilityIconSize())
-    row.viewport.layoutScale = 1
-    row.viewport.sharedScroll, row.viewport.scrollController = nil, nil
-    row.viewport.slider:SetParent(row.viewport)
-    row.viewport.scrollTrack:SetParent(row.viewport)
-    -- Horizontal controls live outside the clipped viewport. Preserve their
-    -- reveal alpha when a live layout refresh rebuilds this list.
-    local scrollAlpha = vertical and row.viewport:GetAlpha() or 1
-    render.Alpha(row.viewport.slider, scrollAlpha)
-    render.Alpha(row.viewport.scrollTrack, scrollAlpha)
-    row.viewport:SetScale(1)
-    row.viewport.verticalLayout = vertical
-    row.viewport.scrollMaximum = 0
-    row.viewport:SetHorizontalScroll(0)
-    row.viewport:SetVerticalScroll(0)
-
-    if count == 0 then
-        local emptyWidth = showEmptyText and (NewAbilityIconSize() * 3 + AbilityIconGap() * 2 + 16) or 120
-        row.viewport.horizontalWidth = emptyWidth
-        row.viewport:SetWidth(vertical and emptyWidth or TEXT_WIDTH)
-        row:SetWidth(vertical and emptyWidth or TEXT_WIDTH)
-        row:SetHeight(ABILITY_ICON_SIZE)
-        row.viewport:SetHeight(ABILITY_ICON_SIZE)
-        row.viewport:SetHorizontalScroll(0)
-        row.viewport.slider:SetMinMaxValues(0, 0)
-        row.viewport.slider:SetValue(0)
-        row.viewport.slider:Hide()
-        row.viewport.scrollTrack:Hide()
-        for _, icon in ipairs(pool) do
-            StopIconAnimation(icon)
-            icon:Hide()
-        end
-        if emptyText then
-            local message, lineCount = EmptyTrainerSkillsMessage()
-            emptyText.wrapLineCount = lineCount or 0
-            ApplyToTextLayers(emptyText, "SetWidth", TEXT_WIDTH)
-            ApplyToTextLayers(emptyText, "SetWordWrap", true)
-            ApplyToTextLayers(emptyText, "SetJustifyH", "CENTER")
-            ApplyToTextLayers(emptyText, "SetText", message)
-            local emptyHeight = math.max(ABILITY_ICON_SIZE, emptyText:GetHeight() or 0, emptyText:GetStringHeight() or 0)
-            row:SetHeight(emptyHeight)
-            row.viewport:SetHeight(emptyHeight)
-            ApplyToTextLayers(emptyText, showEmptyText and "Show" or "Hide")
-        end
-        return
-    end
-
-    if emptyText then ApplyToTextLayers(emptyText, "Hide") end
-
-    -- Measure the actual selected-font price before laying out the row. Labels
-    -- may be wider than the icon; reserve that space instead of truncating or
-    -- letting neighboring prices overlap (including compact/scroll layouts).
-    local cellWidth = normalIconSize
-    local rowIconSize = normalIconSize
-    local costFontSize = ns.GetAbilityCostSize()
-    local showCosts = TrainerCostsVisible()
-    local showInlineCosts = TrainerCostsVisible(true)
-    for i, spell in ipairs(abilities) do
-        local icon = GetAbilityIcon(i, row, pool)
-        local iconSize = spell.isNewAbility == true and newIconSize or normalIconSize
-        icon:SetSize(iconSize, iconSize)
-        icon.newAbilityGlow:SetSize(iconSize * 1.85, iconSize * 1.85)
-        cellWidth = math.max(cellWidth, iconSize)
-        rowIconSize = math.max(rowIconSize, iconSize)
-        ---@type string|boolean|nil
-        local formattedCost = showInlineCosts and render.FormatTrainerCost(spell.cost)
-        icon.trainerCost = showCosts and spell.cost or nil
-        if formattedCost ~= icon.formattedCost then
-            icon.costText:SetText(formattedCost or "")
-            icon.formattedCost = formattedCost
-        end
-        icon.costText:SetShown(formattedCost ~= nil and formattedCost ~= false)
-        if formattedCost then
-            local fontPath, fontSize, fontFlags = icon.costText:GetFont()
-            icon.costFont.size = costFontSize
-            if fontSize ~= costFontSize then
-                icon.costText:SetFont(fontPath or DEFAULT_FONT_PATH, costFontSize, fontFlags)
-            end
-            icon.costText:SetHeight(AbilityCostHeight())
-            icon.costText:SetWidth(0)
-            local costWidth = math.ceil(icon.costText:GetStringWidth()) + 2
-            icon.costText:SetWidth(costWidth)
-            cellWidth = math.max(cellWidth, costWidth)
-        end
-    end
-    local gap = AbilityIconGap()
-    local viewportWidth = not vertical and IsCompactLayout()
-        and math.min(TEXT_WIDTH, COMPACT_MAX_SKILLS * cellWidth + (COMPACT_MAX_SKILLS - 1) * gap)
-        or TEXT_WIDTH
-    row.viewport:SetWidth(viewportWidth)
-    local horizontalGrid = vertical and not singleColumn
-    local maxColumns = vertical and (horizontalGrid and 3 or 1) or AbilityIconColumns(cellWidth)
-    local shouldScroll = not vertical and UseHorizontalAbilityScroll() and count > maxColumns
-    local columns = shouldScroll and count or math.min(count, maxColumns)
-    local rows = shouldScroll and 1 or math.ceil(count / maxColumns)
-    if horizontalGrid then
-        columns = 3
-        rows = math.min(count, 3) + math.ceil(math.max(0, count - 9) / 3)
-    end
-    local totalWidth = columns * cellWidth + (columns - 1) * gap
-    local cellHeight = AbilityCellHeight(rowIconSize)
-    local cellGap = vertical and not TrainerCostsVisible(true) and gap or 0
-    local verticalGap = vertical and 0 or gap
-    row.viewport.cellHeight = cellHeight
-    row.viewport.rowIconSize = rowIconSize
-    row.viewport.cellWidth = cellWidth
-    row.viewport.gridColumns = columns
-    row.viewport.cellGap = cellGap
-    local totalHeight = rows * cellHeight - cellGap + (rows - 1) * verticalGap
-    row.viewport.rowContentHeight = totalHeight
-    local viewportHeight = totalHeight
-    if vertical then
-        -- Keep a fixed viewport height while additional entries scroll vertically.
-        local visibleRows = 3
-        viewportHeight = math.min(totalHeight, visibleRows * cellHeight - cellGap + (visibleRows - 1) * verticalGap)
-        shouldScroll = count > row.viewport.visibleSlots and totalHeight > viewportHeight
-    end
-    if vertical then
-        viewportWidth = totalWidth + 16
-        if singleColumn then
-            local header = content.petSpellsHeader
-            local path, _, flags = header:GetFont()
-            local size = math.max(1, header.gluFontBaseSize * ns.GetTextScale("headingTextScale"))
-            viewportWidth = math.max(viewportWidth, math.ceil(render.MeasureTextWidth(path, size, flags, header:GetText())) + 8)
-        end
-        row.viewport.horizontalWidth = viewportWidth
-        row.viewport:SetWidth(viewportWidth)
-    end
-    row:SetWidth(vertical and viewportWidth or (shouldScroll and totalWidth or viewportWidth))
-    -- Keep the scroll child at the native origin. Put the scrollbar clearance
-    -- inside the child so horizontal scrolling cannot change the vertical inset.
-    local scrollbarSpace = not vertical and shouldScroll and SCROLLBAR_HEIGHT or 0
-    row:SetHeight(totalHeight + scrollbarSpace)
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", row.viewport, "TOPLEFT", 0, 0)
-    row.viewport:SetHeight(viewportHeight + scrollbarSpace)
-    local slider, track = row.viewport.slider, row.viewport.scrollTrack
-    slider:ClearAllPoints()
-    track:ClearAllPoints()
-    slider:SetOrientation(vertical and "VERTICAL" or "HORIZONTAL")
-    slider:SetValueStep(0.01)
-    if vertical then
-        slider:SetPoint("TOPRIGHT", row.viewport, "TOPRIGHT", -2, 0)
-        slider:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", -2, 0)
-        slider:SetWidth(UI_METRICS.scrollbarThickness)
-        track:SetPoint("TOPRIGHT", row.viewport, "TOPRIGHT", -6, 0)
-        track:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", -6, 0)
-        track:SetWidth(2)
-    else
-        slider:SetPoint("BOTTOMLEFT", row.viewport, "BOTTOMLEFT", 0, 0)
-        slider:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", 0, 0)
-        slider:SetHeight(UI_METRICS.scrollbarThickness)
-        track:SetPoint("BOTTOMLEFT", row.viewport, "BOTTOMLEFT", 0, 0)
-        track:SetPoint("BOTTOMRIGHT", row.viewport, "BOTTOMRIGHT", 0, 0)
-        track:SetHeight(2)
-    end
-    local thumb = slider:GetThumbTexture()
-    if thumb then
-        if vertical then thumb:SetSize(UI_METRICS.scrollbarThickness, render.ScrollThumbLength(viewportHeight, totalHeight))
-        else thumb:SetSize(math.min(24, viewportWidth * .45), UI_METRICS.scrollbarThickness) end
-    end
-    local maximum = shouldScroll and math.max(0, vertical and totalHeight - viewportHeight or totalWidth - viewportWidth) or 0
-    row.viewport.scrollMaximum = maximum
-    row.viewport.scrollStep = vertical and cellHeight + verticalGap or cellWidth + gap
-    row.viewport:UpdateScrollChildRect()
-    slider:SetMinMaxValues(0, maximum)
-    local value = math.max(0, math.min(maximum, previousValue))
-    slider:SetValue(value)
-    -- A same-value SetValue need not emit OnValueChanged after a rebuild.
-    slider:GetScript("OnValueChanged")(slider, value)
-    slider:SetShown(shouldScroll)
-    track:SetShown(shouldScroll)
-    local startX = -totalWidth / 2 + cellWidth / 2
-    local startY = totalHeight / 2 - cellHeight / 2
-
-    for i, spell in ipairs(abilities) do
-        local icon = GetAbilityIcon(i, row, pool)
-        local spellID = spell.id
-        local spellName = spell.name
-        if icon.previousRankSpellID ~= spell.previousRankSpellID or icon.spellID ~= spellID then
-            if render.rankTooltipOwner == icon then render.HideAbilityTooltips(icon) end
-        end
-        icon.spellID = spellID
-        icon.previousRankSpellID = spell.previousRankSpellID
-        icon.spellName = spellName
-        icon.isNewAbility = spell.isNewAbility
-        local formattedCost = icon.formattedCost
-        local texture = spell.icon
-        if not texture and icon.textureSpellID == spellID then
-            texture = icon.texturePath
-        elseif not texture then
-            local spellTextureFunc = C_Spell and C_Spell.GetSpellTexture
-            if not spellTextureFunc then
-                spellTextureFunc = rawget(_G, "GetSpellTexture")
-            end
-            texture = spellID and spellTextureFunc and spellTextureFunc(spellID)
-            icon.textureSpellID = spellID
-        else
-            icon.textureSpellID = nil
-        end
-        texture = texture or "Interface\\Icons\\INV_Misc_QuestionMark"
-        if texture ~= icon.texturePath then
-            icon.icon:SetTexture(texture)
-            icon.texturePath = texture
-        end
-
-        local zeroIndex = i - 1
-        local column = zeroIndex % columns
-        local rowIndex = math.floor(zeroIndex / columns)
-        if horizontalGrid and i <= 9 then
-            column = math.floor(zeroIndex / 3)
-            rowIndex = zeroIndex % 3
-        elseif horizontalGrid then
-            column = (i - 10) % 3
-            rowIndex = 3 + math.floor((i - 10) / 3)
-        end
-        icon.layoutRow = rowIndex
-        local x = startX + column * (cellWidth + gap)
-        if horizontalGrid and count <= 6 then
-            local occupiedColumns = math.ceil(count / 3)
-            x = x + (3 - occupiedColumns) * (cellWidth + gap) / 2
-        end
-        if not vertical and not shouldScroll then
-            local rowColumns = math.min(columns, count - rowIndex * columns)
-            x = -(rowColumns * cellWidth + (rowColumns - 1) * gap) / 2
-                + cellWidth / 2 + column * (cellWidth + gap)
-        end
-        local iconSize = spell.isNewAbility == true and newIconSize or normalIconSize
-        local visibleCellHeight = formattedCost and cellHeight or rowIconSize
-        local iconY = startY + (visibleCellHeight - iconSize) / 2
-            - rowIndex * (cellHeight + verticalGap)
-        if formattedCost and not vertical then iconY = iconY - ABILITY_COST_TOP_PADDING end
-        local delay = staggerBase + (i - 1) * staggerStep
-        icon.skipEntrance = count > row.viewport.visibleSlots and shouldScroll and (vertical
-            and rowIndex * (cellHeight + verticalGap) >= viewportHeight
-            or not vertical and column * (cellWidth + gap) >= viewportWidth)
-        icon.entranceEnd = delay + popDuration
-        StartIconPop(icon, row, x, iconY, delay, popDuration, skipAnimation or portraitPreparing)
-    end
-
-    for i = count + 1, #pool do
-        StopIconAnimation(pool[i])
-        pool[i]:Hide()
-    end
-end
-
--- Fit visible icon groups after the normal frame geometry has been finalized.
--- must never feed back into column widths, row heights or the popup's scale.
-function render.FitSparseAbilityIcons(viewport, pool)
-    local count = viewport.abilityCount or 0
-    local vertical = IsHorizontalLayout()
-    local growGrid = vertical and not TrainerCostsVisible(true)
-        and render.AbilityScrollRange(viewport) <= 0
-    if count < 1 or count > 3 and not growGrid or (viewport.scrollMaximum or 0) > 0 then return end
-    local gap = AbilityIconGap()
-    local width, height = viewport:GetWidth(), viewport:GetHeight()
-    local base = NewAbilityIconSize()
-    local function IconSize(icon, size)
-        return icon.isNewAbility == true and size or NormalAbilityIconSize() * size / base
-    end
-    local function Measure(size, position)
-        local columns, rows = {}, {}
-        for i = 1, count do
-            local icon = pool[i]
-            local iconSize = IconSize(icon, size)
-            local column = vertical and math.floor((i - 1) / viewport.gridRows) + 1 or i
-            local row = vertical and (i - 1) % viewport.gridRows + 1 or 1
-            local cellWidth = math.max(iconSize, icon.formattedCost and icon.costText:GetWidth() or 0)
-            local cellHeight = iconSize + (icon.formattedCost and ABILITY_COST_GAP + AbilityCostHeight() or 0)
-            columns[column] = math.max(columns[column] or 0, cellWidth)
-            rows[row] = math.max(rows[row] or 0, cellHeight)
-        end
-        local groupWidth, groupHeight = gap * (#columns - 1), gap * (#rows - 1)
-        for _, value in ipairs(columns) do groupWidth = groupWidth + value end
-        for _, value in ipairs(rows) do groupHeight = groupHeight + value end
-        if position then
-            for i = 1, count do
-                local icon = pool[i]
-                local iconSize = IconSize(icon, size)
-                local column = vertical and math.floor((i - 1) / viewport.gridRows) + 1 or i
-                local row = vertical and (i - 1) % viewport.gridRows + 1 or 1
-                local x, y = -groupWidth / 2 + columns[column] / 2, (vertical and viewport.row:GetHeight() or groupHeight) / 2 - iconSize / 2
-                if vertical and count == 1 then
-                    local lift = 18 / math.max(.001, content:GetScale() * viewport:GetScale())
-                    y = math.min(lift, math.max(0, (viewport.row:GetHeight() - iconSize) / 2))
-                end
-                for j = 1, column - 1 do x = x + columns[j] + gap end
-                for j = 1, row - 1 do y = y - rows[j] - gap end
-                render.Size(icon, iconSize, iconSize)
-                render.Size(icon.newAbilityGlow, iconSize * 1.85, iconSize * 1.85)
-                icon.animationX, icon.animationY = x, y
-                icon:ClearAllPoints()
-                icon:SetPoint("CENTER", viewport.row, "CENTER", x, y - (activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
-            end
-        end
-        local centeredCost = vertical and count == 1 and pool[1].formattedCost and ABILITY_COST_GAP + AbilityCostHeight() or 0
-        return groupWidth + (vertical and 16 or 0), groupHeight + centeredCost
-    end
-    local low, high = base, base * 1.5
-    local baseWidth, baseHeight = Measure(base)
-    if baseWidth > width or baseHeight > height then low = 0 end
-    local capWidth, capHeight = Measure(high)
-    if capWidth <= width and capHeight <= height then
-        low = high
-    else
-        for _ = 1, 18 do
-            local mid = (low + high) / 2
-            local neededWidth, neededHeight = Measure(mid)
-            if neededWidth <= width and neededHeight <= height then low = mid else high = mid end
-        end
-    end
-    Measure(math.max(.1, math.floor(low * 100) / 100), true)
-end
-
-local function UpdateTrainerAbilityIcons(trainerAbilities, skipAnimation)
-    content.currentTrainerAbilities = trainerAbilities or {}
-    if not ns.NewAbilitiesEnabled() then
-        UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, nil, {}, false, skipAnimation)
-        ApplyToTextLayers(content.noAbilitiesText, "Hide")
-        render.RefreshAbilityHeader()
-        return
-    end
-    if ns.SupportsTrainerData() and ns.db.showLatestTrainingRanks ~= false then
-        trainerAbilities = ns.LatestTrainingRanks(content.currentTrainerAbilities)
-    end
-    UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, content.noAbilitiesText, trainerAbilities, true, skipAnimation)
-    if ns.GetCurrentFlavor() == "retail" then
-        ApplyToTextLayers(content.noAbilitiesText, "Hide")
-    end
-    render.RefreshAbilityHeader()
-end
-
-local function UpdateWarlockPetAbilityIcons(petAbilities, skipAnimation)
-    local hideRetailPets = not ns.SupportsTrainerData()
-    --@do-not-package@
-    -- SSTEST: local screenshot presentation only.
-    if content.screenshotPreview and content.screenshotPreview.grimoires then hideRetailPets = false end
-    --@end-do-not-package@
-    if hideRetailPets then petAbilities = {} end
-    content.currentWarlockPetAbilities = petAbilities or {}
-    if not ns.NewAbilitiesEnabled() then petAbilities = {} end
-    local hasAbilities = type(petAbilities) == "table" and #petAbilities > 0
-    if not hasAbilities then
-        ApplyToTextLayers(content.petSpellsHeader, "Hide")
-        content.petAbilityRow:Hide()
-        UpdateAbilityIcons(content.petAbilityRow, content.petAbilityIconPool, nil, {}, false, skipAnimation)
-        return
-    end
-
-    ApplyToTextLayers(content.petSpellsHeader, "Show")
-    content.petAbilityRow:Show()
-    UpdateAbilityIcons(content.petAbilityRow, content.petAbilityIconPool, nil, petAbilities, false, skipAnimation)
 end
 
 local function UpdateWeaponSkillText(unlearnedWeaponSkills)
@@ -3157,7 +2698,7 @@ FitStatFont = function(availableWidth, compact)
     if key == render.fitKey then SetSize(render.fitSize); return changed end
     -- Keep the smaller compact presentation for the whole popup so finishing
     -- a count never changes its font or frame width mid-display.
-    local baseSize = (compact and ns.db and ns.db.emphasizeStatGains and 19 or 20) * ns.GetTextScale("statTextScale")
+    local baseSize = ns.GetThemeFontSize("stats", compact and ns.db and ns.db.emphasizeStatGains and 19 or 20) * ns.GetTextScale("statTextScale")
     local fittedSize = baseSize
     SetSize(baseSize)
     if compact then
@@ -3814,8 +3355,8 @@ function render.RefreshMilestoneLevelText()
         if entry.fs == text then base = entry.size; break end
     end
     local enabled = content.isMilestone and ns.db and ns.db.milestoneAnimations ~= false
-    local target = base * ns.GetTextScale("headingTextScale") * (enabled and 1.43 or 1)
-    local fitHeading = content.levelRangeStart or ns.GetTextScale("headingTextScale") ~= 1
+    local target = ns.GetThemeFontSize("level", base) * ns.GetTextScale("headingTextScale") * (enabled and 1.43 or 1)
+    local fitHeading = content.levelRangeStart or ns.GetTextScale("headingTextScale") ~= 1 or ns.GetThemeFontSize("level", base) ~= base
     if fitHeading then
         ApplyToTextLayers(text, "SetFont", path, target, flags)
         local available = IsHorizontalLayout() and PortraitColumnWidth() - 12 or FRAME_WIDTH - 40
@@ -5413,7 +4954,7 @@ local function BuildEntranceTimeline()
     entranceTimeline, content.entranceTimeline = plan, plan
 end
 
-local function TextHeight(fs, fallback)
+function render.TextHeight(fs, fallback)
     local h = fs:GetStringHeight()
     if not h or h < 1 then h = fallback end
     return h
@@ -5428,8 +4969,8 @@ local function LayoutFrame(statCount)
     local borderInset = ThemeContentInset()
     local gap = SectionGap()
     local h = SectionPadding() + PortraitRingSize() + render.PortraitLevelGap()
-    h = h + TextHeight(content.levelText, 18)
-    h = h + 22 + TextHeight(content.statsHeader, 18)
+    h = h + render.TextHeight(content.levelText, 18)
+    h = h + 22 + render.TextHeight(content.statsHeader, 18)
     h = h + gap + SECTION_DIVIDER_HEIGHT + gap
         + statCount * STAT_LINE_HEIGHT
     h = h + gap + SECTION_DIVIDER_HEIGHT + gap
@@ -5438,19 +4979,19 @@ local function LayoutFrame(statCount)
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
     end
     if ns.AbilitySectionVisible(content.currentTrainerAbilities) then
-        h = h + TextHeight(content.spellsHeader, 16)
+        h = h + render.TextHeight(content.spellsHeader, 16)
         h = h + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding()
             + (content.abilityViewport:GetHeight() or ABILITY_ICON_SIZE)
     end
     if content.petSpellsHeader:IsShown() then
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
-        h = h + TextHeight(content.petSpellsHeader, 16)
+        h = h + render.TextHeight(content.petSpellsHeader, 16)
         h = h + gap + SECTION_DIVIDER_HEIGHT + render.AbilitySectionPadding()
             + (content.petAbilityViewport:GetHeight() or ABILITY_ICON_SIZE)
     end
     if content.weaponSkillsText:IsShown() then
         h = h + gap + SECTION_DIVIDER_HEIGHT + gap
-            + math.max(18, TextHeight(content.weaponSkillsText, 18))
+            + math.max(18, render.TextHeight(content.weaponSkillsText, 18))
     end
     local abilitiesLast = not content.weaponSkillsText:IsShown()
         and (content.abilityViewport:IsShown() or content.petAbilityViewport:IsShown())
@@ -5464,11 +5005,11 @@ local function LayoutFrame(statCount)
             if content.petSpellsHeader:IsShown() then width = width + 28 + TrainingWidth(content.petAbilityViewport) end
             ApplyToTextLayers(content.weaponSkillsText, "SetWidth", width)
             ApplyToTextLayers(content.weaponSkillsText, "SetHeight", 0)
-            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", TextHeight(content.weaponSkillsText, 18))
+            ApplyToTextLayers(content.weaponSkillsText, "SetHeight", render.TextHeight(content.weaponSkillsText, 18))
             SyncTextGeometry(content.weaponSkillsText)
         end
         --@end-do-not-package@
-        local statsHeight = 24 + TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + statCount * STAT_LINE_HEIGHT
+        local statsHeight = 24 + render.TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT + statCount * STAT_LINE_HEIGHT
         if content.levelTimeText:IsShown() then statsHeight = statsHeight + 2 + content.levelTimeText:GetHeight() end
         -- Reserve three rows, then use extra panel height for additional rows.
         content.portraitFit = 1
@@ -5491,14 +5032,14 @@ local function LayoutFrame(statCount)
                 end
                 local modern = ns.GetEffectiveBackgroundMode() == "MODERN"
                 local bottomPadding = modern and UI_METRICS.modernAbilityPadding or UI_METRICS.texturedAbilityPadding
-                local reserve = 24 + TextHeight(header, 18) + gap + SECTION_DIVIDER_HEIGHT
+                local reserve = 24 + render.TextHeight(header, 18) + gap + SECTION_DIVIDER_HEIGHT
                     + UI_METRICS.abilityTopGap + math.max(render.AbilitySectionPadding(), bottomPadding)
                     + (modern and 20 or 0)
                 naturalHeight = math.max(naturalHeight, reserve + 3 * (viewport.cellHeight or AbilityCellHeight(NewAbilityIconSize())))
             end
         end
         local maximum = math.max(1, math.min(350, UIParent:GetHeight() - 40)) / ns.GetPopupScale()
-        local statsTop = 24 + TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
+        local statsTop = 24 + render.TextHeight(content.statsHeader, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
         local hasTime = content.levelTimeText:IsShown()
         local blockHeight = statCount * STAT_LINE_HEIGHT
             + (hasTime and gap + content.levelTimeText:GetHeight() or 0)
@@ -5527,63 +5068,11 @@ local function LayoutFrame(statCount)
         --@do-not-package@
         -- SSTEST: local screenshot presentation only.
         if content.screenshotPreview and content.weaponSkillsText:IsShown() then
-            abilityPadding = abilityPadding + TextHeight(content.weaponSkillsText, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
+            abilityPadding = abilityPadding + render.TextHeight(content.weaponSkillsText, 18) + gap * 2 + SECTION_DIVIDER_HEIGHT
         end
         --@end-do-not-package@
         local topGap = UI_METRICS.abilityTopGap / fit
-        for _, viewport in ipairs({main, pet}) do
-            local count = viewport.abilityCount or 0
-            if count > 0 then
-                local header = viewport == main and content.spellsHeader or content.petSpellsHeader
-                local divider = viewport == main and content.abilitiesDivider or content.petHeaderDivider
-                local abilityTop = 24 + TextHeight(header,18) + gap + SECTION_DIVIDER_HEIGHT + topGap
-                local height = math.max(1, naturalHeight-bottomAbilityInset-abilityPadding-abilityTop)
-                viewport:ClearAllPoints();viewport:SetPoint("TOP",divider,"BOTTOM",0,-topGap)
-                viewport.abilityPadding = abilityPadding
-                local columns = viewport == main and 3 or 1
-                local rows = math.max(1, math.floor((height + (viewport.cellGap or 0)) / viewport.cellHeight))
-                viewport.gridRows, viewport.gridColumns = rows, columns
-                viewport.visibleSlots = rows * columns
-                local totalRows = math.min(count, rows) + math.ceil(math.max(0, count - viewport.visibleSlots) / columns)
-                viewport.rowContentHeight = totalRows * viewport.cellHeight - (viewport.cellGap or 0)
-                viewport:SetHeight(height)
-                viewport.row:SetHeight(math.max(height, viewport.rowContentHeight))
-                viewport.row:ClearAllPoints()
-                viewport.row:SetPoint("TOPLEFT", viewport, "TOPLEFT", 0, 0)
-                viewport.scrollMaximum = math.max(0, viewport.rowContentHeight - height)
-            end
-        end
-        main.sharedScroll = true
-        main.sharedMaximum = math.max(main.scrollMaximum or 0, hasPet and pet.scrollMaximum or 0)
-        main.scrollController = main.slider
-        pet.scrollController = hasPet and main.slider or nil
-        main.slider:SetParent(content)
-        main.scrollTrack:SetParent(content)
-        main.slider:ClearAllPoints()
-        main.scrollTrack:ClearAllPoints()
-        local barX = hasPet and 14 or 10
-        main.slider:SetOrientation("VERTICAL")
-        main.slider:SetWidth(UI_METRICS.scrollbarThickness)
-        main.scrollTrack:SetWidth(2)
-        main.slider:SetPoint("TOP", main, "TOPRIGHT", barX, 0)
-        main.slider:SetHeight(math.max(main:GetHeight(), hasPet and pet:GetHeight() or 0))
-        main.scrollTrack:SetPoint("TOP", main.slider, "TOP", 0, 0)
-        main.scrollTrack:SetHeight(main.slider:GetHeight())
-        main:UpdateScrollChildRect()
-        pet:UpdateScrollChildRect()
-        main.slider:SetMinMaxValues(0, main.sharedMaximum)
-        local value = math.max(0, math.min(main.sharedMaximum, main.requestedScroll or 0))
-        main.slider:SetValue(value)
-        main.slider:GetScript("OnValueChanged")(main.slider, value)
-        main.slider:SetShown(main.sharedMaximum > 0)
-        main.scrollTrack:SetShown(main.sharedMaximum > 0)
-        pet.slider:Hide()
-        pet.scrollTrack:Hide()
-        local thumb = main.slider:GetThumbTexture()
-        if thumb then
-            local height = main.slider:GetHeight()
-            thumb:SetSize(UI_METRICS.scrollbarThickness, render.ScrollThumbLength(height, height + main.sharedMaximum))
-        end
+        render.LayoutHorizontalAbilities(naturalHeight, bottomAbilityInset, abilityPadding, topGap, gap, hasPet)
         ns.RefreshPortraitGeometry(true)
         content.portraitPulse:SetSize(PortraitRingSize() * 1.1, PortraitRingSize() * 1.1)
         content:SetScale(fit)
@@ -5648,54 +5137,7 @@ local function LayoutFrame(statCount)
     end
     --@end-do-not-package@
     render.PositionPaceRecord()
-    if IsHorizontalLayout() then
-        for _, entry in ipairs({{content.abilityViewport,content.abilityIconPool},{content.petAbilityViewport,content.petAbilityIconPool}}) do
-            local viewport,pool=entry[1],entry[2]
-            if (viewport.abilityCount or 0)>0 then
-                local occupiedColumns = math.min(viewport.gridColumns, math.ceil(viewport.abilityCount / viewport.gridRows))
-                local width = occupiedColumns * viewport.cellWidth + (occupiedColumns - 1) * AbilityIconGap()
-                for i=1,viewport.abilityCount do
-                    local icon=pool[i]
-                    local zeroIndex = i - 1
-                    local rows, columns = viewport.gridRows, viewport.gridColumns
-                    local column = math.floor(zeroIndex / rows)
-                    local rowIndex = zeroIndex % rows
-                    if i > viewport.visibleSlots then
-                        column = (i - viewport.visibleSlots - 1) % columns
-                        rowIndex = rows + math.floor((i - viewport.visibleSlots - 1) / columns)
-                    end
-                    icon.layoutRow = rowIndex
-                    icon.skipEntrance = rowIndex >= rows
-                    local x = -width / 2 + viewport.cellWidth / 2 + column * (viewport.cellWidth + AbilityIconGap())
-                    -- Align icon bottoms so prices share a baseline in each row.
-                    local alignedHeight = TrainerCostsVisible(true) and icon:GetHeight() or viewport.rowIconSize
-                    local y = viewport.row:GetHeight() / 2 - viewport.rowIconSize
-                        + alignedHeight / 2 - icon.layoutRow * viewport.cellHeight
-                    icon.animationX,icon.animationY=x,y;icon:ClearAllPoints()
-                    icon:SetPoint("CENTER",viewport.row,"CENTER",x,y-(activeIconAnims[icon] and ABILITY_POP_DISTANCE or 0))
-                end
-            end
-        end
-    end
-    render.FitSparseAbilityIcons(content.abilityViewport, content.abilityIconPool)
-    render.FitSparseAbilityIcons(content.petAbilityViewport, content.petAbilityIconPool)
-    content.abilityViewport:UpdateScrollChildRect()
-    content.petAbilityViewport:UpdateScrollChildRect()
-    -- Pooled icons change the native scroll rectangle when they move into
-    -- their final grid. Restore offsets after layout, without rebuilding that
-    -- rectangle on wheel/drag input and moving the thumb under the cursor.
-    content.abilityViewport.restoringScroll = false
-    content.petAbilityViewport.restoringScroll = false
-    for _, viewport in ipairs({content.abilityViewport, content.petAbilityViewport}) do
-        if not viewport.scrollController or viewport.scrollController == viewport.slider then
-            local slider = viewport.scrollController or viewport.slider
-            local value = math.max(0, math.min(render.AbilityScrollRange(viewport), viewport.requestedScroll or 0))
-            slider:SetValue(value)
-            slider:GetScript("OnValueChanged")(slider, value)
-        end
-    end
-    render.RefreshAbilityVisibility(content.abilityViewport)
-    render.RefreshAbilityVisibility(content.petAbilityViewport)
+    render.FinishAbilityLayout()
     LayoutBackground()
 end
 
@@ -5735,8 +5177,8 @@ local function RefreshPopupLayoutNow()
     frame:SetScale(ns.GetPopupScale())
     ApplyPopupWidth()
     ns.RefreshPortraitGeometry()
-    UpdateTrainerAbilityIcons(content.currentTrainerAbilities or {}, true)
-    UpdateWarlockPetAbilityIcons(content.currentWarlockPetAbilities or {}, true)
+    render.UpdateTrainerAbilityIcons(content.currentTrainerAbilities or {}, true)
+    render.UpdateWarlockPetAbilityIcons(content.currentWarlockPetAbilities or {}, true)
     UpdateWeaponSkillText(content.currentWeaponSkills or {})
     ns.RefreshVisualEffects()
     PositionSections()
@@ -6031,8 +5473,8 @@ local function ShowLevelUpImpl(currentLevel, statChanges, trainerAbilities, unle
     render.UpdateLevelTime()
 
     content.currentWarlockPetAbilities = warlockPetAbilities or {}
-    UpdateTrainerAbilityIcons(trainerAbilities or {})
-    UpdateWarlockPetAbilityIcons(warlockPetAbilities or {})
+    render.UpdateTrainerAbilityIcons(trainerAbilities or {})
+    render.UpdateWarlockPetAbilityIcons(warlockPetAbilities or {})
     UpdateWeaponSkillText(unlearnedWeaponSkills or {})
 
     PositionSections()

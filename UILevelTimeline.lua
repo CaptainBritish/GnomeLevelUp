@@ -426,7 +426,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
             if not marker.hasLevel then marker:Hide() end
             if marker.spark and i ~= 2 and i ~= steps + 1 then marker.spark:Hide() end
             marker:SetWidth(2 * iconSize + 3)
-            marker.label:SetFont(path, 14, "OUTLINE")
+            marker.label:SetFont(path, ns.GetThemeFontSize("timeline", 14), "OUTLINE")
             marker.label:SetText(marker.hasLevel and tostring(level) or "")
             -- Older replay snapshots may still include starter spells.
             local skills = count > 0 and marker.hasLevel and level > 1 and source.levels[level]
@@ -435,7 +435,7 @@ function ns.InstallLevelTimeline(render, popup, modernBottomLine, texturedBottom
                 marker.hasUnlockLabel = marker.hasLevel and i == steps + 1 and count > 0
                     and (not skills or #skills == 0) and source.nextUnlockLevel ~= nil
                 if marker.hasUnlockLabel then
-                    marker.unlockLabel:SetFont(path, 12, "OUTLINE")
+                    marker.unlockLabel:SetFont(path, ns.GetThemeFontSize("timeline", 12), "OUTLINE")
                     marker.unlockLabel:SetText(ns.L("Level %d", source.nextUnlockLevel))
                     skills, iconTop = source.nextUnlockSkills, TRACK_Y - 42
                 end

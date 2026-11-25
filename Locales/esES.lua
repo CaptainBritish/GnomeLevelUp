@@ -204,6 +204,21 @@ RegisterLocaleBuilder("esES", ns.BuildSpanishLocale)
 -- Register the startup message before selecting the initial language.
 -- Core applies the saved choice at ADDON_LOADED.
 RegisterLocaleBuilder("esES", function() return {
+    ["Delete"] = "Eliminar",
+    ["Unknown"] = "Desconocido",
+    ["Local"] = "Local",
+    ["Direct"] = "Directo",
+    ["Relayed"] = "Retransmitido",
+    ["Received from: %s"] = "Recibido de: %s",
+    ["Received at: %s"] = "Recibido el: %s",
+    ["Record source: %s"] = "Origen del récord: %s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "Advertencia: vas a eliminar este récord para todos los usuarios conectados en este momento. Esta acción es irreversible.",
+    ["Delete this record for all online users."] = "Eliminar este récord para todos los usuarios conectados.",
+
+    ["Share level times with guild"] = "Compartir tiempos de nivel con la hermandad",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "Comparte los tiempos de niveles completados con miembros de la hermandad que usan GLU y muestra sus récords en el historial de niveles.",
+    ["Guild record"] = "Récord de hermandad",
+
     ["Welcome to GnomeLevelUp! As of 1.4.0 you no longer need to scan trainers manually, the list is pre-populated! Please report any issues you encounter to me on GitHub or Curseforge!"] = "¡Bienvenido a GnomeLevelUp! Desde la versión 1.4.0 ya no necesitas escanear los instructores manualmente: ¡la lista ya está incluida! ¡Comunícame cualquier problema que encuentres en GitHub o Curseforge!",
 } end)
 

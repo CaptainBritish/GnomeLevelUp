@@ -1017,6 +1017,7 @@ local function FinishSetup()
     if setupMode then ns.db.firstTimeSetupCompleted = true end
     ns.SaveActiveProfile()
     Close()
+    if ns.MaybeShowVersionWelcome then ns.MaybeShowVersionWelcome() end
 end
 
 local function Activate()

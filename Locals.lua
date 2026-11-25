@@ -133,6 +133,7 @@ function ns.GetLocaleFontPath(locale)
 end
 
 function ns.GetPopupFontPath(path)
+    if ns.GetAvailableThemeFontPath then path = ns.GetAvailableThemeFontPath(path) end
     if type(path) ~= "string" or path == "" then path = ns.DEFAULT_FONT_PATH end
     local fontKey = path:gsub("/", "\\"):upper()
     -- Game-supplied names may use the client script even when GLU is in English.

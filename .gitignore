@@ -1,7 +1,8 @@
 .DS_Store
 Thumbs.db
 
-Tools/
+Tools/*
+!Tools/check_theme_pack.py
 .vscode/
 .idea/
 

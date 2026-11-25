@@ -5,6 +5,21 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Every new UI string needs an entry here and in the other non-English files.
 
 RegisterLocaleBuilder("ruRU", function() return {
+    ["Delete"] = "Удалить",
+    ["Unknown"] = "Неизвестно",
+    ["Local"] = "Локально",
+    ["Direct"] = "Напрямую",
+    ["Relayed"] = "Переслано",
+    ["Received from: %s"] = "Получено от: %s",
+    ["Received at: %s"] = "Получено: %s",
+    ["Record source: %s"] = "Источник рекорда: %s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "Внимание: вы собираетесь удалить этот рекорд для всех пользователей, находящихся сейчас в сети. Это действие необратимо.",
+    ["Delete this record for all online users."] = "Удалить этот рекорд для всех пользователей в сети.",
+
+    ["Share level times with guild"] = "Делиться временем уровней с гильдией",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "Передаёт время завершённых уровней участникам гильдии с GLU и показывает рекорды гильдии в истории уровней.",
+    ["Guild record"] = "Рекорд гильдии",
+
     ["%s (recommended for gamepad)"] = "%s (рекомендуется для геймпада)",
     ["%s hue"] = "Оттенок: %s",
     ["%s rotation"] = "Поворот: %s",

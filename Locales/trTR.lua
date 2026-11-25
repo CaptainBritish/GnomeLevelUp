@@ -5,6 +5,21 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Lines whose text is still in English have not been translated yet.
 
 RegisterLocaleBuilder("trTR", function() return {
+    ["Delete"] = "Sil",
+    ["Unknown"] = "Bilinmiyor",
+    ["Local"] = "Yerel",
+    ["Direct"] = "Doğrudan",
+    ["Relayed"] = "Aktarılan",
+    ["Received from: %s"] = "Gönderen: %s",
+    ["Received at: %s"] = "Alınma zamanı: %s",
+    ["Record source: %s"] = "Rekor kaynağı: %s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "Uyarı: Bu rekoru şu anda çevrimiçi olan tüm kullanıcılar için silmek üzeresiniz. Bu işlem geri alınamaz.",
+    ["Delete this record for all online users."] = "Bu rekoru tüm çevrimiçi kullanıcılar için sil.",
+
+    ["Share level times with guild"] = "Seviye sürelerini loncayla paylaş",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "Tamamlanan seviyelerin sürelerini GLU kullanan lonca üyeleriyle paylaşır ve Seviye Geçmişinde lonca rekorlarını gösterir.",
+    ["Guild record"] = "Lonca rekoru",
+
     ["%s (recommended for gamepad)"] = "%s (Kontrolcü için önerilen)",
     ["%s hue"] = "Ton: %s",
     ["%s rotation"] = "Açı: %s",

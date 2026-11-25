@@ -5,6 +5,21 @@ local RegisterLocaleBuilder = ns.RegisterLocaleBuilder
 -- Every new UI string needs an entry here and in the other non-English files.
 
 RegisterLocaleBuilder("koKR", function() return {
+    ["Delete"] = "삭제",
+    ["Unknown"] = "알 수 없음",
+    ["Local"] = "로컬",
+    ["Direct"] = "직접",
+    ["Relayed"] = "전달됨",
+    ["Received from: %s"] = "보낸 사람: %s",
+    ["Received at: %s"] = "받은 시각: %s",
+    ["Record source: %s"] = "기록 출처: %s",
+    ["Warning: You are about to remove this record for everyone online right now. This is not reversable."] = "경고: 현재 접속 중인 모든 사용자의 이 기록을 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+    ["Delete this record for all online users."] = "현재 접속 중인 모든 사용자의 이 기록을 삭제합니다.",
+
+    ["Share level times with guild"] = "길드와 레벨 달성 시간 공유",
+    ["Share completed level times with guild members using GLU and show guild records in Level History."] = "GLU를 사용하는 길드원과 완료한 레벨의 소요 시간을 공유하고 레벨 기록에 길드 최고 기록을 표시합니다.",
+    ["Guild record"] = "길드 최고 기록",
+
     ["%s (recommended for gamepad)"] = "%s (게임패드 권장)",
     ["%s hue"] = "%s 색조",
     ["%s rotation"] = "%s 회전",

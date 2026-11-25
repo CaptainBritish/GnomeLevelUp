@@ -5,14 +5,15 @@ local ADDON_NAME, ns = ...
 local WHITE = { 1, 1, 1 }
 local BLACK = { 0, 0, 0 }
 
-function ns.GetBackgroundStyle()
-    local style = ns.db and ns.db.backgroundStyle
+function ns.GetBackgroundStyle(settings)
+    local db = settings or ns.db
+    local style = db and db.backgroundStyle
     if style == "fill" or style == "tile" or style == "stretch" then return style end
-    return ns.db and ns.db.backgroundFillMode == "tile" and "tile" or "stretch"
+    return db and db.backgroundFillMode == "tile" and "tile" or "stretch"
 end
 
-local function PieceColor(name)
-    local db = ns.db or {}
+local function PieceColor(name, settings)
+    local db = settings or ns.db or {}
     local color = db.backgroundTextureColors and db.backgroundTextureColors[name] or WHITE
     local hue = name == "center" and db.backgroundColor or db.frameColor
     if name == "center" and db.backgroundChoice == "SOLID" then
@@ -27,9 +28,10 @@ local function PieceColor(name)
     return color[1] * hue[1], color[2] * hue[2], color[3] * hue[3]
 end
 
-function ns.PaintThemePiece(texture, name, reference, alpha, tileEdges)
+function ns.PaintThemePiece(texture, name, reference, alpha, tileEdges, settings)
     if not reference or reference == "" then texture:Hide(); return false end
-    local style = ns.GetBackgroundStyle()
+    local db = settings or ns.db
+    local style = ns.GetBackgroundStyle(settings)
     local centerTile = name == "center" and style == "tile"
     local edgeTile = tileEdges ~= false
     local tileH = centerTile or edgeTile and (name == "top" or name == "bottom")
@@ -41,7 +43,7 @@ function ns.PaintThemePiece(texture, name, reference, alpha, tileEdges)
     if not applied then texture:Hide(); return false end
 
     local isAtlas = type(reference) == "table" and type(reference.atlas) == "string"
-    local transform = ns.db and ns.db.backgroundTextureTransforms and ns.db.backgroundTextureTransforms[name]
+    local transform = db and db.backgroundTextureTransforms and db.backgroundTextureTransforms[name]
     local rotation = transform and tonumber(transform.rotation) or 0
     if texture.SetRotation then texture:SetRotation(math.rad(rotation)) end
     if texture.SetBlendMode then texture:SetBlendMode("BLEND") end
@@ -51,13 +53,13 @@ function ns.PaintThemePiece(texture, name, reference, alpha, tileEdges)
         if transform and transform.flipY then top, bottom = bottom, top end
         texture:SetTexCoord(left, right, top, bottom)
         if name == "center" and style == "fill" then
-            local background = ns.GetBackgroundReference(ns.db and ns.db.backgroundChoice)
+            local background = ns.GetBackgroundReference(db and db.backgroundChoice)
             ns.SetBackgroundFillCoords(texture, sourceWidth or background and background.width,
                 sourceHeight or background and background.height, left, right, top, bottom)
         end
     end
     -- Native SetAtlas already applies its UVs if no metadata was available.
-    local r, g, b = PieceColor(name)
+    local r, g, b = PieceColor(name, settings)
     texture:SetVertexColor(r, g, b, alpha)
     texture:Show()
     return true
@@ -93,8 +95,10 @@ function ns.LayoutThemeFrame(theme, parent, pieces, backing, width, height)
     Anchor(pieces.right, parent, "TOPRIGHT", 0, -inset, edge, spanHeight)
     Anchor(pieces.center, parent, "TOPLEFT", corner, -corner,
         math.max(1, width - corner * 2), math.max(1, height - corner * 2))
-    -- A single deepest backing fills the frame, including underneath corners.
-    Anchor(backing, parent, "TOPLEFT", 0, 0, width, height)
+    -- Rounded artwork can inset its fill so transparent outer corners stay clear.
+    local backgroundInset = math.max(0, math.min(tonumber(theme.backgroundInset) or 0, width / 2, height / 2))
+    Anchor(backing, parent, "TOPLEFT", backgroundInset, -backgroundInset,
+        width - backgroundInset * 2, height - backgroundInset * 2)
     local tiled = ns.GetBackgroundStyle() == "tile"
     if backing.SetHorizTile then backing:SetHorizTile(tiled) end
     if backing.SetVertTile then backing:SetVertTile(tiled) end
