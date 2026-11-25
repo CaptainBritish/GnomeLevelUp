@@ -642,6 +642,10 @@ local function BuildOptions()
     end
     y = appearanceRow - 36
 
+    local druidPortraitToggle = AddSettingCheckbox("druidForms2D", LEFT, y)
+    druidPortraitToggle.gluOptionsCell.isVisible = ns.OPTION_SETTINGS.druidForms2D.isAvailable
+    y = y - 32
+
     local appearanceThemeRow = y
     local refreshTheme, themeDropdown = AddDropdown("Theme", ns.THEME_CHOICES or {},
         function()
@@ -1028,6 +1032,7 @@ local function BuildOptions()
     end)
     optionLayout:ArrangeGroups(appearanceCells, {
         { columns = 3, labels = { "Portrait", "Portrait ring", "Theme", "Background", "Background Fill Mode", "Frame" } },
+        { columns = 1, labels = { "Force 2D portraits in Druid forms" } },
         { columns = 3, positions = { 1, 3 }, labels = { "Frame strata", "Font" } },
         { columns = 2, labels = { "Lock Location", "Horizontal layout", "Compact Layout", "Show level timeline" } },
         { columns = 2, labels = { "Background opacity", "Display duration", "Popup scale", "Section padding", "Heading text size", "Time to Level text size" } },
@@ -1199,7 +1204,22 @@ local function BuildOptions()
         end, LEFT, y)
     y = y - 32
 
-    DeferDebugControls(math.ceil(#ns.ANIMATION_SOUND_SETTINGS / 3) * 60 + 32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34 + 32, function()
+    DeferDebugControls(math.ceil(#ns.ANIMATION_SOUND_SETTINGS / 3) * 60 + 32 + math.ceil(#ns.MODEL_SETTINGS / 3) * 60 + #ns.PARTICLE_SETTINGS * 60 + 120 + 64 + 3 * 34 + 64, function()
+        AddButton("Reset debug settings", 220, LEFT, y, function()
+            -- Finish pending edits before resetting, so focus-loss callbacks
+            -- cannot write an old value back over the restored defaults.
+            for _, row in pairs(optionLayout.rows) do
+                for _, cell in ipairs(row) do
+                    if cell.debugOnly then
+                        for _, widget in ipairs(cell.widgets) do
+                            if widget.HasFocus and widget:HasFocus() and widget.ClearFocus then widget:ClearFocus() end
+                        end
+                    end
+                end
+            end
+            ns.ResetDebugSettings()
+        end, true, y, 32)
+        y = y - 32
         local allGrimoiresCheck = AddCheckbox("Show all available grimoires",
             function() return ns.db.showAllWarlockGrimoires == true end,
             function(v) ns.db.showAllWarlockGrimoires = v end,
@@ -1404,6 +1424,7 @@ local function BuildOptions()
     local historyChoices, currentCharacter = ns.GetLevelHistoryCharacters()
     historyFrame.character = historyChoices[1] and historyChoices[1].value or nil
     historyFrame.flavor = ns.GetCurrentFlavor()
+    function ns.ResetHistoryDebugMode() historyFrame.flavor = ns.GetCurrentFlavor() end
     local historyReset
     local function HistoryCharacterChoices()
         local choices = ns.GetLevelHistoryCharacters()
@@ -1824,7 +1845,7 @@ local function BuildOptions()
     TrackElement(contributorsTitle, LEFT, y)
     y = y - 26
     local contributors = body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    contributors:SetText("Shadowhand, Alyssa, Molly, Rena, 3Zeah, Sindarina, Bun, Buildábear, Afleyna")
+    contributors:SetText("Shadowhand, Alyssa, Molly, Rena, 3Zeah, Sindarina, Bun, Buildábear, Afleyna, Gwen")
     TrackElement(contributors, LEFT, y)
     y = y - 32
 

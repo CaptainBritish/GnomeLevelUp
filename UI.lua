@@ -38,7 +38,7 @@ local CLASS_ICON_SIZE = PLAYER_PORTRAIT_SIZE
 local PORTRAIT_RING_PADDING = 6
 
 local function IsPlayerPortrait()
-    return ns.db and (ns.db.portraitMode == "player" or ns.db.portraitMode == "player3d")
+    return ns.db and (ns.GetEffectivePortraitMode() == "player" or ns.GetEffectivePortraitMode() == "player3d")
 end
 
 local function PortraitBaseSize()
@@ -56,11 +56,11 @@ local function PortraitIconSize()
 end
 
 local function PortraitArtworkSize()
-    return PortraitIconSize() * (ns.db and ns.db.portraitMode == "player" and 0.95 or 1)
+    return PortraitIconSize() * (ns.db and ns.GetEffectivePortraitMode() == "player" and 0.95 or 1)
 end
 
 local function PortraitRingSize()
-    if ns.db and ns.db.portraitMode == "none" then return 0 end
+    if ns.db and ns.GetEffectivePortraitMode() == "none" then return 0 end
     local padding = PORTRAIT_RING_PADDING
     if IsPlayerPortrait() and ns.db and not ns.db.horizontalMode then
         padding = padding * UI_METRICS.verticalPortraitGrowth
@@ -92,11 +92,13 @@ local render = {}
 -- See THIRD_PARTY_NOTICES.md. Texture masks alone cannot clip PlayerModel.
 local modelMaskState
 function render.ConfigurePortraitMask(mask)
-    mask:MakeCurrentCameraCustom()
+    if not mask.portraitMaskConfigured then mask:MakeCurrentCameraCustom() end
     mask:SetCameraFacing(math.pi / 2)
     mask:SetPosition(0.1118, 0, -0.2837)
     mask:SetCameraPosition(0, 14 * 0.6, 0)
     mask:SetCameraRoll(mask.portraitMaskRoll)
+    mask.portraitMaskConfigured = true
+    if modelMaskState then modelMaskState.inset, modelMaskState.scale = nil, nil end
 end
 
 local function UpdateModelMaskGeometry(diameter)
@@ -109,7 +111,12 @@ local function UpdateModelMaskGeometry(diameter)
         for _, mask in ipairs(modelMaskState.models) do mask:SetViewInsets(inset, inset, inset, inset) end
         modelMaskState.inset = inset
     end
-    local scale = 0.6 / math.max(0.01, model:GetEffectiveScale())
+    -- Model cameras use diagonal FOV. The mask was calibrated at 16:9;
+    -- compensate for screen aspect so a given opening stays the same size.
+    local width, height = UIParent:GetWidth(), UIParent:GetHeight()
+    local aspect = height > 0 and width > 0 and width / height or 16 / 9
+    local fovScale = math.sqrt((1 + aspect * aspect) / (1 + (16 / 9)^2))
+    local scale = 0.6 * fovScale / math.max(0.01, model:GetEffectiveScale())
     if modelMaskState.scale ~= scale then
         for _, mask in ipairs(modelMaskState.models) do mask:SetModelScale(scale) end
         modelMaskState.scale = scale
@@ -129,7 +136,10 @@ local function CreateModelMask()
         mask.portraitMaskRoll = -0.17 + (i - 1) * math.pi / 12
         if mask.SetKeepModelOnHide then mask:SetKeepModelOnHide(true) end
         -- The asset can finish loading after the initial camera setup.
-        pcall(mask.SetScript, mask, "OnModelLoaded", render.ConfigurePortraitMask)
+        pcall(mask.SetScript, mask, "OnModelLoaded", function(self)
+            self.portraitMaskConfigured = nil
+            render.ConfigurePortraitMask(self)
+        end)
         mask:SetModel(587744) -- Built-in gears model with a circular opening.
         mask:SetPaused(true)
         render.ConfigurePortraitMask(mask)
@@ -169,7 +179,7 @@ local function IsHorizontalLayout()
 end
 
 local function PortraitColumnWidth()
-    if ns.db and ns.db.portraitMode == "none" then return IsCompactLayout() and 110 or 140 end
+    if ns.db and ns.GetEffectivePortraitMode() == "none" then return IsCompactLayout() and 110 or 140 end
     local offsetX = PortraitRingOffset()
     return math.max(IsCompactLayout() and 140 or 176, PortraitRingSize() * PortraitRingScale() + math.abs(offsetX) * 2 + 24)
 end
@@ -1130,7 +1140,7 @@ function ns.RefreshPortraitGeometry(skipEffects)
     end
     content.classRing:SetSize(ringSize, ringSize)
     content.classIcon:SetSize(PortraitArtworkSize(), PortraitArtworkSize())
-    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then
+    if content.playerModel and ns.db and ns.GetEffectivePortraitMode() == "player3d" then
         local diameter = ModelPortraitDiameter()
         -- Leave room for the full portrait; the depth mask trims its outer edge.
         content.playerModel:SetSize(diameter * ModelViewportRatio(), diameter * ModelViewportRatio())
@@ -1149,7 +1159,7 @@ function ns.RefreshPortraitGeometry(skipEffects)
 
     if content.levelText then
         content.levelText:ClearAllPoints()
-        if ns.db and ns.db.portraitMode == "none" then
+        if ns.db and ns.GetEffectivePortraitMode() == "none" then
             if IsHorizontalLayout() then
                 content.levelText:SetPoint("CENTER", content, "LEFT", 24 + PortraitColumnWidth() / 2, 0)
             else
@@ -1182,6 +1192,55 @@ function ns.GetPortraitPreviewTuning()
     if type(test) == "table" and test.druidForm then return test.tuning end
 end
 
+function ns.ResetDebugPreviewSettings()
+    local test = content.portraitLoadTest
+    if type(test) == "table" and test.druidForm then
+        test.tuning = ns.DefaultDruidPortraitSettings(test.displayID, test.formID)
+    elseif test then
+        content.portraitLoadTest = nil
+        if content.playerModel then content.playerModel:Hide() end
+        ns.RefreshClassIcon()
+    end
+    content.weatherTest = nil
+    render.ResetWeatherMotes()
+end
+
+function render.AssignPortraitDisplay(model, displayID, source)
+    model:ClearModel()
+    if model.ClearTransform then model:ClearTransform() end
+    if model.ZeroCachedCenterXY then model:ZeroCachedCenterXY() end
+    model.loadReceived, model.portraitSource = false, source
+    return model:SetDisplayInfo(displayID)
+end
+
+function ns.PrintPortraitDiagnostics()
+    local model = content.playerModel
+    local function Value(value)
+        if issecretvalue and issecretvalue(value) then return "restricted" end
+        return value == nil and "-" or tostring(value)
+    end
+    local function Read(method)
+        if not model or type(model[method]) ~= "function" then return "-" end
+        local ok, a, b, c = pcall(model[method], model)
+        if not ok then return "unavailable" end
+        if b ~= nil or c ~= nil then return Value(a) .. "," .. Value(b) .. "," .. Value(c) end
+        return Value(a)
+    end
+    local state = ns.GetDruidPortraitState()
+    local metadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+    local version = metadata and metadata(ADDON_NAME, "Version") or "unknown"
+    print("GLU portrait " .. Value(version) .. ": key=" .. Value(state.identity) .. ", form=" .. Value(state.formID)
+        .. ", playerDisplay=" .. Value(state.displayID) .. ", modelDisplay=" .. Read("GetDisplayInfo") .. ", file=" .. Read("GetModelFileID"))
+    print("GLU portrait: source=" .. Value(model and model.portraitSource) .. ", modelScale=" .. Read("GetModelScale")
+        .. ", position=" .. Read("GetPosition") .. ", facing=" .. Read("GetFacing"))
+    local values = {}
+    for _, spec in ipairs(ns.MODEL_SETTINGS) do values[#values + 1] = spec.key .. "=" .. Value(ns.GetPlayerModelSetting(spec.key)) end
+    print("GLU portrait: " .. table.concat(values, ", "))
+    print("GLU mask: screen=" .. Value(UIParent:GetWidth()) .. "x" .. Value(UIParent:GetHeight())
+        .. ", viewport=" .. Read("GetWidth") .. "x" .. Read("GetHeight") .. ", effectiveScale=" .. Read("GetEffectiveScale")
+        .. ", maskScale=" .. Value(modelMaskState and modelMaskState.scale) .. ", inset=" .. Value(modelMaskState and modelMaskState.inset))
+end
+
 function render.ApplyPlayerModelCamera(model)
     model = model or content.playerModel
     if not model or model.applyingCamera then return end
@@ -1206,7 +1265,7 @@ end
 
 function render.SyncPlayerModelCamera()
     local model = content.playerModel
-    if not model or not model.portraitLoaded or not ns.db or ns.db.portraitMode ~= "player3d" then return end
+    if not model or not model.portraitLoaded or not ns.db or ns.GetEffectivePortraitMode() ~= "player3d" then return end
     if model.cameraWidth ~= model:GetWidth() or model.cameraHeight ~= model:GetHeight()
         or model.cameraScale ~= model:GetEffectiveScale() then
         render.TryPlayerModelCamera(model)
@@ -1216,6 +1275,7 @@ end
 function ns.ApplyPlayerModelSettings()
     ns.RefreshPlayerModelIdentity()
     ns.RefreshPortraitGeometry(true)
+    if ns.GetEffectivePortraitMode() ~= "player3d" then ns.RefreshClassIcon(); return end
     if content.playerModel and content.playerModel.portraitLoaded then
         render.TryPlayerModelCamera(content.playerModel)
     else
@@ -1259,7 +1319,7 @@ function render.ReportPlayerModelFailure(model, reason, failure)
 end
 
 function render.ReadPlayerModelReady(model)
-    if type(content.portraitLoadTest) == "table" then return true end
+    if model.formDisplayBound or type(content.portraitLoadTest) == "table" then return true end
     if not IsUnitModelReadyForUI then return true end
     local ready = IsUnitModelReadyForUI("player")
     if issecretvalue and issecretvalue(ready) then
@@ -1305,7 +1365,7 @@ end
 local function FinishPlayerModelLoad(model)
     if not model.unitAssigned or not model.loadReceived or model.loadDelayed or model.portraitLoaded
         or model.portraitRevealPending or not model:IsShown()
-        or not frame:IsShown() or frame.closingInputSuppressed or ns.db.portraitMode ~= "player3d" or model.cameraFailed then return end
+        or not frame:IsShown() or frame.closingInputSuppressed or ns.GetEffectivePortraitMode() ~= "player3d" or model.cameraFailed then return end
     local ok, ready = xpcall(function() return render.CheckPlayerModel(model) end, ns.CaptureErrorTrace)
     if not ok then
         if not model.loadReported then
@@ -1315,6 +1375,25 @@ local function FinishPlayerModelLoad(model)
         return
     end
     if not ready or not render.TryPlayerModelCamera(model) then return end
+    -- SetUnit can retain unit-specific scale/camera data that SetDisplayInfo
+    -- previews do not have. Bind the exact live appearance through the same path.
+    if not model.formDisplayBound and type(content.portraitLoadTest) ~= "table" then
+        local displayID = ns.GetLiveDruidPortraitDisplayID()
+        if displayID then
+            model.formDisplayBound, model.unitAssigned, model.loadReceived = true, false, false
+            local assignedOK, assigned = xpcall(function()
+                return render.AssignPortraitDisplay(model, displayID, "live-display-fallback")
+            end, ns.CaptureErrorTrace)
+            model.unitAssigned = assignedOK and ((issecretvalue and issecretvalue(assigned)) or assigned ~= false)
+            if not model.unitAssigned then
+                render.ShowPlayerModelFallback(model)
+                render.ReportPlayerModelFailure(model, "model_assignment_failed", assignedOK and nil or assigned)
+                return
+            end
+            FinishPlayerModelLoad(model)
+            return
+        end
+    end
     local maskOK, failure = xpcall(function()
         if content.portraitLoadTest ~= "unmasked" then
             for _, mask in ipairs(content.modelMasks) do render.ConfigurePortraitMask(mask) end
@@ -1334,7 +1413,7 @@ local function FinishPlayerModelLoad(model)
         if model.loadToken ~= token or not model.portraitRevealPending then return end
         model.portraitRevealPending = nil
         if not model:IsShown() or not frame:IsShown() or frame.closingInputSuppressed
-            or ns.db.portraitMode ~= "player3d" then return end
+            or ns.GetEffectivePortraitMode() ~= "player3d" then return end
         if model.cameraWidth ~= model:GetWidth() or model.cameraHeight ~= model:GetHeight()
             or model.cameraScale ~= model:GetEffectiveScale() then
             FinishPlayerModelLoad(model)
@@ -1353,6 +1432,7 @@ local function LoadPlayerPortraitModel(model)
     model.portraitLoaded, model.unitAssigned, model.loadReceived = false, false, false
     model.loadReported, model.cameraFailed, model.lastModelFileID, model.unitModelReady = nil, nil, nil, nil
     local portraitTest = content.portraitLoadTest
+    model.formDisplayBound = nil
     model.loadDelayed = portraitTest == "delay"
     local fallback = content.modelFallback
     local readyOK, ready = pcall(render.ReadPlayerModelReady, model)
@@ -1371,11 +1451,15 @@ local function LoadPlayerPortraitModel(model)
     if portraitTest ~= "fail" then
         local ok, assigned = xpcall(function()
             if type(portraitTest) == "table" then
-                model:ClearModel()
-                -- ClearModel can invalidate a previous model's ready event.
-                model.loadReceived = false
-                return model:SetDisplayInfo(portraitTest.displayID)
+                return render.AssignPortraitDisplay(model, portraitTest.displayID, "preview-display")
             end
+            ns.RefreshPlayerModelIdentity()
+            local displayID = ns.GetLiveDruidPortraitDisplayID(true)
+            if displayID then
+                model.formDisplayBound = true
+                return render.AssignPortraitDisplay(model, displayID, "live-display")
+            end
+            model.portraitSource = "player-unit"
             return model:SetUnit("player")
         end, ns.CaptureErrorTrace)
         -- Older clients may return nothing. An explicit false rejects the assignment.
@@ -1385,7 +1469,7 @@ local function LoadPlayerPortraitModel(model)
     FinishPlayerModelLoad(model)
     C_Timer.After(1.5, function()
         if model.loadToken == token and not model.loadReported and model:IsShown()
-            and frame:IsShown() and not frame.closingInputSuppressed and ns.db.portraitMode == "player3d" then
+            and frame:IsShown() and not frame.closingInputSuppressed and ns.GetEffectivePortraitMode() == "player3d" then
             -- A model can lose its data after OnModelLoaded has already fired.
             if model.portraitLoaded then
                 local ok, stillReady = xpcall(function() return render.CheckPlayerModel(model) end, ns.CaptureErrorTrace)
@@ -1416,11 +1500,25 @@ local function LoadPlayerPortraitModel(model)
     end
 end
 
+-- Unit updates belong to the visible popup, so leaving a form can restore 3D
+-- even though the model itself was hidden for the 2D fallback.
+frame:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
+frame:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
+frame:SetScript("OnEvent", function()
+    if not frame:IsShown() or content.portraitLoadTest then return end
+    local model = content.playerModel
+    local wasShown = model and model:IsShown()
+    local identityChanged = ns.RefreshPlayerModelIdentity()
+    ns.RefreshClassIcon()
+    if wasShown and model:IsShown() and ns.GetEffectivePortraitMode() == "player3d" then LoadPlayerPortraitModel(model) end
+    if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+end)
+
 function ns.RefreshClassIcon()
     ns.RefreshPlayerModelIdentity()
     ns.RefreshPortraitGeometry()
     -- None removes the portrait artwork and its reserved header space.
-    local portraitMode = ns.db and ns.db.portraitMode or "class"
+    local portraitMode = ns.db and ns.GetEffectivePortraitMode() or "class"
     if content.playerModel and portraitMode ~= "player3d" then
         content.playerModel:Hide()
         content.modelFallback:Hide()
@@ -1455,16 +1553,6 @@ function ns.RefreshClassIcon()
                 render.SetModelLayersShown(false)
                 content.modelFallback:Hide()
                 self:ClearModel()
-            end)
-            model:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
-            model:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
-            model:SetScript("OnEvent", function(self)
-                if not frame:IsShown() or not self:IsShown() or content.portraitLoadTest then return end
-                local identityChanged = ns.RefreshPlayerModelIdentity()
-                LoadPlayerPortraitModel(self)
-                if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then
-                    ns.RefreshOptionsPanel()
-                end
             end)
             content.playerModel = model
             -- The authored ring stays above the model, sharing its parent fade.
@@ -1535,7 +1623,7 @@ function ns.RefreshPortraitRing()
         content.modelBacking:SetColorTexture(fill[1], fill[2], fill[3], 1)
     end
     render.portraitGlintRadius = .5
-    if db.portraitMode == "none" then
+    if ns.GetEffectivePortraitMode() == "none" then
         content.classRing:Hide()
         content.classRingGraphic:Hide()
         return
@@ -1904,7 +1992,7 @@ end
 
 -- Match the right column edge to the portrait/level column's visible left edge.
 function render.HorizontalEndPadding()
-    local mode = ns.db and ns.db.portraitMode
+    local mode = ns.db and ns.GetEffectivePortraitMode()
     local x = IsPlayerPortrait() and tonumber(ns.db.playerPortraitPosition and ns.db.playerPortraitPosition.x) or 0
     local centre = 24 + PortraitColumnWidth() / 2 + (x or 0)
     local left = centre - content.levelText:GetStringWidth() / 2
@@ -3556,7 +3644,7 @@ function render.UpdateMilestoneAccents()
     local speed = Speed()
     local active = render.UpdateMilestoneRingSparks(accents, speed)
     local portraitFinish = plan.portrait.finish
-    local shockwaves = db.portraitAnimation and db.portraitMode ~= "none" and IsPlayerPortrait()
+    local shockwaves = db.portraitAnimation and ns.GetEffectivePortraitMode() ~= "none" and IsPlayerPortrait()
     for i, ring in ipairs(accents.rings) do
         local t = (effectAge - portraitFinish - (PORTRAIT_PULSE_GAP + (i - 1) * 0.17) / speed) / (0.90 / speed)
         local shown = shockwaves and t >= 0 and t < 1
@@ -3659,7 +3747,7 @@ end
 
 function render.PortraitGlintFinish()
     local db = ns.db or {}
-    if not entranceTimeline or not db.portraitRingGlint or db.portraitMode == "none"
+    if not entranceTimeline or not db.portraitRingGlint or ns.GetEffectivePortraitMode() == "none"
         or not ns.DecorativeAnimationsEnabled() then return 0 end
     return entranceTimeline.portrait.finish + (.08 + render.PortraitGlintDuration() * 1.08) / Speed()
 end
@@ -3858,7 +3946,7 @@ function render.UpdateMaxCelebration()
             active = true
         end
     end
-    local portrait = db.portraitMode ~= "none"
+    local portrait = ns.GetEffectivePortraitMode() ~= "none"
     if render.UpdatePortraitRingSparks(effects.surge, render.PortraitRingSparkAge(speed)) then active = true end
     local radius = (PortraitRingSize() * PortraitRingScale() * .56 + 12) * content:GetScale()
     local sparkAge = (effectAge - starburstStartedAt) * speed - .12
@@ -3993,7 +4081,7 @@ function render.CancelClosing()
     if entranceTimeline then render.ApplyClosingEntrance(entranceTimeline.finish) end
     render.sectionComplete = nil
     frame:SetScale(ns.GetPopupScale());frame:SetAlpha(1)
-    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then
+    if content.playerModel and ns.db and ns.GetEffectivePortraitMode() == "player3d" then
         if content.playerModel.portraitLoaded then content.playerModel:SetModelAlpha(1) end
         if frame:IsShown() and content.portraitArtwork:IsShown() then content.playerModel:Show() end
         UpdateModelMaskGeometry(ModelPortraitDiameter())
@@ -4407,7 +4495,7 @@ UpdateVisualEffects = function()
     end
     local decorative = ns.DecorativeAnimationsEnabled()
     local portraitPerf = ns.PerfStart("portrait_effects_frame", effectAge)
-    local portraitEnabled = decorative and not db.reducedMotion and db.portraitAnimation and db.portraitMode ~= "none" and frame:IsShown()
+    local portraitEnabled = decorative and not db.reducedMotion and db.portraitAnimation and ns.GetEffectivePortraitMode() ~= "none" and frame:IsShown()
     -- Keep the portrait hidden until setup and its entrance delay are complete.
     local portraitEntrance = entranceTimeline and entranceTimeline.portrait
     local ringAlpha = EntranceAlpha(portraitEntrance, effectAge, moving)
@@ -4415,9 +4503,9 @@ UpdateVisualEffects = function()
         local t = math.max(0, math.min(1, (effectAge - portraitEntrance.start) / (portraitEntrance.finish - portraitEntrance.start)))
         ringAlpha = t * t * (3 - 2 * t)
     end
-    if moving and ringAlpha < 1 and db.portraitMode ~= "none" then active = true end
+    if moving and ringAlpha < 1 and ns.GetEffectivePortraitMode() ~= "none" then active = true end
     local ringSettle = 1
-    if decorative and moving and portraitEntrance and db.portraitRingSettle and db.portraitMode ~= "none" then
+    if decorative and moving and portraitEntrance and db.portraitRingSettle and ns.GetEffectivePortraitMode() ~= "none" then
         local t = math.max(0, math.min(1, (effectAge - portraitEntrance.start) / (portraitEntrance.finish - portraitEntrance.start)))
         -- Keep the enlarged portrait through the dim part of its fade.
         local settle = math.max(0, math.min(1, (t - 0.35) / 0.65))
@@ -4426,7 +4514,7 @@ UpdateVisualEffects = function()
     local ringSize = math.max(1, PortraitRingSize())
     render.Size(content.classRing, ringSize * ringSettle, ringSize * ringSettle)
     render.Size(content.classIcon, PortraitArtworkSize() * ringSettle, PortraitArtworkSize() * ringSettle)
-    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then
+    if content.playerModel and ns.db and ns.GetEffectivePortraitMode() == "player3d" then
         -- Keep the 3D framebuffer and depth mask at their layout size while the ring animates.
         local diameter = ModelPortraitDiameter()
         render.Size(content.playerModel, diameter * ModelViewportRatio(), diameter * ModelViewportRatio())
@@ -4441,10 +4529,10 @@ UpdateVisualEffects = function()
         content.classRingGraphic:SetPoint("CENTER", content.portraitAnchor, "CENTER", pointX, pointY)
         render.pointX, render.pointY = pointX, pointY
     end
-    local portraitVisible = not portraitPreparing and db.portraitMode ~= "none" and ringAlpha > 0
+    local portraitVisible = not portraitPreparing and ns.GetEffectivePortraitMode() ~= "none" and ringAlpha > 0
     render.Alpha(content.portraitArtwork, ringAlpha)
     render.Shown(content.portraitArtwork, portraitVisible)
-    if content.playerModel and db.portraitMode == "player3d" then
+    if content.playerModel and ns.GetEffectivePortraitMode() == "player3d" then
         render.Shown(content.playerModel, portraitVisible)
     end
     if portraitEnabled and moving and portraitStage == "waiting"
@@ -4554,7 +4642,7 @@ function ns.RefreshVisualEffects()
         content.trialEffects.white = nil
         content.trialEffects.shinesFinished, content.trialEffects.impactsFinished = false, false
     end
-    if content.playerModel and ns.db and ns.db.portraitMode == "player3d" then content.playerModel:SetPaused(ns.db.backgroundAnimations == false) end
+    if content.playerModel and ns.db and ns.GetEffectivePortraitMode() == "player3d" then content.playerModel:SetPaused(ns.db.backgroundAnimations == false) end
     render.RefreshParticleSettings()
     local levelChanged = render.RefreshMilestoneLevelText()
     render.glowWake, render.sparkleWake, render.statIdle = nil, nil, nil
@@ -4612,7 +4700,7 @@ function ns.RefreshVisualEffects()
         end
     end
     UpdateStatSlides(nil, 0)
-    if db.backgroundAnimations == false or not db.portraitAnimation or db.portraitMode == "none" or db.reducedMotion then
+    if db.backgroundAnimations == false or not db.portraitAnimation or ns.GetEffectivePortraitMode() == "none" or db.reducedMotion then
         portraitPulseGroup:Stop()
         content.portraitPulse:Hide()
         portraitStage = db.reducedMotion and "starburst" or "waiting"
@@ -4941,7 +5029,7 @@ local function BuildEntranceTimeline()
         return stage
     end
     Add("background", BASE_BG_FADE_DURATION)
-    Add("portrait", ns.db and ns.db.portraitMode == "none" and 0.20 or BASE_CONTENT_FADE_DURATION)
+    Add("portrait", ns.db and ns.GetEffectivePortraitMode() == "none" and 0.20 or BASE_CONTENT_FADE_DURATION)
     Add("statsHeader", 0.18)
     local statCount = 0
     for _, fs in ipairs(content.statLinePool) do if fs.statData or fs.plainText then statCount = statCount + 1 end end
@@ -5243,7 +5331,7 @@ end
 -- Refresh projection after layout without asynchronously reloading the unit.
 function render.RefreshPlayerModelLayout()
     local model = content.playerModel
-    if not model or not ns.db or ns.db.portraitMode ~= "player3d" then return end
+    if not model or not ns.db or ns.GetEffectivePortraitMode() ~= "player3d" then return end
     local horizontal, scale, fit = IsHorizontalLayout(), ns.GetPopupScale(), content:GetScale()
     if model.layoutHorizontal == horizontal and model.layoutPopupScale == scale and model.layoutFit == fit then return end
     model.layoutHorizontal, model.layoutPopupScale, model.layoutFit = horizontal, scale, fit
@@ -5624,7 +5712,7 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
         or not isPreview and ns.GetGuildLevelCelebration and ns.GetGuildLevelCelebration(currentLevel, timePlayedThisLevel) or nil
     content.portraitLoadTest = isPreview and portraitTest or nil
     if type(content.portraitLoadTest) == "table" and content.portraitLoadTest.druidForm and not content.portraitLoadTest.tuning then
-        content.portraitLoadTest.tuning = ns.CopyValue(ns.GetDruidPortraitTuning(content.portraitLoadTest.displayID, content.portraitLoadTest.formID))
+        content.portraitLoadTest.tuning = ns.DefaultDruidPortraitSettings(content.portraitLoadTest.displayID, content.portraitLoadTest.formID)
     end
     content.weatherTest = isPreview and weatherTest or nil
     --@do-not-package@

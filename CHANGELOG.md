@@ -12,12 +12,23 @@
 
 ##### Customization Options
 
+* Added **FE Path of Radiance** as a second example theme, with a gold frame, matching portrait ring and dividers, tiled blue background, custom font and level-up sound.
+* Simplified the theme-pack setup guide, with advanced settings in a separate reference.
+* Added a Druid-only option to use 2D portraits in forms, enabled by default.
+* Set the default 3D mask size to 98%, with a one-time update for existing profiles and saved portrait tuning.
 * Expanded custom theme support to include fonts, individual popup text sizes, divider textures and custom sounds, alongside frames, backgrounds and portrait rings.
 * Themes can declare whether they include custom sounds, so artwork-only packs keep the normal sound fallback.
 * Replaced the old example themes with **FFIV Blue Atlas**, featuring a silver frame and dividers, tiled blue background, larger custom font, matching thin portrait ring and level-up sound.
 
 ##### Bug Fixes and Optimization
 
+* Added Gwen to Special Thanks.
+* Added a Debug reset button to restore tuning defaults, including saved portrait adjustments, without clearing recorded data.
+* Fixed live Druid form controls ignoring adjustments. Each appearance now keeps its own tuning, separate from humanoid settings.
+* Druid portrait defaults are reapplied once to replace older adjustments. Changes made afterward remain saved.
+* Matched live Druid portrait loading to the debug previews and stopped repeated mask-camera setup during refreshes.
+* Druid portrait presets now use the player's current display ID instead of relying on a reused portrait model. Added `/glu debugportrait info` to inspect the selected appearance and settings.
+* Added the default Retail Night Elf and Tauren form mappings and corrected circular mask sizing for different screen aspect ratios.
 * Added 3D portrait presets for default Night Elf, Tauren and Skyborne Cat and Bear forms, plus all Tree forms. Other forms and barber-shop appearances use zeroed positions and rotation. Leaving form restores normal portrait settings.
 * Added Druid form previews to `/glu debugportrait`, so they can be checked without a Druid character.
 * Druid form previews now include default Night Elf, Skyborne and Tauren variants, using Forever's current form displays and clearing the previous model before loading.

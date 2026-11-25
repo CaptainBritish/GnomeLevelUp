@@ -16,6 +16,7 @@ local optional = {
 }
 
 local function NormalizeSettings(settings)
+    ns.MigratePortraitMaskDefaults(settings)
     settings.guildTimeSyncInterval = nil
     settings.compareAccountLevelTimes = nil
     ns.MigrateTrainerPriceSettings(settings)
@@ -117,6 +118,7 @@ function ns.InitializeProfiles()
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     store, character = GnomeLevelUpProfilesDB, GnomeLevelUpCharacterDB
     store.profiles = type(store.profiles) == "table" and store.profiles or {}
+    for _, settings in pairs(store.profiles) do ns.MigratePortraitMaskDefaults(settings) end
     if type(store.profiles.Default) ~= "table" then store.profiles.Default = Snapshot() end
     store.profileIDs = type(store.profileIDs) == "table" and store.profileIDs or {}
     store.legacyProfileIDs = type(store.legacyProfileIDs) == "table" and store.legacyProfileIDs or {}

@@ -703,3 +703,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["Choose a custom colour for the timeline."] = "Выбирает цвет шкалы.",
     ["Use your class colour for the timeline."] = "Использует цвет вашего класса для шкалы.",
 } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Reset debug settings"] = "Сбросить настройки отладки" } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Force 2D portraits in Druid forms"] = "2D-портреты в обликах друида", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Использовать 2D-портрет при смене облика и возвращать выбранный портрет при выходе из него." } end)

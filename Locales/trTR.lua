@@ -705,3 +705,7 @@ RegisterLocaleBuilder("trTR", function() return {
     ["Choose a custom colour for the timeline."] = "Çizelge için özel bir renk seçer.",
     ["Use your class colour for the timeline."] = "Çizelgede sınıf rengini kullanır.",
 } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Reset debug settings"] = "Hata ayıklama ayarlarını sıfırla" } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Force 2D portraits in Druid forms"] = "Druid biçimlerinde 2B portreleri zorla", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Dönüşüm sırasında 2B portre kullanır ve biçimden çıkınca seçili portreyi geri yükler." } end)

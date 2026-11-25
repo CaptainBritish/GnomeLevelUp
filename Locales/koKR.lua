@@ -703,3 +703,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["Choose a custom colour for the timeline."] = "타임라인의 사용자 지정 색상을 선택합니다.",
     ["Use your class colour for the timeline."] = "타임라인에 내 직업 색상을 사용합니다.",
 } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Reset debug settings"] = "디버그 설정 초기화" } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Force 2D portraits in Druid forms"] = "드루이드 변신 중 2D 초상화 사용", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "변신 중에는 2D 초상화를 사용하고 변신이 풀리면 선택한 초상화로 복원합니다." } end)

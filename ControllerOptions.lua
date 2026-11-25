@@ -481,6 +481,9 @@ local function BuildEntries(key)
         for index, setting in ipairs(ns.TEXT_SIZE_SETTINGS) do
             table.insert(entries, 9 + index, NumericOption(setting.key))
         end
+        if ns.OPTION_SETTINGS.druidForms2D.isAvailable() then
+            table.insert(entries, 3, Toggle(nil, "druidForms2D"))
+        end
         if ns.LevelTimelineEnabled() then
             if ns.NewAbilitiesEnabled() then table.insert(entries, #entries - 2, NumericOption("timelineSkillCount")) end
             table.insert(entries, #entries - 2, NumericOption("timelineOpacity"))

@@ -705,3 +705,7 @@ RegisterLocaleBuilder("esES", function() return {
     ["Choose a custom colour for the timeline."] = "Elige un color personalizado para la cronología.",
     ["Use your class colour for the timeline."] = "Usa el color de tu clase en la cronología.",
 } end)
+
+RegisterLocaleBuilder("esES", function() return { ["Reset debug settings"] = "Restablecer ajustes de depuración" } end)
+
+RegisterLocaleBuilder("esES", function() return { ["Force 2D portraits in Druid forms"] = "Forzar retratos 2D en formas de druida", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Usa un retrato 2D durante la transformación y restaura el retrato seleccionado al salir de la forma." } end)

@@ -703,3 +703,7 @@ RegisterLocaleBuilder("deDE", function() return {
     ["Choose a custom colour for the timeline."] = "Wählt eine eigene Farbe für die Stufenleiste.",
     ["Use your class colour for the timeline."] = "Verwendet die Klassenfarbe für die Stufenleiste.",
 } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Reset debug settings"] = "Debug-Einstellungen zurücksetzen" } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Force 2D portraits in Druid forms"] = "2D-Porträts in Druidengestalten erzwingen", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Verwendet während der Verwandlung ein 2D-Porträt und stellt danach das gewählte Porträt wieder her." } end)

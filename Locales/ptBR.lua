@@ -703,3 +703,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["Choose a custom colour for the timeline."] = "Escolhe uma cor personalizada para a linha.",
     ["Use your class colour for the timeline."] = "Usa a cor da sua classe na linha.",
 } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Reset debug settings"] = "Redefinir configurações de depuração" } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Force 2D portraits in Druid forms"] = "Forçar retratos 2D nas formas de druida", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Usa um retrato 2D durante a transformação e restaura o retrato selecionado ao sair da forma." } end)

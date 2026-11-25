@@ -132,6 +132,7 @@ local defaults = {
     suspendPreview = true,
     minimapAngle = 225,
     portraitMode = "player",
+    druidForms2D = true,
     playerPortraitPosition = { x = 0, y = 0 }, -- offset from the current portrait top anchor
     playerPortraitScale = 1.0,                 -- theme-controlled multiplier for the player portrait
     portraitRingEnabled = false,
@@ -144,7 +145,8 @@ local defaults = {
     portraitModelY = -0.05,
     portraitModelZ = 0.03,
     portraitModelScale = 100,
-    portraitModelMaskSize = 93,
+    portraitModelMaskSize = 98,
+    portraitMaskDefaultsVersion = 1,
     portraitModelViewportSize = 105,
     horizontalPortraitRingScale = 1.15,
     horizontalPortraitRingOffset = { x = 0, y = 1 },
@@ -536,6 +538,11 @@ SharedToggle("classColourPortraitBackground", "Class-coloured portrait backgroun
     ns.RefreshPortraitRing()
 end, "Fill the background behind the 3D player portrait with your class colour.",
     function() return ns.db.portraitMode == "player3d" end)
+SharedToggle("druidForms2D", "Force 2D portraits in Druid forms", function()
+    ns.RefreshClassIcon()
+    ns.RefreshPopupLayout()
+end, "Use a 2D portrait while transformed and restore the selected portrait when leaving form.",
+    function() local _, class = UnitClass("player"); return class == "DRUID" end)
 
 local function RefreshTimeline()
     if ns.RefreshLevelTimeline then ns.RefreshLevelTimeline() end
@@ -636,7 +643,7 @@ ns.RESETTABLE_SETTING_KEYS = {
     "maxLevelCelebration", "showSecondaryStats", "secondaryStatStartPercent",
     "shortenRetailStatTotals", "relevantRetailStatsOnly",
     "portraitRingGlint",
-    "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize",
+    "portraitModelRotation", "portraitModelX", "portraitModelY", "portraitModelZ", "portraitModelScale", "portraitModelMaskSize", "portraitModelViewportSize", "portraitMaskDefaultsVersion", "druidForms2D",
     "starburstOpacity", "portraitPulseOpacity", "frameEdgeGlowOpacity", "fireworkSize", "fireworkOpacity", "frameInset",
     "particlePortraitCount", "particlePortraitSize", "particlePortraitOpacity", "particleStarburstCount", "particleStarburstSize", "particleStarburstOpacity", "particleEmberCount", "particleEmberSize", "particleEmberOpacity", "particleSparkleCount", "particleSparkleSize", "particleSparkleOpacity",
     "milestoneAnimations", "milestoneInterval", "screenshotMilestones", "screenshotEveryLevel",
@@ -664,6 +671,12 @@ local function ResetSettingKeys(keys)
     end
 end
 ns.ResetSettingKeys = ResetSettingKeys
+
+function ns.MigratePortraitMaskDefaults(settings)
+    if type(settings) ~= "table" or (tonumber(settings.portraitMaskDefaultsVersion) or 0) >= 1 then return end
+    settings.portraitModelMaskSize = defaults.portraitModelMaskSize
+    settings.portraitMaskDefaultsVersion = 1
+end
 
 ns.CLASS_COLORS = {
     DEATHKNIGHT = { 196 / 255, 30 / 255, 58 / 255 },
@@ -1093,6 +1106,7 @@ local function InitDB()
     defaults.controllerGlyphStyle = ns.GetDefaultControllerGlyphStyle()
     -- Load saved settings and fill in anything that is missing.
     GnomeLevelUpDB = GnomeLevelUpDB or {}
+    ns.MigratePortraitMaskDefaults(GnomeLevelUpDB)
     ns.RemoveObsoleteAnimationSounds(GnomeLevelUpDB)
     ns.MigrateLevelUpSoundPreference(GnomeLevelUpDB)
     ns.MigrateTrainerPriceSettings(GnomeLevelUpDB)
@@ -1658,6 +1672,41 @@ function ns.SetAddonEnabled(enabled)
     ns.ApplyAddonState(true)
 end
 
+function ns.ResetDebugSettings()
+    EnsureDatabase()
+    if not ns.IsDebugEnabled() then return false end
+    ns.InvalidateColorPicker()
+    if ns.StopAnimationSounds then ns.StopAnimationSounds(true) end
+    local keys = { "showAllWarlockGrimoires", "completeTrainerReporting", "useThemeSounds",
+        "portraitRingScale", "horizontalPortraitRingScale", "portraitRingOffset", "horizontalPortraitRingOffset",
+        "backgroundTextureColors", "backgroundTextureTransforms" }
+    for _, spec in ipairs(ns.MODEL_SETTINGS) do keys[#keys + 1] = spec.key end
+    for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do keys[#keys + 1] = spec.key end
+    for _, spec in ipairs(ns.PARTICLE_SETTINGS) do
+        keys[#keys + 1], keys[#keys + 2], keys[#keys + 3] = spec.count, spec.size, spec.opacity
+    end
+    keys[#keys + 1], keys[#keys + 2], keys[#keys + 3] = ns.FIREWORK_SETTINGS.size, ns.FIREWORK_SETTINGS.opacity, ns.FRAME_INSET_SETTING.value
+    for _, spec in ipairs(ns.EFFECT_OPACITY_SETTINGS) do keys[#keys + 1] = spec.opacity end
+    local theme = ns.FindBackgroundTheme(ns.db.backgroundTheme)
+    local appearance = theme and theme.appearance or {}
+    for _, key in ipairs(keys) do
+        local value = appearance[key]
+        if value == nil then value = defaults[key] end
+        ns.db[key] = CopySetting(value)
+    end
+    if GnomeLevelUpCharacterDB then GnomeLevelUpCharacterDB.portraitModelTuning = nil end
+    ns.db.debugMilestoneInterval, ns.previewStatRange = nil, nil
+    if ns.SetPerformanceProfiling then ns.SetPerformanceProfiling(false) end
+    if ns.SetLevelHistorySamples then ns.SetLevelHistorySamples(false) end
+    if ns.ResetHistoryDebugMode then ns.ResetHistoryDebugMode() end
+    if ns.ResetDebugPreviewSettings then ns.ResetDebugPreviewSettings() end
+    if ns.ApplyPlayerModelSettings then ns.ApplyPlayerModelSettings() end
+    if ns.RefreshVisualEffects then ns.RefreshVisualEffects() end
+    ns.ApplyCurrentAppearance()
+    if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
+    return true
+end
+
 function ns.ResetOptionsToDefaults()
     if GnomeLevelUpCharacterDB then GnomeLevelUpCharacterDB.portraitModelTuning = nil end
     ns.db.debugMilestoneInterval = nil
@@ -1762,123 +1811,123 @@ end
 -- Values: depth, horizontal, vertical, scale %, mask %, viewport %, rotation degrees.
 local portraitModelPresets = {
     Human = {
-        [2] = { -0.08, 0.08, -0.02, 100, 93, 105, 0 },
-        [3] = { -0.06, 0.06, 0, 100, 93, 105, -10 },
+        [2] = { -0.08, 0.08, -0.02, 100, 98, 105, 0 },
+        [3] = { -0.06, 0.06, 0, 100, 98, 105, -10 },
     },
     Dwarf = {
-        [2] = { -0.12, 0.09, -0.06, 100, 93, 105, 6 },
-        [3] = { -0.13, 0.07, -0.03, 100, 93, 105, 0 },
+        [2] = { -0.12, 0.09, -0.06, 100, 98, 105, 6 },
+        [3] = { -0.13, 0.07, -0.03, 100, 98, 105, 0 },
     },
     NightElf = {
-        [2] = { -0.06, 0.12, -0.01, 100, 93, 105, 0 },
-        [3] = { -0.08, 0.05, 0, 100, 93, 105, 1 },
+        [2] = { -0.06, 0.12, -0.01, 100, 98, 105, 0 },
+        [3] = { -0.08, 0.05, 0, 100, 98, 105, 1 },
     },
     Gnome = {
-        [2] = { -0.06, 0.1, -0.03, 100, 93, 105, 0 },
-        [3] = { -0.04, 0.12, -0.07, 100, 93, 105, -6 },
+        [2] = { -0.06, 0.1, -0.03, 100, 98, 105, 0 },
+        [3] = { -0.04, 0.12, -0.07, 100, 98, 105, -6 },
     },
     Orc = {
-        [2] = { -0.31, 0.16, 0.01, 100, 93, 105, 0 },
-        [3] = { -0.08, 0.14, -0.05, 100, 93, 105, -6 },
+        [2] = { -0.31, 0.16, 0.01, 100, 98, 105, 0 },
+        [3] = { -0.08, 0.14, -0.05, 100, 98, 105, -6 },
     },
     Scourge = {
-        [2] = { -0.03, 0.05, 0, 100, 93, 105, 0 },
-        [3] = { -0.23, 0.06, 0.04, 100, 93, 105, 7 },
+        [2] = { -0.03, 0.05, 0, 100, 98, 105, 0 },
+        [3] = { -0.23, 0.06, 0.04, 100, 98, 105, 7 },
     },
     Tauren = {
-        [2] = { -0.37, 0.41, -0.07, 100, 93, 105, -4 },
-        [3] = { -0.13, 0.23, -0.01, 100, 93, 105, -3 },
+        [2] = { -0.37, 0.41, -0.07, 100, 98, 105, -4 },
+        [3] = { -0.13, 0.23, -0.01, 100, 98, 105, -3 },
     },
     Troll = {
-        [2] = { -0.05, 0.23, 0.06, 100, 93, 105, -10 },
-        [3] = { -0.08, 0.19, 0, 100, 93, 105, -15 },
+        [2] = { -0.05, 0.23, 0.06, 100, 98, 105, -10 },
+        [3] = { -0.08, 0.19, 0, 100, 98, 105, -15 },
     },
     Skyborne = {
-        [2] = { -0.1, 0.04, 0.03, 100, 93, 105, 9 },
-        [3] = { -0.02, -0.02, 0, 100, 93, 105, -3 },
+        [2] = { -0.1, 0.04, 0.03, 100, 98, 105, 9 },
+        [3] = { -0.02, -0.02, 0, 100, 98, 105, -3 },
     },
 
     -- Retail presets are independent so each race can be calibrated separately.
     Haranir = {
-        [2] = { -0.06, 0.12, -0.01, 100, 93, 105, 0 },
-        [3] = { -0.08, 0.05, 0, 100, 93, 105, 1 },
+        [2] = { -0.06, 0.12, -0.01, 100, 98, 105, 0 },
+        [3] = { -0.08, 0.05, 0, 100, 98, 105, 1 },
     },
     Nightborne = {
-        [2] = { -0.06, 0.12, -0.01, 100, 93, 105, 0 },
-        [3] = { -0.08, 0.05, 0, 100, 93, 105, 1 },
+        [2] = { -0.06, 0.12, -0.01, 100, 98, 105, 0 },
+        [3] = { -0.08, 0.05, 0, 100, 98, 105, 1 },
     },
     DarkIronDwarf = {
-        [2] = { -0.12, 0.09, -0.06, 100, 93, 105, 6 },
-        [3] = { -0.13, 0.07, -0.03, 100, 93, 105, 0 },
+        [2] = { -0.12, 0.09, -0.06, 100, 98, 105, 6 },
+        [3] = { -0.13, 0.07, -0.03, 100, 98, 105, 0 },
     },
     EarthenDwarf = {
-        [2] = { -0.12, 0.09, -0.06, 100, 93, 105, 6 },
-        [3] = { -0.13, 0.07, -0.03, 100, 93, 105, 0 },
+        [2] = { -0.12, 0.09, -0.06, 100, 98, 105, 6 },
+        [3] = { -0.13, 0.07, -0.03, 100, 98, 105, 0 },
     },
     Mechagnome = {
-        [2] = { -0.06, 0.1, -0.03, 100, 93, 105, 0 },
-        [3] = { -0.04, 0.1, -0.08, 100, 93, 105, -6 },
+        [2] = { -0.06, 0.1, -0.03, 100, 98, 105, 0 },
+        [3] = { -0.04, 0.1, -0.08, 100, 98, 105, -6 },
     },
     BloodElf = {
-        [2] = { -0.1, 0.04, 0.03, 100, 93, 105, 9 },
-        [3] = { -0.02, -0.02, 0, 100, 93, 105, -3 },
+        [2] = { -0.1, 0.04, 0.03, 100, 98, 105, 9 },
+        [3] = { -0.02, -0.02, 0, 100, 98, 105, -3 },
     },
     VoidElf = {
-        [2] = { -0.1, 0.04, 0.03, 100, 93, 105, 9 },
-        [3] = { -0.02, -0.02, 0, 100, 93, 105, -3 },
+        [2] = { -0.1, 0.04, 0.03, 100, 98, 105, 9 },
+        [3] = { -0.02, -0.02, 0, 100, 98, 105, -3 },
     },
     HighmountainTauren = {
-        [2] = { -0.37, 0.41, -0.07, 100, 93, 105, -4 },
-        [3] = { -0.13, 0.23, -0.01, 100, 93, 105, -3 },
+        [2] = { -0.37, 0.41, -0.07, 100, 98, 105, -4 },
+        [3] = { -0.13, 0.23, -0.01, 100, 98, 105, -3 },
     },
     MagharOrc = {
-        [2] = { -0.31, 0.16, 0.01, 100, 93, 105, 0 },
-        [3] = { -0.08, 0.14, -0.05, 100, 93, 105, -6 },
+        [2] = { -0.31, 0.16, 0.01, 100, 98, 105, 0 },
+        [3] = { -0.08, 0.14, -0.05, 100, 98, 105, -6 },
     },
     ZandalariTroll = {
-        [2] = { -0.05, 0.23, 0.06, 100, 93, 105, -10 },
-        [3] = { -0.08, 0.19, 0, 100, 93, 105, -15 },
+        [2] = { -0.05, 0.23, 0.06, 100, 98, 105, -10 },
+        [3] = { -0.08, 0.19, 0, 100, 98, 105, -15 },
     },
     Goblin = {
-        [2] = { -0.02, 0.06, 0.04, 100, 93, 105, -6 },
-        [3] = { -0.05, 0.17, -0.03, 100, 93, 105, -4 },
+        [2] = { -0.02, 0.06, 0.04, 100, 98, 105, -6 },
+        [3] = { -0.05, 0.17, -0.03, 100, 98, 105, -4 },
     },
     Vulpera = {
-        [2] = { -0.08, 0.13, 0.02, 100, 93, 105, 0 },
-        [3] = { -0.04, 0.09, 0.01, 100, 93, 105, 0 },
+        [2] = { -0.08, 0.13, 0.02, 100, 98, 105, 0 },
+        [3] = { -0.04, 0.09, 0.01, 100, 98, 105, 0 },
     },
     Draenei = {
-        [2] = { -0.26, 0.24, -0.01, 100, 93, 105, 1 },
-        [3] = { 0.04, 0.01, -0.01, 100, 93, 105, 0 },
+        [2] = { -0.26, 0.24, -0.01, 100, 98, 105, 1 },
+        [3] = { 0.04, 0.01, -0.01, 100, 98, 105, 0 },
     },
     Worgen = {
-        [2] = { -0.21, 0.1, 0, 100, 93, 105, 5 },
-        [3] = { -0.18, 0.07, -0.08, 100, 93, 105, 4 },
+        [2] = { -0.21, 0.1, 0, 100, 98, 105, 5 },
+        [3] = { -0.18, 0.07, -0.08, 100, 98, 105, 4 },
     },
     Pandaren = {
-        [2] = { -0.13, 0.19, -0.01, 100, 93, 105, -3 },
-        [3] = { -0.08, 0.02, 0, 100, 93, 105, 6 },
+        [2] = { -0.13, 0.19, -0.01, 100, 98, 105, -3 },
+        [3] = { -0.08, 0.02, 0, 100, 98, 105, 6 },
     },
     LightforgedDraenei = {
-        [2] = { -0.26, 0.24, -0.01, 100, 93, 105, 1 },
-        [3] = { 0.04, 0.01, -0.01, 100, 93, 105, 0 },
+        [2] = { -0.26, 0.24, -0.01, 100, 98, 105, 1 },
+        [3] = { 0.04, 0.01, -0.01, 100, 98, 105, 0 },
     },
     KulTiran = {
-        [2] = { -0.22, 0.17, 0, 100, 93, 105, 0 },
-        [3] = { 0, 0, 0, 100, 93, 105, 0 },
+        [2] = { -0.22, 0.17, 0, 100, 98, 105, 0 },
+        [3] = { 0, 0, 0, 100, 98, 105, 0 },
     },
     Dracthyr = {
-        [2] = { 0, 0, 0, 100, 93, 105, 0 },
-        [3] = { 0, 0, 0, 100, 93, 105, 0 },
+        [2] = { 0, 0, 0, 100, 98, 105, 0 },
+        [3] = { 0, 0, 0, 100, 98, 105, 0 },
     },
     -- Humanoid forms have their own presets and saved Debug overrides.
     WorgenHuman = {
-        [2] = { -0.08, 0.08, -0.02, 100, 93, 105, 0 },
-        [3] = { -0.06, 0.06, 0, 100, 93, 105, -10 },
+        [2] = { -0.08, 0.08, -0.02, 100, 98, 105, 0 },
+        [3] = { -0.06, 0.06, 0, 100, 98, 105, -10 },
     },
     DracthyrVisage = {
-        [2] = { -0.16, 0.08, 0, 100, 93, 105, 0 },
-        [3] = { -0.16, 0.08, 0, 100, 93, 105, 0 },
+        [2] = { -0.16, 0.08, 0, 100, 98, 105, 0 },
+        [3] = { -0.16, 0.08, 0, 100, 98, 105, 0 },
     },
 }
 local portraitModelIndexes = {
@@ -1899,7 +1948,7 @@ local portraitRaceIDs = { [1] = "Human", [2] = "Orc", [3] = "Dwarf",
 local portraitRaceAliases = { Harronir = "Haranir", Earthen = "EarthenDwarf" }
 local portraitIdentityReady, portraitIdentity, portraitPreset
 local portraitDruidForm = false
-local portraitDruidDisplayID, portraitDruidFormID
+local portraitDruidDisplayID, portraitDruidFormID, portraitDruidFormSlot, portraitFormIdentity
 
 local druidPortraitZero = { portraitModelRotation = 0, portraitModelX = 0, portraitModelY = 0, portraitModelZ = 0 }
 local druidTreePortrait = { portraitModelRotation = 0, portraitModelX = -.26, portraitModelY = .1, portraitModelZ = .05 }
@@ -1912,21 +1961,85 @@ local druidPortraitDisplays = {
     [147881] = { portraitModelRotation = 0, portraitModelX = -.22, portraitModelY = .29, portraitModelZ = 0 }, -- Night Elf bear
     [864] = druidTreePortrait,
 }
+-- Retail's default appearances have separate display IDs. Do not extend these
+-- aliases to other barber-shop colors or collected forms.
+druidPortraitDisplays[29406] = druidPortraitDisplays[145380] -- Night Elf cat
+druidPortraitDisplays[892] = druidPortraitDisplays[145380] -- Native Night Elf cat
+druidPortraitDisplays[8571] = druidPortraitDisplays[145381] -- Tauren cat
+druidPortraitDisplays[29417] = druidPortraitDisplays[147881] -- Night Elf bear
+druidPortraitDisplays[2281] = druidPortraitDisplays[147881] -- Native Night Elf bear
+druidPortraitDisplays[2289] = druidPortraitDisplays[147880] -- Tauren bear
 
 function ns.GetDruidPortraitTuning(displayID, formID)
     if formID == 2 then return druidTreePortrait end -- Every Tree of Life appearance.
     return druidPortraitDisplays[displayID] or druidPortraitZero
 end
 
+function ns.DefaultDruidPortraitSettings(displayID, formID)
+    local tuning = ns.CopyValue(ns.GetDruidPortraitTuning(displayID, formID))
+    tuning.portraitModelScale = defaults.portraitModelScale
+    tuning.portraitModelMaskSize = defaults.portraitModelMaskSize
+    tuning.portraitModelViewportSize = defaults.portraitModelViewportSize
+    return tuning
+end
+
+function ns.ReadPlayerDisplayID()
+    if not C_PlayerInfo or type(C_PlayerInfo.GetDisplayID) ~= "function" then return end
+    local ok, displayID = pcall(C_PlayerInfo.GetDisplayID)
+    if not ok or issecretvalue and issecretvalue(displayID) then return end
+    if type(displayID) == "number" and displayID > 0 and displayID < math.huge then return displayID end
+end
+
+function ns.GetLiveDruidPortraitDisplayID(nativeOnly)
+    if not portraitDruidForm then return end
+    return ns.ReadPlayerDisplayID() or not nativeOnly and portraitDruidDisplayID or nil
+end
+
+function ns.RefreshDruidPortraitDefaults()
+    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
+    local db = GnomeLevelUpCharacterDB
+    local version = tonumber(db.druidPortraitDefaultsVersion) or 0
+    if version >= 2 then return end
+    local tuning = db.portraitModelTuning
+    if type(tuning) == "table" then
+        for identity in pairs(tuning) do
+            if type(identity) == "string" and identity:match("^Druid:") then
+                if version < 1 then tuning[identity] = nil
+                else
+                    local displayID = tonumber(identity:match("^Druid:retail:[^:]+:[^:]+:[^:]+:(%d+)$"))
+                    local saved = tuning[identity]
+                    if (displayID == 29406 or displayID == 892 or displayID == 8571 or displayID == 29417 or displayID == 2281 or displayID == 2289) and type(saved) == "table" then
+                        saved.portraitModelX, saved.portraitModelY, saved.portraitModelZ, saved.portraitModelRotation = nil, nil, nil, nil
+                    end
+                end
+            end
+        end
+    end
+    -- Defaults are resolved by appearance; later user adjustments remain saved.
+    db.druidPortraitDefaultsVersion = 2
+end
+
 function ns.RefreshPlayerModelIdentity(displayID)
+    ns.RefreshDruidPortraitDefaults()
+    local character = GnomeLevelUpCharacterDB
+    if (tonumber(character.portraitMaskDefaultsVersion) or 0) < 1 then
+        for _, tuning in pairs(type(character.portraitModelTuning) == "table" and character.portraitModelTuning or {}) do
+            if type(tuning) == "table" then tuning.portraitModelMaskSize = defaults.portraitModelMaskSize end
+        end
+        character.portraitMaskDefaultsVersion = 1
+    end
     local previousForm = portraitDruidForm
     local previousDisplay, previousFormID = portraitDruidDisplayID, portraitDruidFormID
+    local previousSlot, previousFormIdentity = portraitDruidFormSlot, portraitFormIdentity
     local _, classToken = UnitClass("player")
-    portraitDruidForm = classToken == "DRUID" and type(GetShapeshiftForm) == "function"
-        and (GetShapeshiftForm() or 0) > 0
+    portraitDruidFormSlot = classToken == "DRUID" and type(GetShapeshiftForm) == "function" and (GetShapeshiftForm() or 0) or 0
+    portraitDruidForm = portraitDruidFormSlot > 0
     portraitDruidFormID = portraitDruidForm and GetShapeshiftFormID and GetShapeshiftFormID() or nil
-    if not portraitDruidForm or portraitDruidFormID ~= previousFormID or portraitDruidForm ~= previousForm then portraitDruidDisplayID = nil end
-    if portraitDruidForm and type(displayID) == "number" then portraitDruidDisplayID = displayID end
+    -- The player API is authoritative. A reused portrait may still report its
+    -- previous display while a new model is loading.
+    if portraitDruidForm then displayID = ns.ReadPlayerDisplayID() or displayID end
+    if not portraitDruidForm or portraitDruidFormID ~= previousFormID or portraitDruidFormSlot ~= previousSlot or portraitDruidForm ~= previousForm then portraitDruidDisplayID = nil end
+    if portraitDruidForm and type(displayID) == "number" and displayID > 0 then portraitDruidDisplayID = displayID end
     local name, token, raceID
     if UnitRace then name, token, raceID = UnitRace("player") end
     local sex = UnitSex and UnitSex("player")
@@ -1945,18 +2058,27 @@ function ns.RefreshPlayerModelIdentity(displayID)
     local previousIdentity = portraitIdentity
     portraitPreset = race and portraitModelPresets[race][sex]
     portraitIdentity = portraitPreset and (race .. ":" .. sex) or nil
+    portraitFormIdentity = portraitDruidForm and table.concat({"Druid", ns.GetClientFlavor(),
+        tostring(token or raceID or "unknown"), tostring(sex), tostring(portraitDruidFormID or portraitDruidFormSlot),
+        tostring(portraitDruidDisplayID or "unknown")}, ":") or nil
     portraitIdentityReady = true
     return portraitIdentity ~= previousIdentity or portraitDruidForm ~= previousForm
         or portraitDruidDisplayID ~= previousDisplay or portraitDruidFormID ~= previousFormID
+        or portraitFormIdentity ~= previousFormIdentity
 end
 
 function ns.GetPlayerModelSetting(key)
     if not portraitIdentityReady then ns.RefreshPlayerModelIdentity() end
     local preview = ns.GetPortraitPreviewTuning and ns.GetPortraitPreviewTuning()
     if preview and portraitModelIndexes[key] and preview[key] ~= nil then return preview[key] end
-    if portraitDruidForm and (key == "portraitModelX" or key == "portraitModelY"
-        or key == "portraitModelZ" or key == "portraitModelRotation") then
-        return ns.GetDruidPortraitTuning(portraitDruidDisplayID, portraitDruidFormID)[key]
+    if portraitDruidForm and portraitModelIndexes[key] then
+        local all = GnomeLevelUpCharacterDB and GnomeLevelUpCharacterDB.portraitModelTuning
+        local tuning = type(all) == "table" and all[portraitFormIdentity]
+        local value = type(tuning) == "table" and tonumber(tuning[key])
+        if value and value == value and value ~= math.huge and value ~= -math.huge then return value end
+        local preset = ns.GetDruidPortraitTuning(portraitDruidDisplayID, portraitDruidFormID)
+        if preset[key] ~= nil then return preset[key] end
+        return ns.defaults[key]
     end
     local index = portraitModelIndexes[key]
     if portraitPreset and index then
@@ -1969,9 +2091,22 @@ function ns.GetPlayerModelSetting(key)
     return tonumber(ns.db and ns.db[key]) or ns.defaults[key]
 end
 
+function ns.GetEffectivePortraitMode()
+    local mode = ns.db and ns.db.portraitMode or "class"
+    if mode == "player3d" and ns.db.druidForms2D ~= false and portraitDruidForm
+        and not (ns.GetPortraitPreviewTuning and ns.GetPortraitPreviewTuning()) then return "player" end
+    return mode
+end
+
+function ns.GetDruidPortraitState()
+    ns.RefreshPlayerModelIdentity()
+    return { active = portraitDruidForm, displayID = portraitDruidDisplayID,
+        formID = portraitDruidFormID, formSlot = portraitDruidFormSlot, identity = portraitFormIdentity }
+end
+
 -- Classic form displays are available without requiring a Druid character.
 ns.PORTRAIT_FORM_PREVIEWS = {
-    cat = {892, 8571}, bear = {2281, 2289}, moonkin = {15374, 15375},
+    cat = {29406, 8571}, bear = {29417, 2289}, moonkin = {15374, 15375},
     travel = {632, 632}, aquatic = {2428, 2428}, tree = {864, 864},
 }
 -- Forever 1.60.1.70959: default customization choices, including their skins.
@@ -1987,16 +2122,14 @@ function ns.SetPlayerModelSetting(key, value)
     local preview = ns.GetPortraitPreviewTuning and ns.GetPortraitPreviewTuning()
     if preview then preview[key] = value; return end
     ns.RefreshPlayerModelIdentity()
-    -- Form offsets are temporary; editing them must not overwrite humanoid tuning.
-    if portraitDruidForm and (key == "portraitModelX" or key == "portraitModelY"
-        or key == "portraitModelZ" or key == "portraitModelRotation") then return end
-    if portraitIdentity then
+    local identity = portraitFormIdentity or portraitIdentity
+    if identity then
         -- Calibration belongs to this character, not a shared appearance profile.
         GnomeLevelUpCharacterDB = GnomeLevelUpCharacterDB or {}
         local all = GnomeLevelUpCharacterDB.portraitModelTuning
         if type(all) ~= "table" then all = {}; GnomeLevelUpCharacterDB.portraitModelTuning = all end
-        if type(all[portraitIdentity]) ~= "table" then all[portraitIdentity] = {} end
-        all[portraitIdentity][key] = value
+        if type(all[identity]) ~= "table" then all[identity] = {} end
+        all[identity][key] = value
     else
         ns.db[key] = value
     end
@@ -2609,9 +2742,11 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         local form = ns.PORTRAIT_FORM_PREVIEWS[scenario]
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+        elseif scenario == "info" and not variant then
+            ns.PrintPortraitDiagnostics()
         elseif variant and (not form or not ns.FOREVER_PORTRAIT_FORM_PREVIEWS[variant])
             or not form and scenario ~= "delay" and scenario ~= "fail" and scenario ~= "unmasked" then
-            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren]")
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <info|delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren]")
         elseif ns.db.portraitMode ~= "player3d" then
             print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
         else
@@ -2804,7 +2939,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         --@do-not-package@
         print("  /glu debugrecord <level> <timeinseconds> - set a real personal record and share it with your guild (debug mode)")
         --@end-do-not-package@
-        print("  /glu debugportrait <delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren] - test 3D portraits and Druid forms (debug mode)")
+        print("  /glu debugportrait <info|delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren] - test 3D portraits and Druid forms (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")
         print("  /glu debugweather <0-4> <0-1> - preview rain (1), snow (2), sandstorm (3), or no effect (0 and 4) in debug mode")

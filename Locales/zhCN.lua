@@ -703,3 +703,7 @@ RegisterLocaleBuilder("zhCN", function() return {
     ["Choose a custom colour for the timeline."] = "选择时间轴的自定义颜色。",
     ["Use your class colour for the timeline."] = "在时间轴上使用你的职业颜色。",
 } end)
+
+RegisterLocaleBuilder("zhCN", function() return { ["Reset debug settings"] = "重置调试设置" } end)
+
+RegisterLocaleBuilder("zhCN", function() return { ["Force 2D portraits in Druid forms"] = "德鲁伊形态下强制使用2D头像", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "变形时使用2D头像，退出形态后恢复所选头像。" } end)

@@ -703,3 +703,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["Choose a custom colour for the timeline."] = "Choisit une couleur personnalisée pour la frise.",
     ["Use your class colour for the timeline."] = "Utilise la couleur de votre classe pour la frise.",
 } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Reset debug settings"] = "Réinitialiser les réglages de débogage" } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Force 2D portraits in Druid forms"] = "Forcer les portraits 2D sous forme de druide", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Utilise un portrait 2D pendant la transformation et rétablit le portrait choisi en quittant la forme." } end)

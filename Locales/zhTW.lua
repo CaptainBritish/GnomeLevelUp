@@ -703,3 +703,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["Choose a custom colour for the timeline."] = "選擇時間軸的自訂顏色。",
     ["Use your class colour for the timeline."] = "在時間軸上使用你的職業顏色。",
 } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Reset debug settings"] = "重設偵錯設定" } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Force 2D portraits in Druid forms"] = "德魯伊形態下強制使用2D頭像", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "變形時使用2D頭像，離開形態後恢復所選頭像。" } end)

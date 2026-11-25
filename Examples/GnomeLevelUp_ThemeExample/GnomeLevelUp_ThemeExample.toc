@@ -1,9 +1,11 @@
 ## Interface: 16001, 120007, 120105, 120100
 ## Title: GnomeLevelUp - Example Theme Pack
-## Notes: FFIV Blue Atlas theme for GnomeLevelUp.
+## Notes: FFIV Blue Atlas and FE Path of Radiance themes for GnomeLevelUp.
 ## Version: 1.0.0
 ## Dependencies: GnomeLevelUp
 
 Textures\BlueAtlasFFIX\Theme.lua
 Sounds\BlueAtlasFFIX\SoundList.lua
+Textures\FEPathOfRadiance\Theme.lua
+Sounds\FEPathOfRadiance\SoundList.lua
 Register.lua
