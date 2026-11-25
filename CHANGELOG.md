@@ -18,6 +18,10 @@
 
 ##### Bug Fixes and Optimization
 
+* Added 3D portrait presets for default Night Elf, Tauren and Skyborne Cat and Bear forms, plus all Tree forms. Other forms and barber-shop appearances use zeroed positions and rotation. Leaving form restores normal portrait settings.
+* Added Druid form previews to `/glu debugportrait`, so they can be checked without a Druid character.
+* Druid form previews now include default Night Elf, Skyborne and Tauren variants, using Forever's current form displays and clearing the previous model before loading.
+* Fixed Druid preview controls showing normal portrait values. Each preview starts with its form's preset and can be adjusted without changing saved portrait settings.
 * Clearing character times now works for the character selected in Level History, including logged-out characters.
 * Level History now labels times by the level reached, so the final level is included.
 * Fixed guild records disappearing when selecting another character in Level History. Each character now shows records from their own saved guild.

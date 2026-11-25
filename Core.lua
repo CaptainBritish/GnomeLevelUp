@@ -1898,8 +1898,35 @@ local portraitRaceIDs = { [1] = "Human", [2] = "Orc", [3] = "Dwarf",
 }
 local portraitRaceAliases = { Harronir = "Haranir", Earthen = "EarthenDwarf" }
 local portraitIdentityReady, portraitIdentity, portraitPreset
+local portraitDruidForm = false
+local portraitDruidDisplayID, portraitDruidFormID
 
-function ns.RefreshPlayerModelIdentity()
+local druidPortraitZero = { portraitModelRotation = 0, portraitModelX = 0, portraitModelY = 0, portraitModelZ = 0 }
+local druidTreePortrait = { portraitModelRotation = 0, portraitModelX = -.26, portraitModelY = .1, portraitModelZ = .05 }
+local druidPortraitDisplays = {
+    [145380] = { portraitModelRotation = 0, portraitModelX = -.1, portraitModelY = -.15, portraitModelZ = 0 }, -- Night Elf cat
+    [145381] = { portraitModelRotation = 0, portraitModelX = -.1, portraitModelY = -.15, portraitModelZ = 0 }, -- Tauren cat
+    [144330] = druidPortraitZero, -- Skyborne cat
+    [144331] = { portraitModelRotation = 0, portraitModelX = -.4, portraitModelY = -.6, portraitModelZ = -.1 }, -- Skyborne bear
+    [147880] = { portraitModelRotation = 0, portraitModelX = -.3, portraitModelY = .55, portraitModelZ = 0 }, -- Tauren bear
+    [147881] = { portraitModelRotation = 0, portraitModelX = -.22, portraitModelY = .29, portraitModelZ = 0 }, -- Night Elf bear
+    [864] = druidTreePortrait,
+}
+
+function ns.GetDruidPortraitTuning(displayID, formID)
+    if formID == 2 then return druidTreePortrait end -- Every Tree of Life appearance.
+    return druidPortraitDisplays[displayID] or druidPortraitZero
+end
+
+function ns.RefreshPlayerModelIdentity(displayID)
+    local previousForm = portraitDruidForm
+    local previousDisplay, previousFormID = portraitDruidDisplayID, portraitDruidFormID
+    local _, classToken = UnitClass("player")
+    portraitDruidForm = classToken == "DRUID" and type(GetShapeshiftForm) == "function"
+        and (GetShapeshiftForm() or 0) > 0
+    portraitDruidFormID = portraitDruidForm and GetShapeshiftFormID and GetShapeshiftFormID() or nil
+    if not portraitDruidForm or portraitDruidFormID ~= previousFormID or portraitDruidForm ~= previousForm then portraitDruidDisplayID = nil end
+    if portraitDruidForm and type(displayID) == "number" then portraitDruidDisplayID = displayID end
     local name, token, raceID
     if UnitRace then name, token, raceID = UnitRace("player") end
     local sex = UnitSex and UnitSex("player")
@@ -1919,11 +1946,18 @@ function ns.RefreshPlayerModelIdentity()
     portraitPreset = race and portraitModelPresets[race][sex]
     portraitIdentity = portraitPreset and (race .. ":" .. sex) or nil
     portraitIdentityReady = true
-    return portraitIdentity ~= previousIdentity
+    return portraitIdentity ~= previousIdentity or portraitDruidForm ~= previousForm
+        or portraitDruidDisplayID ~= previousDisplay or portraitDruidFormID ~= previousFormID
 end
 
 function ns.GetPlayerModelSetting(key)
     if not portraitIdentityReady then ns.RefreshPlayerModelIdentity() end
+    local preview = ns.GetPortraitPreviewTuning and ns.GetPortraitPreviewTuning()
+    if preview and portraitModelIndexes[key] and preview[key] ~= nil then return preview[key] end
+    if portraitDruidForm and (key == "portraitModelX" or key == "portraitModelY"
+        or key == "portraitModelZ" or key == "portraitModelRotation") then
+        return ns.GetDruidPortraitTuning(portraitDruidDisplayID, portraitDruidFormID)[key]
+    end
     local index = portraitModelIndexes[key]
     if portraitPreset and index then
         local all = GnomeLevelUpCharacterDB and GnomeLevelUpCharacterDB.portraitModelTuning
@@ -1935,9 +1969,27 @@ function ns.GetPlayerModelSetting(key)
     return tonumber(ns.db and ns.db[key]) or ns.defaults[key]
 end
 
+-- Classic form displays are available without requiring a Druid character.
+ns.PORTRAIT_FORM_PREVIEWS = {
+    cat = {892, 8571}, bear = {2281, 2289}, moonkin = {15374, 15375},
+    travel = {632, 632}, aquatic = {2428, 2428}, tree = {864, 864},
+}
+-- Forever 1.60.1.70959: default customization choices, including their skins.
+-- ChrCustomizationChoice -> ChrCustomizationElement -> ChrCustomizationDisplayInfo.
+ns.FOREVER_PORTRAIT_FORM_PREVIEWS = {
+    nightelf = { cat = 145380, bear = 147881, moonkin = 145269, travel = 145290, aquatic = 148716, tree = 864 },
+    tauren = { cat = 145381, bear = 147880, moonkin = 145275, travel = 145290, aquatic = 148716, tree = 864 },
+    skyborne = { cat = 144330, bear = 144331, moonkin = 144900, travel = 145284, aquatic = 148716, tree = 864 },
+}
+
 function ns.SetPlayerModelSetting(key, value)
     if not portraitModelIndexes[key] then return end
+    local preview = ns.GetPortraitPreviewTuning and ns.GetPortraitPreviewTuning()
+    if preview then preview[key] = value; return end
     ns.RefreshPlayerModelIdentity()
+    -- Form offsets are temporary; editing them must not overwrite humanoid tuning.
+    if portraitDruidForm and (key == "portraitModelX" or key == "portraitModelY"
+        or key == "portraitModelZ" or key == "portraitModelRotation") then return end
     if portraitIdentity then
         -- Calibration belongs to this character, not a shared appearance profile.
         GnomeLevelUpCharacterDB = GnomeLevelUpCharacterDB or {}
@@ -2552,14 +2604,30 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
             print("|cff3fe0ffGnomeLevelUp|r: /glu debugtime <new|slower|best|guild>")
         end
     elseif msg == "debugportrait" or msg:match("^debugportrait%s") then
-        local scenario = msg:match("^debugportrait%s+(%a+)$")
+        local scenario, variant = msg:match("^debugportrait%s+(%a+)%s*(%a*)$")
+        if variant == "" then variant = nil end
+        local form = ns.PORTRAIT_FORM_PREVIEWS[scenario]
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
-        elseif scenario ~= "delay" and scenario ~= "fail" and scenario ~= "unmasked" then
-            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked>")
+        elseif variant and (not form or not ns.FOREVER_PORTRAIT_FORM_PREVIEWS[variant])
+            or not form and scenario ~= "delay" and scenario ~= "fail" and scenario ~= "unmasked" then
+            print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren]")
         elseif ns.db.portraitMode ~= "player3d" then
             print("|cff3fe0ffGnomeLevelUp|r: /glu debugportrait <delay|fail|unmasked> (" .. ns.L("Portrait") .. ": " .. ns.L("Player 3D portrait") .. ")")
         else
+            if form then
+                local faction = UnitFactionGroup and UnitFactionGroup("player")
+                local _, race = UnitRace("player")
+                variant = variant or (race == "Skyborne" and "skyborne" or race == "NightElf" and "nightelf"
+                    or race == "Tauren" and "tauren" or faction == "Horde" and "tauren" or "nightelf")
+                if variant == "skyborne" and ns.GetCurrentFlavor() ~= "forever" then
+                    print("|cff3fe0ffGnomeLevelUp|r: Skyborne portrait previews require WoW Forever.")
+                    return
+                end
+                local displayID = ns.GetCurrentFlavor() == "forever" and ns.FOREVER_PORTRAIT_FORM_PREVIEWS[variant][scenario]
+                    or form[variant == "tauren" and 2 or 1]
+                scenario = { displayID = displayID, druidForm = true }
+            end
             ns.PreviewLevelUp(false, nil, nil, 3, nil, nil, scenario)
         end
     elseif msg == "debugweather" or msg:match("^debugweather%s") then
@@ -2736,7 +2804,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         --@do-not-package@
         print("  /glu debugrecord <level> <timeinseconds> - set a real personal record and share it with your guild (debug mode)")
         --@end-do-not-package@
-        print("  /glu debugportrait <delay|fail|unmasked> - test the 3D portrait fallback or preview without the circular mask (debug mode)")
+        print("  /glu debugportrait <delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren] - test 3D portraits and Druid forms (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")
         print("  /glu debugweather <0-4> <0-1> - preview rain (1), snow (2), sandstorm (3), or no effect (0 and 4) in debug mode")

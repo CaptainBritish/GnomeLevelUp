@@ -1177,11 +1177,18 @@ local FALLBACK_CLASS_COORDS = {
 
 -- Rebuild the camera before applying offsets, whether loading or editing live.
 -- PlayerModel caches its projection when the viewport changes size or scale.
+function ns.GetPortraitPreviewTuning()
+    local test = content.portraitLoadTest
+    if type(test) == "table" and test.druidForm then return test.tuning end
+end
+
 function render.ApplyPlayerModelCamera(model)
     model = model or content.playerModel
     if not model or model.applyingCamera then return end
     model.applyingCamera = true
-    ns.RefreshPlayerModelIdentity()
+    local displayID = model.GetDisplayInfo and model:GetDisplayInfo()
+    if issecretvalue and issecretvalue(displayID) then displayID = nil end
+    local identityChanged = ns.RefreshPlayerModelIdentity(type(content.portraitLoadTest) ~= "table" and displayID or nil)
     model:SetModelScale(ns.GetPlayerModelSetting("portraitModelScale") / 100)
     -- Do not let the previous pose/offset become the next camera's baseline.
     model:SetFacing(0)
@@ -1194,6 +1201,7 @@ function render.ApplyPlayerModelCamera(model)
     model:SetPaused(ns.db and (ns.db.backgroundAnimations == false) or false)
     model.cameraWidth, model.cameraHeight, model.cameraScale = model:GetWidth(), model:GetHeight(), model:GetEffectiveScale()
     model.applyingCamera = nil
+    if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
 function render.SyncPlayerModelCamera()
@@ -1251,6 +1259,7 @@ function render.ReportPlayerModelFailure(model, reason, failure)
 end
 
 function render.ReadPlayerModelReady(model)
+    if type(content.portraitLoadTest) == "table" then return true end
     if not IsUnitModelReadyForUI then return true end
     local ready = IsUnitModelReadyForUI("player")
     if issecretvalue and issecretvalue(ready) then
@@ -1360,7 +1369,15 @@ local function LoadPlayerPortraitModel(model)
     render.ShowPlayerModelFallback(model)
     local loadError = not readyOK and ns.CaptureErrorTrace(ready) or nil
     if portraitTest ~= "fail" then
-        local ok, assigned = xpcall(function() return model:SetUnit("player") end, ns.CaptureErrorTrace)
+        local ok, assigned = xpcall(function()
+            if type(portraitTest) == "table" then
+                model:ClearModel()
+                -- ClearModel can invalidate a previous model's ready event.
+                model.loadReceived = false
+                return model:SetDisplayInfo(portraitTest.displayID)
+            end
+            return model:SetUnit("player")
+        end, ns.CaptureErrorTrace)
         -- Older clients may return nothing. An explicit false rejects the assignment.
         model.unitAssigned = ok and ((issecretvalue and issecretvalue(assigned)) or assigned ~= false)
         if not ok then loadError = assigned end
@@ -1442,8 +1459,9 @@ function ns.RefreshClassIcon()
             model:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
             model:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
             model:SetScript("OnEvent", function(self)
+                if not frame:IsShown() or not self:IsShown() or content.portraitLoadTest then return end
                 local identityChanged = ns.RefreshPlayerModelIdentity()
-                if self:IsShown() and not content.portraitLoadTest then LoadPlayerPortraitModel(self) end
+                LoadPlayerPortraitModel(self)
                 if identityChanged and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then
                     ns.RefreshOptionsPanel()
                 end
@@ -4679,6 +4697,7 @@ local function StartVisualEffects()
 end
 
 function render.ReleasePopupData()
+    local wasFormPreview = ns.GetPortraitPreviewTuning() ~= nil
     render.ClearLevelTimeline()
     render.timeRowOrigin = nil
     render.statPages = nil
@@ -4708,6 +4727,7 @@ function render.ReleasePopupData()
     for _, pool in ipairs(render.abilityPools) do
         for _, icon in ipairs(pool) do StopIconAnimation(icon) end
     end
+    if wasFormPreview and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
 
 frame:HookScript("OnHide", function()
@@ -5591,6 +5611,7 @@ end
 
 function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWeaponSkills, timePlayedThisLevel, warlockPetAbilities, isPreview, milestonePreview, previousFastest, maxLevelPreview, pacePreview, rangeStart, secondaryStats, replayRecord, portraitTest, weatherTest, cataloguePreview, guildComparison)
     ns.EnsureDatabase()
+    local wasFormPreview = ns.GetPortraitPreviewTuning() ~= nil
     render.screenshotRequest = nil
     ns.SetClosingClickThrough(false)
     hideToken = hideToken + 1
@@ -5602,6 +5623,9 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
     content.guildRecordComparison = guildComparison or replayRecord and replayRecord.guildComparison
         or not isPreview and ns.GetGuildLevelCelebration and ns.GetGuildLevelCelebration(currentLevel, timePlayedThisLevel) or nil
     content.portraitLoadTest = isPreview and portraitTest or nil
+    if type(content.portraitLoadTest) == "table" and content.portraitLoadTest.druidForm and not content.portraitLoadTest.tuning then
+        content.portraitLoadTest.tuning = ns.CopyValue(ns.GetDruidPortraitTuning(content.portraitLoadTest.displayID, content.portraitLoadTest.formID))
+    end
     content.weatherTest = isPreview and weatherTest or nil
     --@do-not-package@
     -- SSTEST: local screenshot presentation only.
@@ -5648,6 +5672,9 @@ function ns.ShowLevelUp(currentLevel, statChanges, trainerAbilities, unlearnedWe
         end
     end, ns.CaptureErrorTrace)
     ns.PerfEnd(perf)
+    if (wasFormPreview or ns.GetPortraitPreviewTuning()) and ns.optionsPanel and ns.optionsPanel:IsShown() and ns.RefreshOptionsPanel then
+        ns.RefreshOptionsPanel()
+    end
     if not ok then
         ns.RecordError("popup", "render_failed", {
             source = isPreview and "preview" or "level_up", level = currentLevel, fromLevel = rangeStart,
