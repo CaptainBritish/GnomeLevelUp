@@ -422,3 +422,37 @@ function ns.GetAllTrainableUpToLevel(currentLevel, spellSnapshot, rangeStart)
     for _, ability in ipairs(unlearnedAbilities) do ability.rank, ability.index = nil, nil end
     return unlearnedAbilities
 end
+
+-- Queries supply trainer entries; only this builder adds current-pet reminders.
+-- Discard saved reminders from old popup/replay lists before rebuilding them.
+-- Return both the full list and filtered display list so options can restore ranks.
+function ns.BuildPopupAbilityList(abilities)
+    abilities = abilities or {}
+    local rebuild = ns.db and ns.db.showSavedBeastTraining == true
+    if not rebuild then
+        for _, ability in ipairs(abilities) do
+            if ability.savedBeastTraining then rebuild = true; break end
+        end
+    end
+    if not rebuild then
+        local displayed = ns.SupportsTrainerData and ns.SupportsTrainerData()
+            and ns.db.showLatestTrainingRanks ~= false and ns.LatestTrainingRanks(abilities) or abilities
+        return abilities, displayed
+    end
+    local visible, seen = {}, {}
+    local function Add(ability)
+        local family, rank = ns.GetTrainingRankInfo(ability.name)
+        local key = (family or "") .. ":" .. tostring(ability.trainingRank or rank or 1)
+        if ability.savedBeastTraining and seen[key] then return end
+        seen[key] = true
+        visible[#visible + 1] = ability
+    end
+    for _, ability in ipairs(abilities) do
+        if not ability.savedBeastTraining then Add(ability) end
+    end
+    for _, ability in ipairs(ns.GetSavedBeastTrainingAbilities and ns.GetSavedBeastTrainingAbilities() or {}) do Add(ability) end
+    if ns.SupportsTrainerData and ns.SupportsTrainerData() and ns.db.showLatestTrainingRanks ~= false then
+        return visible, ns.LatestTrainingRanks(visible)
+    end
+    return visible, visible
+end

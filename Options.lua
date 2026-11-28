@@ -273,6 +273,7 @@ local function BuildOptions()
         ["Show learning costs"] = true,
         ["Show Warlock pet abilities"] = true,
         ["Show Hunter pet abilities"] = true,
+        ["Show saved Beast Training skills"] = true,
         ["Filter grimoires by active pet"] = true,
         ["Clear trainer cache"] = true,
         ["Refresh Cache Status"] = true,
@@ -1490,40 +1491,25 @@ local function BuildOptions()
     tooltipCosts.gluOptionsCell.isVisible = ns.SupportsTrainerData
     AddAvailabilityRefresh(tooltipCosts, tooltipCostsLabel, ns.TrainerAbilitiesEnabled)
 
-    local petCheck, petLabel, hunterPetCheck, hunterPetLabel = AddCheckboxPair({
-        "Show Warlock pet abilities",
-        function() return ns.db.showWarlockPetSkills end,
-        function(v) ns.db.showWarlockPetSkills = v end,
-    }, {
-        "Show Hunter pet abilities",
-        function() return ns.db.showHunterPetSkills ~= false end,
-        function(v) ns.db.showHunterPetSkills = v end,
-    })
-    local function IsForeverWarlock()
-        if not ns.TrainerAbilitiesEnabled() then return false end
-        local _, classToken = UnitClass("player")
-        return classToken == "WARLOCK"
-    end
-    AddAvailabilityRefresh(petCheck, petLabel, IsForeverWarlock)
+    local petCheck, petLabel, hunterPetCheck, hunterPetLabel = AddSettingCheckboxPair("showWarlockPetSkills", "showHunterPetSkills")
+    AddAvailabilityRefresh(petCheck, petLabel, ns.OPTION_SETTINGS.showWarlockPetSkills.isAvailable)
+    AddAvailabilityRefresh(hunterPetCheck, hunterPetLabel, ns.OPTION_SETTINGS.showHunterPetSkills.isAvailable)
 
-    local function IsForeverHunter()
-        if not ns.TrainerAbilitiesEnabled() then return false end
-        local _, classToken = UnitClass("player")
-        return classToken == "HUNTER"
+    local beastCheck, beastLabel = AddSettingCheckbox("showSavedBeastTraining", LEFT, y)
+    beastCheck.gluOptionsCell.isVisible = function()
+        local _, class = UnitClass("player")
+        return ns.SupportsTrainerData() and class == "HUNTER"
     end
-    AddAvailabilityRefresh(hunterPetCheck, hunterPetLabel, IsForeverHunter)
+    AddAvailabilityRefresh(beastCheck, beastLabel, ns.OPTION_SETTINGS.showSavedBeastTraining.isAvailable)
+    y = y - 32
 
-    local weaponCheck, weaponLabel, filterPetCheck, filterPetLabel = AddCheckboxPair({
-        "Show unlearned weapon skills",
+    local weaponCheck, weaponLabel = AddCheckbox("Show unlearned weapon skills",
         function() return ns.db.showWeaponSkills end,
-        function(v) if not ns.db.horizontalMode then ns.db.showWeaponSkills = v end end,
-    }, {
-        "Filter grimoires by active pet",
-        function() return ns.db.filterWarlockPetByActivePet end,
-        function(v) ns.db.filterWarlockPetByActivePet = v end,
-    })
+        function(v) if not ns.db.horizontalMode then ns.db.showWeaponSkills = v end end, LEFT, y)
+    local filterPetCheck, filterPetLabel = AddSettingCheckbox("filterWarlockPetByActivePet", LEFT + 270, y)
+    y = y - 32
     AddAvailabilityRefresh(weaponCheck, weaponLabel, ns.WeaponTrainingAvailable)
-    AddAvailabilityRefresh(filterPetCheck, filterPetLabel, IsForeverWarlock)
+    AddAvailabilityRefresh(filterPetCheck, filterPetLabel, ns.OPTION_SETTINGS.filterWarlockPetByActivePet.isAvailable)
 
     for index, filter in ipairs(ns.ABILITY_FILTERS) do
         local check, label = AddSettingCheckbox(filter.key, LEFT + (index - 1) * 175, y)

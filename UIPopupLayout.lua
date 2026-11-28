@@ -70,7 +70,7 @@ function ns.CreatePopupSectionPositioner(context)
             local statsX = 24 + PortraitColumnWidth() + 18 + TEXT_WIDTH / 2
             content.statsHeader:SetPoint("TOP", content, "TOPLEFT", statsX, -24)
         else
-            content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -22)
+            content.statsHeader:SetPoint("TOP", content.levelText, "BOTTOM", 0, -context.verticalStatsHeadingGap)
         end
         AnchorBelow(content.statsHeaderDivider, content.statsHeader, gap)
         local topGap = IsHorizontalLayout() and 8 / math.max(.001, content:GetScale()) or gap

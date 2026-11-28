@@ -326,13 +326,13 @@ function ns.CreatePopupDecorationUpdater(context)
         local db, plan = ns.db or {}, entranceTimeline
         local enabled = frame:IsShown() and ns.DecorativeAnimationsEnabled()
         if not enabled or not plan then
-            render.HideTrialEffects();render.TintTrialImpact(0)
+            render.HideDecorationEffects();render.TintDecorationImpact(0)
             return false
         end
-        local effects = content.trialEffects
+        local effects = content.decorationEffects
         if not effects then
             effects = {glints={},depth={},impacts={}}
-            content.trialEffects = effects
+            content.decorationEffects = effects
         end
         local active, speed = false, Speed()
         local perf = ns.PerfStart("ring_glint_frame", effectAge)
@@ -391,7 +391,7 @@ function ns.CreatePopupDecorationUpdater(context)
         if shimmerVisible and not effects.portraitShimmer then
             local clip = CreateFrame("Frame", nil, content.portraitArtwork)
             clip:SetClipsChildren(true)
-            clip.texture = render.TrialSpark(clip)
+            clip.texture = render.DecorationSpark(clip)
             clip.texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
             clip.texture:SetRotation(-math.pi/4)
             if clip.CreateMaskTexture then
@@ -433,7 +433,7 @@ function ns.CreatePopupDecorationUpdater(context)
                 if visible and not icon.revealShine then
                     local clip = CreateFrame("Frame", nil, icon)
                     clip:SetAllPoints(icon);clip:SetClipsChildren(true);clip:SetFrameLevel(icon:GetFrameLevel()+4)
-                    clip.texture = render.TrialSpark(clip)
+                    clip.texture = render.DecorationSpark(clip)
                     clip.texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
                     clip.texture:SetRotation(-math.pi/4)
                     icon.revealShine = clip
@@ -469,7 +469,7 @@ function ns.CreatePopupDecorationUpdater(context)
             end
             if visible and not effects.impacts[row] then
                 effects.impacts[row] = {}
-                for i=1,3 do effects.impacts[row][i]=render.TrialSpark(row.slideFrame) end
+                for i=1,3 do effects.impacts[row][i]=render.DecorationSpark(row.slideFrame) end
             end
             local pool = effects.impacts[row]
             if pool then for i, texture in ipairs(pool) do
@@ -546,7 +546,7 @@ function ns.CreatePopupDecorationUpdater(context)
         end
         local impact = portraitStage == "starburst" and (effectAge-starburstStartedAt)/(1.2/speed) or -1
         local white=milestone and portrait and db.portraitAnimation and impact>=0 and impact<1 and .95*(1-impact)^2 or 0
-        render.TintTrialImpact(white)
+        render.TintDecorationImpact(white)
         if milestone and portrait and db.portraitAnimation and impact<1 then active=true end
         ns.PerfEnd(perf)
         return active

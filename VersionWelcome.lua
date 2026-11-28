@@ -5,14 +5,20 @@ local ADDON_NAME, ns = ...
 local window, ready, loading, scheduled = nil, false, false, false
 local textureRoot = "Interface\\AddOns\\GnomeLevelUp\\Textures\\"
 local WIDTH, MARGIN = 680, 52
+local PORTRAIT_SCALE = 1.15
 local EMPHASIS, NORMAL = "|cffffd775", "|r"
 local paragraphs = {
     "Yo! Sorry to get in the way. I just want to say thank you to all of you for checking out "
         .. EMPHASIS .. "GnomeLevelUp" .. NORMAL .. " over the last few months. I've met a bunch of you in game both in live and the beta, and you've been nothing but lovely.",
-    "With this update, " .. EMPHASIS .. "GLU" .. NORMAL .. " is in what I'd consider a \"feature complete\" state. Anything else I add now might be redundant, but just in case you missed it here are the major features of this update (and the last few.)",
-    "- A timeline to show your upcoming abilities!\n- Full custom theme support!\n- Background effects that match the weather.\n- Synchronized best times with your guildies!",
+    "With this update, " .. EMPHASIS .. "GLU" .. NORMAL .. " is in what I'd consider a \"feature complete\" state. Anything else I add now might be redundant and bloat the addon, but just in case you missed it here are the major features of this update (and the last few.)",
+    "- " .. EMPHASIS .. "A timeline to show your upcoming abilities!" .. NORMAL
+        .. "\n- " .. EMPHASIS .. "Full custom theme support!" .. NORMAL
+        .. " (Check out my Curse page for an example addon on how to do it!)"
+        .. "\n- " .. EMPHASIS .. "Background effects that match the weather." .. NORMAL
+        .. " (I know this is dumb, I just wanted to see if I could do it)"
+        .. "\n- " .. EMPHASIS .. "Synchronized best times with your guildies!" .. NORMAL,
     "Again, thank you all for your support. I never expected this goofy lil addon would reach "
-        .. EMPHASIS .. "20k unique users" .. NORMAL .. " but somehow it did.",
+        .. EMPHASIS .. "22k unique users" .. NORMAL .. " but somehow it did.",
     "Love from Lessa <3",
 }
 
@@ -24,7 +30,7 @@ end
 
 local function Resize()
     if not window then return end
-    local top = 218
+    local top = 218 + 126 * (PORTRAIT_SCALE - 1)
     for _, text in ipairs(window.paragraphs) do
         text:ClearAllPoints()
         text:SetPoint("TOPLEFT", window, "TOPLEFT", MARGIN, -top)
@@ -41,6 +47,33 @@ local function Resize()
     for name, texture in pairs(window.pieces) do
         if name == "center" then texture:Hide()
         else ns.PaintThemePiece(texture, name, window.theme.textures[name], 1, true, window.appearance) end
+    end
+end
+
+local function RefreshControllerHint()
+    if not window then return end
+    local style = ns.IsControllerUIActive() and (ns.db.controllerGlyphStyle or "xbox") or "none"
+    if style ~= "playstation" and style ~= "nintendo" and style ~= "none" then style = "xbox" end
+    if window.controllerStyle == style then return end
+    window.controllerStyle = style
+    local visible = style ~= "none"
+    local applied = visible and ns.ApplyControllerGlyph(window.closeIcon, "back", style)
+    window.closeIcon:SetShown(applied == true)
+    window.closeGlyph:SetShown(visible and not applied)
+    window.closeGlyph:SetText(style == "playstation" and "○" or style == "nintendo" and "A" or "B")
+end
+
+local function UpdateControllerBinding()
+    if not window then return end
+    if not window:IsShown() then
+        if window.controllerBound and type(ClearOverrideBindings) == "function" then
+            local cleared = pcall(ClearOverrideBindings, window)
+            if cleared then window.controllerBound = false end
+        end
+    elseif not window.controllerBound and type(SetOverrideBindingClick) == "function"
+        and not (InCombatLockdown and InCombatLockdown()) then
+        window.controllerBound = pcall(SetOverrideBindingClick, window, true, "PAD2",
+            "GnomeLevelUpWelcomeClose", "LeftButton")
     end
 end
 
@@ -68,7 +101,7 @@ local function BuildWindow()
     window.shade:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -27, 27)
 
     window.portrait = CreateFrame("Frame", nil, window)
-    window.portrait:SetSize(126, 126)
+    window.portrait:SetSize(126 * PORTRAIT_SCALE, 126 * PORTRAIT_SCALE)
     window.portrait:SetPoint("TOP", window, "TOP", 0, -24)
     window.avatar = window.portrait:CreateTexture(nil, "ARTWORK")
     window.avatar:SetAllPoints(window.portrait)
@@ -81,7 +114,7 @@ local function BuildWindow()
     end
     window.ring = window.portrait:CreateTexture(nil, "OVERLAY")
     window.ring:SetTexture(ns.PORTRAIT_RING_TEXTURES.STEEL.texture)
-    window.ring:SetSize(146, 146)
+    window.ring:SetSize(146 * PORTRAIT_SCALE, 146 * PORTRAIT_SCALE)
     window.ring:SetPoint("CENTER", window.portrait, "CENTER")
 
     local font = ns.GetPopupFontPath(ns.DEFAULT_FONT_PATH)
@@ -105,12 +138,34 @@ local function BuildWindow()
         text:SetText(value)
         window.paragraphs[#window.paragraphs + 1] = text
     end
-    window.close = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+    window.close = CreateFrame("Button", "GnomeLevelUpWelcomeClose", window, "UIPanelButtonTemplate")
     window.close:SetSize(300, 32)
     window.close:SetPoint("BOTTOM", window, "BOTTOM", 0, 31)
     window.close:SetText("Get off my screen, gnome.")
+    window.close:RegisterForClicks("AnyDown", "AnyUp")
+    window.closeIcon = window.close:CreateTexture(nil, "OVERLAY")
+    window.closeIcon:SetSize(24, 24)
+    window.closeIcon:SetPoint("LEFT", window.close, "LEFT", 10, 0)
+    window.closeGlyph = window.close:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    window.closeGlyph:SetAllPoints(window.closeIcon)
+    window.closeGlyph:SetJustifyH("CENTER")
+    window.closeGlyph:SetJustifyV("MIDDLE")
     window.close:SetScript("OnClick", function() window:Hide() end)
-    window:SetScript("OnHide", function() window.automatic = false end)
+    window:SetScript("OnShow", function()
+        RefreshControllerHint()
+        UpdateControllerBinding()
+    end)
+    window:SetScript("OnHide", function()
+        window.automatic = false
+        UpdateControllerBinding()
+    end)
+    local controllerElapsed = 0
+    window:SetScript("OnUpdate", function(_, elapsed)
+        controllerElapsed = controllerElapsed + elapsed
+        if controllerElapsed < .2 then return end
+        controllerElapsed = 0
+        RefreshControllerHint()
+    end)
     UISpecialFrames = UISpecialFrames or {}
     UISpecialFrames[#UISpecialFrames + 1] = "GnomeLevelUpVersionWelcome"
     Resize()
@@ -145,6 +200,7 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("DISPLAY_SIZE_CHANGED")
 events:RegisterEvent("UI_SCALE_CHANGED")
 events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_ENABLED" then UpdateControllerBinding() end
     if event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED" then Resize(); return end
     if event == "LOADING_SCREEN_ENABLED" then loading = true; return end
     if event == "LOADING_SCREEN_DISABLED" then loading = false end

@@ -247,7 +247,6 @@ RegisterLocaleBuilder("deDE", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("deDE", function() return {
     ["Portrait sparks"] = "Porträtfunken",
-    ["New ability sparkles"] = "Funkeln neuer Fähigkeiten",
     ["Background embers"] = "Glut im Hintergrund",
     ["Frame edge glow"] = "Rahmenleuchten",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("deDE", function() return { ["Firework size (%)"] = "Feuer
 RegisterLocaleBuilder("deDE", function() return { ["Frame inset (px)"] = "Rahmeninnenabstand (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("deDE", function() return { ["Portrait ring glint"] = "Glanz am Porträtring", ["Ability reveal shine"] = "Glanz beim Erscheinen von Fähigkeiten", ["Milestone anticipation"] = "Meilenstein-Vorbereitung", ["Stat impact sparks"] = "Funken bei Attributsgewinnen", ["Background depth"] = "Hintergrundtiefe", ["Closing animation"] = "Schließanimation", ["Milestone color transition"] = "Meilenstein-Farbübergang" } end)
+RegisterLocaleBuilder("deDE", function() return { ["Portrait ring glint"] = "Glanz am Porträtring", ["Closing animation"] = "Schließanimation" } end)
 RegisterLocaleBuilder("deDE", function() return { ["Screenshot milestones"] = "Screenshots bei Meilensteinen" } end)
 RegisterLocaleBuilder("deDE", function() return { ["Portrait motes"] = "Porträtpartikel", ["Background motes"] = "Hintergrundpartikel" } end)
 RegisterLocaleBuilder("deDE", function() return { ["3D Portraits may consume more memory."] = "3D-Porträts können mehr Arbeitsspeicher verbrauchen." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("deDE", function() return {
     ["%dh %02dm %02ds"] = "%dStd. %02dMin. %02dSek.", ["%dm %02ds"] = "%dMin. %02dSek.", ["%ds"] = "%dSek.",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("deDE", function() return {
     ["Max Level Celebration"] = "Feier der Maximalstufe",
     ["Time to max level: %s"] = "Zeit bis zur Höchststufe: %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("deDE", function() return {
 RegisterLocaleBuilder("deDE", function() return { ["Reset debug settings"] = "Debug-Einstellungen zurücksetzen" } end)
 
 RegisterLocaleBuilder("deDE", function() return { ["Force 2D portraits in Druid forms"] = "2D-Porträts in Druidengestalten erzwingen", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Verwendet während der Verwandlung ein 2D-Porträt und stellt danach das gewählte Porträt wieder her." } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Show saved Beast Training skills"] = "Gespeicherte Tierausbildungsfähigkeiten anzeigen", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Experimentelle Funktion; kann Probleme verursachen. Zeigt noch nicht erlernte Fähigkeiten aus der gespeicherten Tierausbildungsliste des aktuellen Begleiters. Öffne die Tierausbildung zum Aktualisieren; die Verfügbarkeit kann veraltet sein und neue Fähigkeiten können fehlen." } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Setzt Debug-Anpassungen zurück, einschließlich gespeicherter Porträt-, Partikel-, Sound- und Textureinstellungen. Zeiten und Berichte bleiben erhalten. Der Debug-Modus bleibt eingeschaltet." } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Saved Beast Training"] = "Gespeicherte Tierausbildung", ["Last refreshed: %s"] = "Zuletzt aktualisiert: %s", ["Last refreshed: unknown"] = "Zuletzt aktualisiert: unbekannt", ["Open Beast Training to refresh this list."] = "Öffne die Tierausbildung, um diese Liste zu aktualisieren." } end)
+
+RegisterLocaleBuilder("deDE", function() return { ["Total played: %s"] = "Gesamte Spielzeit: %s" } end)

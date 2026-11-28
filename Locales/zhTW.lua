@@ -247,7 +247,6 @@ RegisterLocaleBuilder("zhTW", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("zhTW", function() return {
     ["Portrait sparks"] = "頭像火花",
-    ["New ability sparkles"] = "新技能閃光",
     ["Background embers"] = "背景餘燼",
     ["Frame edge glow"] = "邊框光暈",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("zhTW", function() return { ["Firework size (%)"] = "煙�
 RegisterLocaleBuilder("zhTW", function() return { ["Frame inset (px)"] = "邊框內距（像素）" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("zhTW", function() return { ["Portrait ring glint"] = "頭像邊框閃光", ["Ability reveal shine"] = "技能出現光澤", ["Milestone anticipation"] = "里程碑預備效果", ["Stat impact sparks"] = "屬性提升火花", ["Background depth"] = "背景縱深", ["Closing animation"] = "關閉動畫", ["Milestone color transition"] = "里程碑顏色過渡" } end)
+RegisterLocaleBuilder("zhTW", function() return { ["Portrait ring glint"] = "頭像邊框閃光", ["Closing animation"] = "關閉動畫" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Screenshot milestones"] = "里程碑等級截圖" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["Portrait motes"] = "頭像微粒", ["Background motes"] = "背景微粒" } end)
 RegisterLocaleBuilder("zhTW", function() return { ["3D Portraits may consume more memory."] = "3D頭像可能佔用更多記憶體。" } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("zhTW", function() return {
     ["%dh %02dm %02ds"] = "%d小時%02d分%02d秒", ["%dm %02ds"] = "%d分%02d秒", ["%ds"] = "%d秒",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("zhTW", function() return {
     ["Max Level Celebration"] = "滿級慶祝",
     ["Time to max level: %s"] = "升至滿級用時：%s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("zhTW", function() return {
 RegisterLocaleBuilder("zhTW", function() return { ["Reset debug settings"] = "重設偵錯設定" } end)
 
 RegisterLocaleBuilder("zhTW", function() return { ["Force 2D portraits in Druid forms"] = "德魯伊形態下強制使用2D頭像", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "變形時使用2D頭像，離開形態後恢復所選頭像。" } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Show saved Beast Training skills"] = "顯示已儲存的野獸訓練技能", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "實驗性功能，可能導致問題。顯示目前寵物已儲存的野獸訓練清單中尚未學會的技能。開啟野獸訓練以更新；儲存的可用狀態可能已過時，也可能缺少新解鎖的技能。" } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "還原除錯設定，包括已儲存的頭像調整、粒子、音效替換和材質調整。保留時間紀錄與報告，除錯模式維持開啟。" } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Saved Beast Training"] = "已儲存的野獸訓練", ["Last refreshed: %s"] = "上次更新：%s", ["Last refreshed: unknown"] = "上次更新：未知", ["Open Beast Training to refresh this list."] = "開啟野獸訓練以更新此清單。" } end)
+
+RegisterLocaleBuilder("zhTW", function() return { ["Total played: %s"] = "總遊戲時間：%s" } end)

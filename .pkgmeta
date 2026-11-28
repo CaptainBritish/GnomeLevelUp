@@ -2,15 +2,12 @@ package-as: GnomeLevelUp
 manual-changelog: CHANGELOG.md
 enable-nolib-creation: no
 
-move-folders:
-  GnomeLevelUp/Examples/GnomeLevelUp_ThemeExample: GnomeLevelUp_ThemeExample
-
 ignore:
   - .github
   - .git
   - .vscode
   - changes.txt
   - Tools
+  - Examples
   - CONTRIBUTING.md
   - LOCALIZATION.md
-  - Locales/Template.lua

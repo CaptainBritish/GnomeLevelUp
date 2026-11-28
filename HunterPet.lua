@@ -8,6 +8,7 @@ local petSpellDefinitions = {}
 local petSpellByTeachingID = {}
 local beastTrainingOpen = false
 local cleanedPetTrainingStore
+local normalizedPetTrainingStore, NormalizePetTrainingStore
 -- NPC-taught Beast Training spell IDs, matched to GLU's pet-effect families.
 -- Teaching and pet-effect IDs are distinct in Forever build 1.60.1.70959.
 local teachingSpellIDsByFamily = {
@@ -52,7 +53,13 @@ end
 local function GetSavedPetTraining()
     if not IsPetTrackingEnabled() or type(GnomeLevelUpCharacterDB) ~= "table" then return end
     local store = GnomeLevelUpCharacterDB.hunterPetTraining
-    if type(store) == "table" and store.schemaVersion == 1 then return store end
+    if type(store) == "table" and store.schemaVersion == 1 then
+        if store ~= normalizedPetTrainingStore then
+            NormalizePetTrainingStore(store)
+            normalizedPetTrainingStore = store
+        end
+        return store
+    end
 end
 
 local function GetTimestamp()
@@ -92,6 +99,10 @@ local function EnsurePetTrainingStore()
         GnomeLevelUpCharacterDB.hunterPetTraining = store
     end
     if store ~= cleanedPetTrainingStore then
+        if store ~= normalizedPetTrainingStore then
+            NormalizePetTrainingStore(store)
+            normalizedPetTrainingStore = store
+        end
         for _, pet in pairs(store.pets) do
             pet.trainerOffers = nil
         end
@@ -119,7 +130,7 @@ local function UpdateCurrentPetRecord(store)
     pet.sequence = store.sequence
     pet.lastSeen = GetTimestamp()
     local level, family = ReadOptionalAPI(UnitLevel, "pet"), ReadOptionalAPI(UnitCreatureFamily, "pet")
-    if pet.level ~= level or pet.family ~= family then
+    if pet.family and family and pet.family ~= family then
         pet.availability = {}
     end
     pet.level = level
@@ -157,6 +168,36 @@ local function FindPetSpellID(name, rank)
     for id, definition in pairs(petSpellDefinitions) do
         if definition.rank == rank and GetLocalizedSpellName(id) == name then
             return id
+        end
+    end
+end
+
+-- Upgrade old name/rank keys once, rather than interpreting them on every render.
+NormalizePetTrainingStore = function(store)
+    store.pets = type(store.pets) == "table" and store.pets or {}
+    store.teaching = type(store.teaching) == "table" and store.teaching or {}
+    store.trainerOffers = type(store.trainerOffers) == "table" and store.trainerOffers or {}
+    for guid, pet in pairs(store.pets) do
+        if type(pet) ~= "table" then
+            store.pets[guid] = nil
+        else
+            pet.spells = type(pet.spells) == "table" and pet.spells or {}
+            pet.spellRanks = type(pet.spellRanks) == "table" and pet.spellRanks or {}
+            local skills = {}
+            for key, skill in pairs(type(pet.availability) == "table" and pet.availability or {}) do
+                if type(skill) == "table" then
+                    local id = skill.spellID or (type(key) == "number" and key or nil)
+                    local definition = id and petSpellDefinitions[id]
+                    local oldName, oldRank
+                    if type(key) == "string" then oldName, oldRank = key:match("^(.*):(%d+)$") end
+                    skill.spellID = id
+                    skill.name = type(skill.name) == "string" and skill.name or (id and GetLocalizedSpellName(id)) or oldName
+                    skill.rank = tonumber(skill.rank) or (definition and definition.rank) or tonumber(oldRank) or 1
+                    skill.normalizedName = ns.NormalizeTrainingName(skill.name)
+                    SaveBoundedEntry(skills, key, skill)
+                end
+            end
+            pet.availability = skills
         end
     end
 end
@@ -230,13 +271,21 @@ local function UpdatePetSpellSnapshot()
     if not pet or not ns.SnapshotPetSpellBook then return end
     local book = ns.SnapshotPetSpellBook(true)
     if ReadOptionalAPI(UnitGUID, "pet") ~= guid then return end
-    if book and next(book.ids or {}) then
+    if book and (next(book.ids or {}) or next(book.ranks or {})) then
         local spells = {}
         for id in pairs(book.ids) do
             SaveBoundedEntry(spells, id, true)
         end
         pet.spells = spells
+        pet.spellRanks = {}
+        for name, rank in pairs(book.ranks or {}) do SaveBoundedEntry(pet.spellRanks, name, rank) end
         pet.spellsSeen = GetTimestamp()
+        for _, skill in pairs(pet.availability) do
+            if type(skill) == "table" and ((skill.spellID and spells[skill.spellID])
+                or (skill.name and book.ranks and (book.ranks[ns.NormalizeTrainingName(skill.name)] or 0) >= (skill.rank or 1))) then
+                skill.status = "used"
+            end
+        end
     end
 end
 
@@ -257,12 +306,18 @@ local function ReadBeastTraining()
         if type(name) == "string" and name ~= "" and status ~= "header" then
             local rank = type(subtext) == "string" and tonumber(subtext:match("(%d+)")) or 1
             local id = FindPetSpellID(name, rank or 1)
-            -- Unknown/wild ranks are kept separately without adding new popup
-            -- entries. Missing rows never remove teaching knowledge.
+            -- Beast-only ranks stay outside the NPC catalogue. The experimental
+            -- popup option reads this saved list without adding catalogue entries.
             local key = id or (name .. ":" .. tostring(rank or 1))
             RecordTeachingRank(store, key)
             if pet and ReadOptionalAPI(UnitGUID, "pet") == guid then
                 SaveBoundedEntry(pet.availability, key, {
+                    name = name,
+                    normalizedName = ns.NormalizeTrainingName(name),
+                    rank = rank or 1,
+                    rankText = subtext,
+                    spellID = id,
+                    icon = ReadOptionalAPI(rawget(_G, "GetCraftIcon"), index),
                     status = status,
                     trainingPoints = ReadOptionalAPI(GetCraftTrainingPoints, index),
                     lastSeen = GetTimestamp(),
@@ -271,9 +326,56 @@ local function ReadBeastTraining()
         end
     end
     store.teachingSeen = GetTimestamp()
-    if ns.InvalidateTrainerIndex then
-        ns.InvalidateTrainerIndex()
+end
+
+-- Saved availability is a reminder, not a prediction of newly unlocked ranks.
+-- Missing rows in a partial scan never erase the pet's previous list.
+function ns.GetSavedBeastTrainingAbilities()
+    if not IsPetTrackingEnabled() or ns.db.showSavedBeastTraining ~= true
+        or ns.db.showHunterPetSkills == false then return {} end
+    local store = GetSavedPetTraining()
+    local guid = ReadOptionalAPI(UnitGUID, "pet")
+    if IsSecretValue(guid) or type(guid) ~= "string" then return {} end
+    local pet = store and store.pets[guid]
+    if not pet then return {} end
+    local saved = {}
+    for key, skill in pairs(pet.availability or {}) do
+        if type(skill) == "table" and skill.status == "available" then
+            local id = skill.spellID
+            local definition = id and petSpellDefinitions[id]
+            local name = skill.name or (id and GetLocalizedSpellName(id))
+            local rank = skill.rank
+            local family = skill.normalizedName or ns.NormalizeTrainingName(name)
+            local learned = (id and pet.spells and pet.spells[id])
+                or (family and pet.spellRanks and (pet.spellRanks[family] or 0) >= rank)
+            if family and not learned and (not ns.db.showOnlyNewSkills or rank == 1) then
+                saved[#saved + 1] = {
+                    id = id,
+                    name = name .. (skill.rankText and skill.rankText ~= "" and (" (" .. skill.rankText .. ")")
+                        or (rank > 1 and (" (" .. rank .. ")") or "")),
+                    icon = skill.icon or 134400,
+                    trainingFamily = definition and ("spell:" .. definition.family) or ("beast:" .. family),
+                    trainingRank = rank,
+                    isNewAbility = rank == 1,
+                    savedBeastTraining = true,
+                    beastTrainingKey = key,
+                    beastTrainingPetGUID = guid,
+                }
+            end
+        end
     end
+    table.sort(saved, function(a, b)
+        if a.name == b.name then return a.trainingRank < b.trainingRank end
+        return a.name < b.name
+    end)
+    return saved
+end
+
+function ns.GetSavedBeastTrainingLastSeen(guid, key)
+    local store = GetSavedPetTraining()
+    local pet = store and store.pets[guid]
+    local skill = pet and pet.availability and pet.availability[key]
+    return skill and skill.lastSeen
 end
 
 local refreshQueued = false
@@ -285,6 +387,7 @@ local function QueuePetTrainingRefresh()
         ReadKnownTeachingSpells()
         UpdatePetSpellSnapshot()
         ReadBeastTraining()
+        if ns.RefreshSavedBeastTrainingPopup then ns.RefreshSavedBeastTrainingPopup() end
     end
     if C_Timer and C_Timer.After then
         C_Timer.After(0.2, RefreshPetTraining)
@@ -314,13 +417,6 @@ frame:SetScript("OnEvent", function(_, event, eventArgument)
     local store = EnsurePetTrainingStore()
     if event == "LEARNED_SPELL_IN_SKILL_LINE" and petSpellByTeachingID[eventArgument] and store then
         RecordTeachingRank(store, eventArgument)
-    end
-    if event == "UNIT_PET" or event == "PET_BAR_UPDATE" or event == "UNIT_LEVEL"
-        or event == "UNIT_PET_TRAINING_POINTS" or event == "PET_STABLE_UPDATE" then
-        local pet = store and UpdateCurrentPetRecord(store)
-        if pet then
-            pet.availability = {}
-        end
     end
     QueuePetTrainingRefresh()
 end)

@@ -247,7 +247,6 @@ RegisterLocaleBuilder("ruRU", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("ruRU", function() return {
     ["Portrait sparks"] = "Искры портрета",
-    ["New ability sparkles"] = "Искры новых способностей",
     ["Background embers"] = "Угольки на фоне",
     ["Frame edge glow"] = "Свечение рамки",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("ruRU", function() return { ["Firework size (%)"] = "Ра�
 RegisterLocaleBuilder("ruRU", function() return { ["Frame inset (px)"] = "Отступ рамки (пкс)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("ruRU", function() return { ["Portrait ring glint"] = "Блик на кольце портрета", ["Ability reveal shine"] = "Блик при появлении способностей", ["Milestone anticipation"] = "Подготовка юбилейного эффекта", ["Stat impact sparks"] = "Искры прироста характеристик", ["Background depth"] = "Глубина фона", ["Closing animation"] = "Анимация закрытия", ["Milestone color transition"] = "Смена цвета юбилейного эффекта" } end)
+RegisterLocaleBuilder("ruRU", function() return { ["Portrait ring glint"] = "Блик на кольце портрета", ["Closing animation"] = "Анимация закрытия" } end)
 RegisterLocaleBuilder("ruRU", function() return { ["Screenshot milestones"] = "Скриншоты на юбилейных уровнях" } end)
 RegisterLocaleBuilder("ruRU", function() return { ["Portrait motes"] = "Частицы портрета", ["Background motes"] = "Фоновые частицы" } end)
 RegisterLocaleBuilder("ruRU", function() return { ["3D Portraits may consume more memory."] = "3D-портреты могут потреблять больше памяти." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("ruRU", function() return {
     ["%dh %02dm %02ds"] = "%dч %02dмин %02dс", ["%dm %02ds"] = "%dмин %02dс", ["%ds"] = "%dс",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("ruRU", function() return {
     ["Max Level Celebration"] = "Празднование максимального уровня",
     ["Time to max level: %s"] = "Время до максимального уровня: %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("ruRU", function() return {
 RegisterLocaleBuilder("ruRU", function() return { ["Reset debug settings"] = "Сбросить настройки отладки" } end)
 
 RegisterLocaleBuilder("ruRU", function() return { ["Force 2D portraits in Druid forms"] = "2D-портреты в обликах друида", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Использовать 2D-портрет при смене облика и возвращать выбранный портрет при выходе из него." } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Show saved Beast Training skills"] = "Показывать сохранённые навыки обучения питомца", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Экспериментальная функция; возможны проблемы. Показывает неизученные навыки из сохранённого списка обучения текущего питомца. Откройте обучение питомца для обновления; доступность может устареть, а новые навыки могут отсутствовать." } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Сбрасывает настройки отладки, включая сохранённые настройки портретов, частиц, звуков и текстур. Времена и отчёты сохраняются. Режим отладки остаётся включённым." } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Saved Beast Training"] = "Сохранённое обучение питомца", ["Last refreshed: %s"] = "Последнее обновление: %s", ["Last refreshed: unknown"] = "Последнее обновление: неизвестно", ["Open Beast Training to refresh this list."] = "Откройте обучение питомца, чтобы обновить этот список." } end)
+
+RegisterLocaleBuilder("ruRU", function() return { ["Total played: %s"] = "Общее время игры: %s" } end)

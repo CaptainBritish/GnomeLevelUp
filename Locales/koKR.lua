@@ -247,7 +247,6 @@ RegisterLocaleBuilder("koKR", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("koKR", function() return {
     ["Portrait sparks"] = "초상화 불꽃",
-    ["New ability sparkles"] = "새 능력 반짝임",
     ["Background embers"] = "배경 불씨",
     ["Frame edge glow"] = "테두리 빛",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("koKR", function() return { ["Firework size (%)"] = "불�
 RegisterLocaleBuilder("koKR", function() return { ["Frame inset (px)"] = "프레임 안쪽 여백 (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("koKR", function() return { ["Portrait ring glint"] = "초상화 테두리 반짝임", ["Ability reveal shine"] = "능력 등장 광택", ["Milestone anticipation"] = "주요 레벨 사전 효과", ["Stat impact sparks"] = "능력치 증가 불꽃", ["Background depth"] = "배경 깊이", ["Closing animation"] = "닫기 애니메이션", ["Milestone color transition"] = "주요 레벨 색상 전환" } end)
+RegisterLocaleBuilder("koKR", function() return { ["Portrait ring glint"] = "초상화 테두리 반짝임", ["Closing animation"] = "닫기 애니메이션" } end)
 RegisterLocaleBuilder("koKR", function() return { ["Screenshot milestones"] = "주요 레벨 스크린샷" } end)
 RegisterLocaleBuilder("koKR", function() return { ["Portrait motes"] = "초상화 입자", ["Background motes"] = "배경 입자" } end)
 RegisterLocaleBuilder("koKR", function() return { ["3D Portraits may consume more memory."] = "3D 초상화는 메모리를 더 사용할 수 있습니다." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("koKR", function() return {
     ["%dh %02dm %02ds"] = "%d시간 %02d분 %02d초", ["%dm %02ds"] = "%d분 %02d초", ["%ds"] = "%d초",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("koKR", function() return {
     ["Max Level Celebration"] = "최고 레벨 축하",
     ["Time to max level: %s"] = "최고 레벨까지 걸린 시간: %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("koKR", function() return {
 RegisterLocaleBuilder("koKR", function() return { ["Reset debug settings"] = "디버그 설정 초기화" } end)
 
 RegisterLocaleBuilder("koKR", function() return { ["Force 2D portraits in Druid forms"] = "드루이드 변신 중 2D 초상화 사용", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "변신 중에는 2D 초상화를 사용하고 변신이 풀리면 선택한 초상화로 복원합니다." } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Show saved Beast Training skills"] = "저장된 야수 훈련 기술 표시", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "실험적인 기능으로 문제가 발생할 수 있습니다. 현재 야수의 저장된 훈련 목록에서 아직 배우지 않은 기술을 표시합니다. 야수 훈련을 열어 갱신하세요. 저장된 습득 가능 여부가 오래되었거나 새 기술이 누락될 수 있습니다." } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "저장된 초상화 조정, 입자, 소리 및 텍스처 설정을 포함한 디버그 조정을 초기화합니다. 기록 시간과 보고서는 유지되며 디버그 모드는 계속 켜져 있습니다." } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Saved Beast Training"] = "저장된 야수 훈련", ["Last refreshed: %s"] = "마지막 갱신: %s", ["Last refreshed: unknown"] = "마지막 갱신: 알 수 없음", ["Open Beast Training to refresh this list."] = "이 목록을 갱신하려면 야수 훈련을 여세요." } end)
+
+RegisterLocaleBuilder("koKR", function() return { ["Total played: %s"] = "총 플레이 시간: %s" } end)

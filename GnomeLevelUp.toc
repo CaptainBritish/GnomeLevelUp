@@ -41,6 +41,7 @@ SpellBookCompat.lua
 WarlockPet.lua
 HunterPet.lua
 Stats.lua
+Migrations.lua
 Core.lua
 Profiles.lua
 ProfileTransfer.lua

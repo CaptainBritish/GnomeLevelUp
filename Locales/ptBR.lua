@@ -247,7 +247,6 @@ RegisterLocaleBuilder("ptBR", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("ptBR", function() return {
     ["Portrait sparks"] = "Faíscas do retrato",
-    ["New ability sparkles"] = "Brilhos nas novas habilidades",
     ["Background embers"] = "Brasas no fundo",
     ["Frame edge glow"] = "Brilho da moldura",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("ptBR", function() return { ["Firework size (%)"] = "Taman
 RegisterLocaleBuilder("ptBR", function() return { ["Frame inset (px)"] = "Margem da moldura (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("ptBR", function() return { ["Portrait ring glint"] = "Brilho do anel do retrato", ["Ability reveal shine"] = "Brilho ao revelar habilidades", ["Milestone anticipation"] = "Antecipação de marcos", ["Stat impact sparks"] = "Faíscas de ganho de atributos", ["Background depth"] = "Profundidade do fundo", ["Closing animation"] = "Animação de fechamento", ["Milestone color transition"] = "Transição de cor dos marcos" } end)
+RegisterLocaleBuilder("ptBR", function() return { ["Portrait ring glint"] = "Brilho do anel do retrato", ["Closing animation"] = "Animação de fechamento" } end)
 RegisterLocaleBuilder("ptBR", function() return { ["Screenshot milestones"] = "Capturas de tela nos marcos" } end)
 RegisterLocaleBuilder("ptBR", function() return { ["Portrait motes"] = "Partículas do retrato", ["Background motes"] = "Partículas de fundo" } end)
 RegisterLocaleBuilder("ptBR", function() return { ["3D Portraits may consume more memory."] = "Retratos 3D podem consumir mais memória." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("ptBR", function() return {
     ["%dh %02dm %02ds"] = "%dh %02dmin %02ds", ["%dm %02ds"] = "%dmin %02ds", ["%ds"] = "%ds",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("ptBR", function() return {
     ["Max Level Celebration"] = "Celebração do nível máximo",
     ["Time to max level: %s"] = "Tempo até o nível máximo: %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("ptBR", function() return {
 RegisterLocaleBuilder("ptBR", function() return { ["Reset debug settings"] = "Redefinir configurações de depuração" } end)
 
 RegisterLocaleBuilder("ptBR", function() return { ["Force 2D portraits in Druid forms"] = "Forçar retratos 2D nas formas de druida", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Usa um retrato 2D durante a transformação e restaura o retrato selecionado ao sair da forma." } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Show saved Beast Training skills"] = "Mostrar habilidades de treinamento salvas", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Recurso experimental; pode causar problemas. Mostra habilidades não aprendidas da lista de treinamento salva do ajudante atual. Abra Treinamento de Feras para atualizar; a disponibilidade pode estar desatualizada e novas habilidades podem estar ausentes." } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Restaura os ajustes de depuração, incluindo retratos salvos, partículas, sons e texturas. Tempos e relatórios são mantidos. O modo de depuração permanece ativado." } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Saved Beast Training"] = "Treinamento de Feras salvo", ["Last refreshed: %s"] = "Última atualização: %s", ["Last refreshed: unknown"] = "Última atualização: desconhecida", ["Open Beast Training to refresh this list."] = "Abra Treinamento de Feras para atualizar esta lista." } end)
+
+RegisterLocaleBuilder("ptBR", function() return { ["Total played: %s"] = "Tempo total jogado: %s" } end)

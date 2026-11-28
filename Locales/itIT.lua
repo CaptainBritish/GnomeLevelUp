@@ -247,7 +247,6 @@ RegisterLocaleBuilder("itIT", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("itIT", function() return {
     ["Portrait sparks"] = "Scintille del ritratto",
-    ["New ability sparkles"] = "Scintille delle nuove abilità",
     ["Background embers"] = "Braci sullo sfondo",
     ["Frame edge glow"] = "Bagliore della cornice",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("itIT", function() return { ["Firework size (%)"] = "Dimen
 RegisterLocaleBuilder("itIT", function() return { ["Frame inset (px)"] = "Margine della cornice (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("itIT", function() return { ["Portrait ring glint"] = "Bagliore dell’anello del ritratto", ["Ability reveal shine"] = "Riflesso alla comparsa delle abilità", ["Milestone anticipation"] = "Anticipazione dei traguardi", ["Stat impact sparks"] = "Scintille dei miglioramenti", ["Background depth"] = "Profondità dello sfondo", ["Closing animation"] = "Animazione di chiusura", ["Milestone color transition"] = "Transizione colore dei traguardi" } end)
+RegisterLocaleBuilder("itIT", function() return { ["Portrait ring glint"] = "Bagliore dell’anello del ritratto", ["Closing animation"] = "Animazione di chiusura" } end)
 RegisterLocaleBuilder("itIT", function() return { ["Screenshot milestones"] = "Screenshot ai traguardi" } end)
 RegisterLocaleBuilder("itIT", function() return { ["Portrait motes"] = "Particelle del ritratto", ["Background motes"] = "Particelle di sfondo" } end)
 RegisterLocaleBuilder("itIT", function() return { ["3D Portraits may consume more memory."] = "I ritratti 3D possono consumare più memoria." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("itIT", function() return {
     ["%dh %02dm %02ds"] = "%dh %02dmin %02ds", ["%dm %02ds"] = "%dmin %02ds", ["%ds"] = "%ds",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("itIT", function() return {
     ["Max Level Celebration"] = "Celebrazione del livello massimo",
     ["Time to max level: %s"] = "Tempo per il livello massimo: %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("itIT", function() return {
 RegisterLocaleBuilder("itIT", function() return { ["Reset debug settings"] = "Ripristina impostazioni di debug" } end)
 
 RegisterLocaleBuilder("itIT", function() return { ["Force 2D portraits in Druid forms"] = "Forza ritratti 2D nelle forme del druido", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Usa un ritratto 2D durante la trasformazione e ripristina il ritratto selezionato quando termina." } end)
+
+RegisterLocaleBuilder("itIT", function() return { ["Show saved Beast Training skills"] = "Mostra abilità di addestramento salvate", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Funzione sperimentale; può causare problemi. Mostra le abilità non apprese nell’elenco di addestramento salvato della mascotte attuale. Apri Addestramento bestie per aggiornarlo; la disponibilità potrebbe essere obsoleta e potrebbero mancare nuove abilità." } end)
+
+RegisterLocaleBuilder("itIT", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Ripristina le impostazioni di debug, comprese le modifiche salvate a ritratti, particelle, suoni e texture. Tempi e rapporti vengono conservati. La modalità debug resta attiva." } end)
+
+RegisterLocaleBuilder("itIT", function() return { ["Saved Beast Training"] = "Addestramento bestie salvato", ["Last refreshed: %s"] = "Ultimo aggiornamento: %s", ["Last refreshed: unknown"] = "Ultimo aggiornamento: sconosciuto", ["Open Beast Training to refresh this list."] = "Apri Addestramento bestie per aggiornare questo elenco." } end)
+
+RegisterLocaleBuilder("itIT", function() return { ["Total played: %s"] = "Tempo totale giocato: %s" } end)

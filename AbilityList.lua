@@ -3,6 +3,20 @@ local ADDON_NAME, ns = ...
 -- The popup supplies sizing and animation hooks; this module owns list layout,
 -- input routing and restoration of the scroll position after a rebuild.
 function ns.InstallAbilityList(render, content, frame, style)
+    local GRID = { columns = 3, rows = 3, denseRows = 4, denseThreshold = 6 }
+    local function PreferredRows(count, singleColumn)
+        if count == 2 and not singleColumn then return 2 end
+        return not singleColumn and count > GRID.denseThreshold and GRID.denseRows or GRID.rows
+    end
+    local function TotalGridRows(count, rows, columns)
+        return math.min(count, rows) + math.ceil(math.max(0, count - rows * columns) / columns)
+    end
+    local function GridPosition(index, rows, columns)
+        local zero = index - 1
+        if zero < rows * columns then return math.floor(zero / rows), zero % rows end
+        local overflow = zero - rows * columns
+        return overflow % columns, rows + math.floor(overflow / columns)
+    end
     function render.AbilityScrollRange(viewport)
         if viewport.scrollController then return content.abilityViewport.sharedMaximum or 0 end
         return viewport.scrollMaximum or 0
@@ -178,7 +192,10 @@ function ns.InstallAbilityList(render, content, frame, style)
         local popDuration = style.BASE_STAT_SLIDE_DURATION / speed
         local vertical = style.IsHorizontalLayout()
         local singleColumn = vertical and row == content.petAbilityRow
-        row.viewport.visibleSlots = singleColumn and 3 or 9
+        local gridRows = vertical and PreferredRows(count, singleColumn) or GRID.rows
+        row.viewport.minimumRows = GRID.rows
+        row.viewport.preferredRows = gridRows
+        row.viewport.visibleSlots = gridRows * (singleColumn and 1 or GRID.columns)
         local controller = row.viewport.scrollController or row.viewport.slider
         local previousValue = skipAnimation and row.viewport.verticalLayout == vertical and controller:GetValue() or 0
         row.viewport.requestedScroll = previousValue
@@ -276,13 +293,13 @@ function ns.InstallAbilityList(render, content, frame, style)
             or style.GetTextWidth()
         row.viewport:SetWidth(viewportWidth)
         local horizontalGrid = vertical and not singleColumn
-        local maxColumns = vertical and (horizontalGrid and 3 or 1) or AbilityIconColumns(cellWidth)
+        local maxColumns = vertical and (horizontalGrid and GRID.columns or 1) or AbilityIconColumns(cellWidth)
         local shouldScroll = not vertical and style.UseHorizontalAbilityScroll() and count > maxColumns
         local columns = shouldScroll and count or math.min(count, maxColumns)
         local rows = shouldScroll and 1 or math.ceil(count / maxColumns)
         if horizontalGrid then
-            columns = 3
-            rows = math.min(count, 3) + math.ceil(math.max(0, count - 9) / 3)
+            columns = GRID.columns
+            rows = TotalGridRows(count, gridRows, columns)
         end
         local totalWidth = columns * cellWidth + (columns - 1) * gap
         local cellHeight = style.AbilityCellHeight(rowIconSize)
@@ -290,6 +307,9 @@ function ns.InstallAbilityList(render, content, frame, style)
         local verticalGap = vertical and 0 or gap
         row.viewport.cellHeight = cellHeight
         row.viewport.rowIconSize = rowIconSize
+        row.viewport.baseCellHeight = cellHeight
+        row.viewport.baseRowIconSize = rowIconSize
+        row.viewport.iconFitScale = 1
         row.viewport.cellWidth = cellWidth
         row.viewport.gridColumns = columns
         row.viewport.cellGap = cellGap
@@ -298,7 +318,7 @@ function ns.InstallAbilityList(render, content, frame, style)
         local viewportHeight = totalHeight
         if vertical then
             -- Keep a fixed viewport height while additional entries scroll vertically.
-            local visibleRows = 3
+            local visibleRows = gridRows
             viewportHeight = math.min(totalHeight, visibleRows * cellHeight - cellGap + (visibleRows - 1) * verticalGap)
             shouldScroll = count > row.viewport.visibleSlots and totalHeight > viewportHeight
         end
@@ -371,6 +391,9 @@ function ns.InstallAbilityList(render, content, frame, style)
             icon.previousRankSpellID = spell.previousRankSpellID
             icon.spellName = spellName
             icon.isNewAbility = spell.isNewAbility
+            icon.savedBeastTraining = spell.savedBeastTraining
+            icon.beastTrainingKey = spell.beastTrainingKey
+            icon.beastTrainingPetGUID = spell.beastTrainingPetGUID
             local formattedCost = icon.formattedCost
             local texture = spell.icon
             if not texture and icon.textureSpellID == spellID then
@@ -394,18 +417,12 @@ function ns.InstallAbilityList(render, content, frame, style)
             local zeroIndex = i - 1
             local column = zeroIndex % columns
             local rowIndex = math.floor(zeroIndex / columns)
-            if horizontalGrid and i <= 9 then
-                column = math.floor(zeroIndex / 3)
-                rowIndex = zeroIndex % 3
-            elseif horizontalGrid then
-                column = (i - 10) % 3
-                rowIndex = 3 + math.floor((i - 10) / 3)
-            end
+            if horizontalGrid then column, rowIndex = GridPosition(i, gridRows, columns) end
             icon.layoutRow = rowIndex
             local x = startX + column * (cellWidth + gap)
-            if horizontalGrid and count <= 6 then
-                local occupiedColumns = math.ceil(count / 3)
-                x = x + (3 - occupiedColumns) * (cellWidth + gap) / 2
+            if horizontalGrid and count <= GRID.denseThreshold then
+                local occupiedColumns = math.ceil(count / gridRows)
+                x = x + (columns - occupiedColumns) * (cellWidth + gap) / 2
             end
             if not vertical and not shouldScroll then
                 local rowColumns = math.min(columns, count - rowIndex * columns)
@@ -445,13 +462,17 @@ function ns.InstallAbilityList(render, content, frame, style)
         local function IconSize(icon, size)
             return icon.isNewAbility == true and size or style.NormalAbilityIconSize() * size / base
         end
+        local function GroupPosition(index)
+            if not vertical then return index, 1 end
+            local column, row = GridPosition(index, viewport.gridRows, viewport.gridColumns)
+            return column + 1, row + 1
+        end
         local function Measure(size, position)
             local columns, rows = {}, {}
             for i = 1, count do
                 local icon = pool[i]
                 local iconSize = IconSize(icon, size)
-                local column = vertical and math.floor((i - 1) / viewport.gridRows) + 1 or i
-                local row = vertical and (i - 1) % viewport.gridRows + 1 or 1
+                local column, row = GroupPosition(i)
                 local cellWidth = math.max(iconSize, icon.formattedCost and icon.costText:GetWidth() or 0)
                 local cellHeight = iconSize + (icon.formattedCost and style.ABILITY_COST_GAP + style.AbilityCostHeight() or 0)
                 columns[column] = math.max(columns[column] or 0, cellWidth)
@@ -464,12 +485,13 @@ function ns.InstallAbilityList(render, content, frame, style)
                 for i = 1, count do
                     local icon = pool[i]
                     local iconSize = IconSize(icon, size)
-                    local column = vertical and math.floor((i - 1) / viewport.gridRows) + 1 or i
-                    local row = vertical and (i - 1) % viewport.gridRows + 1 or 1
+                    local column, row = GroupPosition(i)
                     local x, y = -groupWidth / 2 + columns[column] / 2, (vertical and viewport.row:GetHeight() or groupHeight) / 2 - iconSize / 2
                     if vertical and count == 1 then
                         local lift = 18 / math.max(.001, content:GetScale() * viewport:GetScale())
                         y = math.min(lift, math.max(0, (viewport.row:GetHeight() - iconSize) / 2))
+                    elseif vertical and count == 2 then
+                        y = groupHeight / 2 - iconSize / 2
                     end
                     for j = 1, column - 1 do x = x + columns[j] + gap end
                     for j = 1, row - 1 do y = y - rows[j] - gap end
@@ -500,17 +522,16 @@ function ns.InstallAbilityList(render, content, frame, style)
     end
 
     function render.UpdateTrainerAbilityIcons(trainerAbilities, skipAnimation)
-        content.currentTrainerAbilities = trainerAbilities or {}
+        local displayed
+        trainerAbilities, displayed = ns.BuildPopupAbilityList(trainerAbilities)
+        content.currentTrainerAbilities = trainerAbilities
         if not ns.NewAbilitiesEnabled() then
             UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, nil, {}, false, skipAnimation)
             style.ApplyToTextLayers(content.noAbilitiesText, "Hide")
             render.RefreshAbilityHeader()
             return
         end
-        if ns.SupportsTrainerData() and ns.db.showLatestTrainingRanks ~= false then
-            trainerAbilities = ns.LatestTrainingRanks(content.currentTrainerAbilities)
-        end
-        UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, content.noAbilitiesText, trainerAbilities, true, skipAnimation)
+        UpdateAbilityIcons(content.abilityRow, content.abilityIconPool, content.noAbilitiesText, displayed, true, skipAnimation)
         if ns.GetCurrentFlavor() == "retail" then
             style.ApplyToTextLayers(content.noAbilitiesText, "Hide")
         end
@@ -553,11 +574,20 @@ function ns.InstallAbilityList(render, content, frame, style)
                 viewport:ClearAllPoints()
                 viewport:SetPoint("TOP", divider, "BOTTOM", 0, -topGap)
                 viewport.abilityPadding = abilityPadding
-                local columns = viewport == main and 3 or 1
+                local columns = viewport == main and GRID.columns or 1
+                if viewport == main and (count > GRID.denseThreshold or count == 2) then
+                    local baseHeight, baseIcon = viewport.baseCellHeight, viewport.baseRowIconSize
+                    local fittedHeight = math.min(baseHeight, (height + (viewport.cellGap or 0)) / viewport.preferredRows)
+                    viewport.rowIconSize = math.max(1, baseIcon - (baseHeight - fittedHeight))
+                    viewport.cellHeight = baseHeight - baseIcon + viewport.rowIconSize
+                    viewport.iconFitScale = viewport.rowIconSize / baseIcon
+                end
                 local rows = math.max(1, math.floor((height + (viewport.cellGap or 0)) / viewport.cellHeight))
+                if viewport == main then rows = math.min(rows, viewport.preferredRows) end
                 viewport.gridRows, viewport.gridColumns = rows, columns
                 viewport.visibleSlots = rows * columns
-                local totalRows = math.min(count, rows) + math.ceil(math.max(0, count - viewport.visibleSlots) / columns)
+                viewport.scrollStep = viewport.cellHeight
+                local totalRows = TotalGridRows(count, rows, columns)
                 viewport.rowContentHeight = totalRows * viewport.cellHeight - (viewport.cellGap or 0)
                 viewport:SetHeight(height)
                 viewport.row:SetHeight(math.max(height, viewport.rowContentHeight))
@@ -616,16 +646,16 @@ function ns.InstallAbilityList(render, content, frame, style)
                     local width = occupiedColumns * viewport.cellWidth + (occupiedColumns - 1) * style.AbilityIconGap()
                     for i = 1, viewport.abilityCount do
                         local icon = pool[i]
-                        local zeroIndex = i - 1
                         local rows, columns = viewport.gridRows, viewport.gridColumns
-                        local column = math.floor(zeroIndex / rows)
-                        local rowIndex = zeroIndex % rows
-                        if i > viewport.visibleSlots then
-                            column = (i - viewport.visibleSlots - 1) % columns
-                            rowIndex = rows + math.floor((i - viewport.visibleSlots - 1) / columns)
-                        end
+                        local column, rowIndex = GridPosition(i, rows, columns)
                         icon.layoutRow = rowIndex
                         icon.skipEntrance = rowIndex >= rows
+                        if (viewport.iconFitScale or 1) < 1 then
+                            local base = icon.isNewAbility == true and style.NewAbilityIconSize() or style.NormalAbilityIconSize()
+                            local size = base * viewport.iconFitScale
+                            render.Size(icon, size, size)
+                            render.Size(icon.newAbilityGlow, size * 1.85, size * 1.85)
+                        end
                         local x = -width / 2 + viewport.cellWidth / 2 + column * (viewport.cellWidth + style.AbilityIconGap())
                         -- Align icon bottoms so prices share a baseline in each row.
                         local alignedHeight = style.TrainerCostsVisible(true) and icon:GetHeight() or viewport.rowIconSize

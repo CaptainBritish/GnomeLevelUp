@@ -247,7 +247,6 @@ RegisterLocaleBuilder("frFR", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("frFR", function() return {
     ["Portrait sparks"] = "Étincelles du portrait",
-    ["New ability sparkles"] = "Étincelles des nouvelles techniques",
     ["Background embers"] = "Braises en arrière-plan",
     ["Frame edge glow"] = "Lueur du cadre",
 } end)
@@ -357,7 +356,7 @@ RegisterLocaleBuilder("frFR", function() return { ["Firework size (%)"] = "Taill
 RegisterLocaleBuilder("frFR", function() return { ["Frame inset (px)"] = "Marge du cadre (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("frFR", function() return { ["Portrait ring glint"] = "Éclat de l’anneau du portrait", ["Ability reveal shine"] = "Reflet à l’apparition des capacités", ["Milestone anticipation"] = "Anticipation des niveaux jalons", ["Stat impact sparks"] = "Étincelles des gains de statistiques", ["Background depth"] = "Profondeur de l’arrière-plan", ["Closing animation"] = "Animation de fermeture", ["Milestone color transition"] = "Transition de couleur des niveaux jalons" } end)
+RegisterLocaleBuilder("frFR", function() return { ["Portrait ring glint"] = "Éclat de l’anneau du portrait", ["Closing animation"] = "Animation de fermeture" } end)
 RegisterLocaleBuilder("frFR", function() return { ["Screenshot milestones"] = "Capturer les niveaux de palier" } end)
 RegisterLocaleBuilder("frFR", function() return { ["Portrait motes"] = "Particules du portrait", ["Background motes"] = "Particules d’arrière-plan" } end)
 RegisterLocaleBuilder("frFR", function() return { ["3D Portraits may consume more memory."] = "Les portraits 3D peuvent utiliser davantage de mémoire." } end)
@@ -379,7 +378,7 @@ RegisterLocaleBuilder("frFR", function() return {
     ["%dh %02dm %02ds"] = "%dh %02dmin %02ds", ["%dm %02ds"] = "%dmin %02ds", ["%ds"] = "%ds",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("frFR", function() return {
     ["Max Level Celebration"] = "Célébration du niveau maximum",
     ["Time to max level: %s"] = "Temps jusqu’au niveau maximum : %s",
@@ -707,3 +706,11 @@ RegisterLocaleBuilder("frFR", function() return {
 RegisterLocaleBuilder("frFR", function() return { ["Reset debug settings"] = "Réinitialiser les réglages de débogage" } end)
 
 RegisterLocaleBuilder("frFR", function() return { ["Force 2D portraits in Druid forms"] = "Forcer les portraits 2D sous forme de druide", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Utilise un portrait 2D pendant la transformation et rétablit le portrait choisi en quittant la forme." } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Show saved Beast Training skills"] = "Afficher les techniques de dressage enregistrées", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Fonction expérimentale pouvant causer des problèmes. Affiche les techniques non apprises de la liste de dressage enregistrée pour votre familier actuel. Ouvrez Dressage des bêtes pour l’actualiser ; les disponibilités peuvent être périmées et de nouvelles techniques peuvent manquer." } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Rétablit les réglages de débogage, y compris les ajustements des portraits enregistrés, les particules, les sons et les textures. Les temps et rapports sont conservés. Le mode débogage reste activé." } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Saved Beast Training"] = "Dressage des bêtes enregistré", ["Last refreshed: %s"] = "Dernière actualisation : %s", ["Last refreshed: unknown"] = "Dernière actualisation : inconnue", ["Open Beast Training to refresh this list."] = "Ouvrez Dressage des bêtes pour actualiser cette liste." } end)
+
+RegisterLocaleBuilder("frFR", function() return { ["Total played: %s"] = "Temps de jeu total : %s" } end)

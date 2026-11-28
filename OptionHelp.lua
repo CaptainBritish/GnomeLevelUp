@@ -61,17 +61,6 @@ ns.OPTION_DESCRIPTIONS = {
     ["Sound volume"] = "Adjust GLU sound volume where the client supports it.",
     ["Play sound"] = "Preview the selected sound.",
     ["Milestone interval"] = "Choose how often milestone animations and screenshots trigger. Max-level animations use their own toggle.",
-    ["Milestone Animations"] = "Add celebration effects at the selected milestone interval.",
-    ["Max Level Celebration"] = "Add celebration effects when reaching the level cap.",
-    ["Portrait pulse and starburst"] = "Play the portrait pulse and starburst during the entrance.",
-    ["Highlight new abilities"] = "Make newly learned ability icons shine.",
-    ["Emphasize stat gains"] = "Animate stat totals and highlight their changes.",
-    ["Portrait motes"] = "Show decorative particles around the portrait.",
-    ["Background motes"] = "Show drifting particles behind the popup content.",
-    ["Frame edge glow"] = "Animate a glow around textured frame edges.",
-    ["Portrait and ring settle"] = "Let the portrait ring settle into place during the entrance.",
-    ["Reveal dividers"] = "Animate the section divider lines.",
-    ["Portrait ring glint"] = "Sweep a bright glint around the portrait ring.",
     ["Slide direction"] = "Choose the direction stat rows slide in from.",
     ["Animation speed"] = "Change animation speed without changing display duration.",
     ["Show text shadows"] = "Add shadows and glow behind popup text.",
@@ -86,6 +75,19 @@ ns.OPTION_DESCRIPTIONS = {
     ["Font"] = "Choose the font used by popup text.",
     ["Suspend Preview"] = "Pause a test popup's timeout only while Options is open.",
     ["Timeline colour"] = "Choose a custom colour for the timeline.",
+    ["Milestone Animations"] = "Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair.",
+    ["Max Level Celebration"] = "At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects.",
+    ["Portrait pulse and starburst"] = "Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine.",
+    ["Highlight new abilities"] = "Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted.",
+    ["Emphasize stat gains"] = "Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes.",
+    ["Portrait motes"] = "Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst.",
+    ["Background motes"] = "Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up.",
+    ["Weather motes"] = "Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms.",
+    ["Frame edge glow"] = "Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern.",
+    ["Portrait and ring settle"] = "Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash.",
+    ["Reveal dividers"] = "Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal.",
+    ["Portrait ring glint"] = "Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark.",
+
 }
 for _, setting in pairs(ns.OPTION_SETTINGS) do
     if setting.description then ns.OPTION_DESCRIPTIONS[setting.label] = setting.description end
@@ -150,21 +152,6 @@ end
 for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
     ns.OPTION_DESCRIPTIONS[spec.label .. " (ID)"] = "Enter a WoW sound file ID to override this cue. Enter 0 to clear the override."
 end
-local animationDescriptions = {
-    ["Milestone Animations"] = "Celebrate the selected milestone interval with portrait anticipation, brighter accents and extra stat effects. Classic Mode disables this flair.",
-    ["Max Level Celebration"] = "At the level cap, add curved class-coloured fireworks, portrait-ring sparks and stronger background motes. Classic Mode disables these effects.",
-    ["Portrait pulse and starburst"] = "Pulse the portrait ring, then reveal a growing starburst behind the portrait. Milestones and max level also add a repeating portrait shine.",
-    ["Highlight new abilities"] = "Add a reveal shine, glow and twinkling sparks to newly learned ability icons. Rank upgrades remain unhighlighted.",
-    ["Emphasize stat gains"] = "Count stat totals up from their old values, then flash the changed numbers. Milestones also add sparks when counting finishes.",
-    ["Portrait motes"] = "Release small drifting lights around the portrait after its starburst. Requires Portrait pulse and starburst.",
-    ["Background motes"] = "Show rising particles behind the popup. Milestones and max level increase their density; max level also speeds them up.",
-    ["Weather motes"] = "Match the current weather behind the popup. Replaces Background motes and adds low haze in heavy rain, snow or sandstorms.",
-    ["Frame edge glow"] = "Sweep a fading glow along textured frame edges during the opening. This effect is unavailable with Modern.",
-    ["Portrait and ring settle"] = "Start the portrait slightly enlarged, then ease it back to normal size. Milestones also add a brief anticipation flash.",
-    ["Reveal dividers"] = "Expand the section divider lines as each section enters. Classic Mode keeps the text transitions but disables this decorative reveal.",
-    ["Portrait ring glint"] = "Sweep a bright spark around the portrait ring, ending in a larger fading flare. Max level enlarges and flickers the finishing spark.",
-}
-for label, description in pairs(animationDescriptions) do ns.OPTION_DESCRIPTIONS[label] = description end
 
 local descriptionLookup, descriptionLocale
 

@@ -26,13 +26,8 @@ end
 local reportWindow, reportEdit, copyHint
 local copyControls
 local revision = ns.ForeverTrainingRevision or "1.4.0-custom"
+-- Account folder names are not exposed; WoW writes this file on reload/logout.
 local REPORT_PATH = "WTF/Account/<account>/SavedVariables/" .. ADDON_NAME .. ".lua"
-
-function ns.GetTrainerReportPath()
-    -- Account folder names are not exposed to addons. This path is relative
-    -- to the active client folder; WoW owns writing it on reload/logout.
-    return REPORT_PATH
-end
 
 function ns.PrintTrainerReportLocation()
     print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L(

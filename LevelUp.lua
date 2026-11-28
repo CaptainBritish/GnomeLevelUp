@@ -15,6 +15,7 @@ local requestedTimeLevel
 local cachedTimeLevel
 local cachedTimeSeconds
 local cachedTimeReceivedAt
+local awaitingMaxLevelTime
 local levelTimeForDisplay
 local quietChatFrames = {}
 local playedTimeRequestToken = 0
@@ -71,6 +72,7 @@ function ns.ResetLevelTimers()
     cachedTimeLevel, cachedTimeSeconds, cachedTimeReceivedAt, levelTimeForDisplay = nil, nil, nil, nil
     requestedTimeLevel = nil
     pendingElapsed, pendingTimes = nil, {}
+    awaitingMaxLevelTime = nil
     playedTimeRequestToken = playedTimeRequestToken + 1
     RestorePlayedTimeChat()
     if ns.ClearLevelPaceComparison then ns.ClearLevelPaceComparison() end
@@ -250,6 +252,15 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
         local timePlayedThisLevel = ...
         timePlayedThisLevel = tonumber(timePlayedThisLevel)
         local currentLevel = tonumber(UnitLevel("player"))
+        local totalPlayed = tonumber(unit)
+        if totalPlayed and totalPlayed == totalPlayed and totalPlayed >= 0 and totalPlayed < math.huge then
+            if awaitingMaxLevelTime and currentLevel == ns.GetLevelCap() and requestedTimeLevel == currentLevel
+                and timePlayedThisLevel and timePlayedThisLevel >= 0 and timePlayedThisLevel <= totalPlayed then
+                -- /played may arrive after the popup; remove time spent at the cap.
+                ns.RecordMaxLevelTime(totalPlayed - timePlayedThisLevel)
+                awaitingMaxLevelTime = nil
+            end
+        end
         if timePlayedThisLevel and timePlayedThisLevel == timePlayedThisLevel
             and timePlayedThisLevel >= 0 and timePlayedThisLevel < math.huge
             and requestedTimeLevel and currentLevel then
@@ -267,6 +278,7 @@ combatWaitFrame:SetScript("OnEvent", function(_, event, unit, ...)
         requestedTimeLevel = nil
         -- Restore after the response has finished dispatching to all frames.
         C_Timer.After(0, RestorePlayedTimeChat)
+        if awaitingMaxLevelTime then C_Timer.After(0, RequestPlayedTime) end
     elseif event == "PLAYER_REGEN_DISABLED" and levelUpPending then
         pendingCombatSeen = true
     elseif event == "PLAYER_REGEN_ENABLED" and pendingSinceCombat then
@@ -322,6 +334,10 @@ function ns.HandleLevelUp(newLevel, ...)
     elseif pendingElapsed and elapsed then pendingElapsed = pendingElapsed + elapsed
     else pendingElapsed = nil end
     pendingEnd = reachedLevel
+    if reachedLevel == ns.GetLevelCap() then
+        awaitingMaxLevelTime = true
+        RequestPlayedTime()
+    end
     cachedTimeLevel, cachedTimeSeconds, cachedTimeReceivedAt = reachedLevel, 0, GetTime()
     local waitForCombat = not ns.db or ns.db.waitForCombatEnd ~= false
     if UnitAffectingCombat("player") then

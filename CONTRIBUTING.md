@@ -8,7 +8,8 @@ headless checks cannot confirm native rendering, sound or controller input.
 
 | Area | Files |
 | --- | --- |
-| Defaults, shared settings/display rules, migrations and commands | `Core.lua` |
+| Defaults, shared settings/display rules and commands | `Core.lua` |
+| Saved-setting conversions and retired appearance repairs | `Migrations.lua` |
 | Profiles and sharing window | `Profiles.lua`, `ProfileTransfer.lua` |
 | Live level events, /played cache and pending popups | `LevelUp.lua` |
 | Recorded intervals, best times, account history and its Options page | `LevelHistory.lua` |
@@ -64,13 +65,27 @@ Run from the addon directory with Python 3:
 ```text
 python -X utf8 Tools/run_checks.py
 python -X utf8 Tools/run_checks.py verify_screenshot_test.py verify_max_background_fade.py
+python -X utf8 Tools/run_checks.py --list
+python -X utf8 Tools/run_checks.py --suite historical --list
 python Tools/check_wow_api.py
 ```
 
-The first command runs the main regression set. Pass individual `verify_*.py`
-filenames for focused work; the remaining checks are under `Tools/`. Linux uses
-`liblua5.4.so.0`. On Windows, the runner finds the VS Code Lua extension, or accepts
-`--luals "C:/path/to/lua-language-server.exe"`.
+The first command runs the current regression set and reports all failures before
+exiting. Pass individual `verify_*.py` filenames for focused work. Run it from
+any directory using the script's path.
+
+The portable backend is Lua 5.4 through `python -m pip install lupa`, on Windows,
+Linux or macOS. A system Lua 5.4 library also works; `GLU_LUA_LIBRARY` can select
+its path. On Windows the runner can fall back to the VS Code Lua extension, or
+accept `--luals "C:/path/to/lua-language-server.exe"`. There are no required
+machine-specific Python or library paths in the runner.
+The theme asset checker itself requires `lupa`.
+
+`--suite historical` selects dated trainer-report audits. These reconstruct old
+catalogues from locked fixture deltas, so later catalogue edits may intentionally
+fail their snapshot hashes. They are separate from current regressions. Use the
+matching historical checkout to audit an old correction; do not update those
+hashes just to make today's catalogue pass.
 
 For the API check, run `python Tools/check_wow_api.py --setup` once to install
 checksum-verified dependencies. `--cache PATH` selects their location. Use `--output PATH` to choose the report
@@ -107,7 +122,8 @@ proof that the catalogue changed. Keep uncertain records for review rather than
 rewriting them merely to silence a warning.
 
 Release packages use `GnomeLevelUp/` as their root. `.pkgmeta` excludes development
-tools and contributor/localization notes. The temporary screenshot command stays
+tools, examples and contributor/localization notes. `Locales/Template.lua` ships
+for translators. Example themes are released separately. The temporary screenshot command stays
 in `Tools/ScreenshotTest.lua`; its loader and renderer overrides have
 `@do-not-package@` markers. Keep those markers intact while the tool is in use.
 
@@ -122,3 +138,13 @@ All nine original suggestions are complete. The second pass consolidated display
 rules and setting callbacks, moved timing persistence into history, and made
 preview lifetime private to the renderer. The saved schema, public entry points
 and temporary screenshot tool remain compatible.
+
+Popup ability lists now have one builder, with shared grid math and pet-option
+callbacks. Legacy saved pet entries are normalized once when loaded. Current
+regression checks and dated catalogue audits have separate runner suites.
+
+Ability changes request a content refresh; layout settings request a full geometry
+refresh. Requests are coalesced, with geometry taking priority. Hidden popups skip
+queued layout work and use current settings on their next normal build. Pet events
+compare visible entries before requesting a refresh; scan timestamps are read
+directly by tooltips.

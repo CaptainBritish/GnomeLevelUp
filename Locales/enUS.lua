@@ -5,5 +5,4 @@ local _, ns = ...
 ns.RegisterLocale("enUS", {
     ["Colors"] = "Colours",
     ["Use class colors"] = "Use class colours",
-    ["Milestone color transition"] = "Milestone colour transition",
 })

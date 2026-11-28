@@ -96,7 +96,10 @@ local function NextJobPacket()
     while #order > 0 do
         local key = table.remove(order, 1)
         local job, entries, size = jobs[key], {}, 0
-        while job.nextLevel < data.Cap(flavor) do
+        while job.nextLevel <= data.Cap(flavor) do
+            -- Older GLU versions reject the cap key. Keep it in its own packet
+            -- so they can still exchange ordinary level records with us.
+            if job.nextLevel == data.Cap(flavor) and #entries > 0 then break end
             local parts = job.parts or LevelParts(job, job.nextLevel)
             job.parts, job.part = parts, job.part or 1
             while job.part <= #parts do
@@ -111,7 +114,7 @@ local function NextJobPacket()
             job.parts, job.part = nil, nil
             job.nextLevel = job.nextLevel + 1
         end
-        if job.nextLevel >= data.Cap(flavor) then jobs[key] = nil else order[#order + 1] = key end
+        if job.nextLevel > data.Cap(flavor) then jobs[key] = nil else order[#order + 1] = key end
         if #entries > 0 then
             return { key = key, target = job.target, text = Header(job.kind, job.token) .. table.concat(entries, ",") }
         end
@@ -140,7 +143,7 @@ local function StartLoginSync()
     -- Summaries include best times and removal fingerprints, but no names.
     -- Peers exchange full state only for levels whose fingerprints differ.
     local changed = false
-    for level = 1, data.Cap(flavor) - 1 do
+    for level = 1, data.Cap(flavor) do
         local seconds, owner = data.Best(level, flavor)
         if seconds then changed = data.Save(level, seconds, owner, flavor) or changed end
     end
@@ -285,7 +288,7 @@ local function HandleSummary(sender, token, values)
     for text in (values .. ","):gmatch("(.-),") do
         local level, seconds, hash = text:match("^(%d+)=(%d+)=(%x+)$")
         level, seconds = tonumber(level), tonumber(seconds)
-        if not level or level % 1 ~= 0 or level < 1 or level >= data.Cap(flavor) or #hash > 8
+        if not level or level % 1 ~= 0 or level < 1 or level > data.Cap(flavor) or #hash > 8
             or seconds ~= 0 and not data.ValidInterval(level, seconds, flavor) then return end
         hashes[level], times[level] = hash, seconds
     end
@@ -371,7 +374,7 @@ frame:SetScript("OnEvent", function(_, event, prefix, text, channel, sender)
             local levels = {}
             for textLevel in (values .. ","):gmatch("(.-),") do
                 local level = tonumber(textLevel:match("^%d+$"))
-                if not level or level < 1 or level >= data.Cap(flavor) then return end
+                if not level or level < 1 or level > data.Cap(flavor) then return end
                 levels[level] = true
             end
             MergeLevels("R", sender, token, levels)

@@ -32,9 +32,11 @@ function records.Cap(flavor)
         ns.GetCurrentFlavor() == "retail" and ns.GetLevelCap() or 90)
 end
 
+-- The cap itself is reserved for the complete 1-to-cap run, never its last interval.
 function records.ValidInterval(level, seconds, flavor)
-    return type(level) == "number" and level % 1 == 0 and level >= 1 and level < records.Cap(flavor)
-        and type(seconds) == "number" and seconds == seconds and seconds >= 1 and seconds <= 365 * 86400
+    return type(level) == "number" and level % 1 == 0 and level >= 1 and level <= records.Cap(flavor)
+        and type(seconds) == "number" and seconds == seconds and seconds >= 1
+        and seconds <= (level == records.Cap(flavor) and ns.MAX_FULL_RUN_SECONDS or 365 * 86400)
 end
 
 function records.ValidOwner(owner)
@@ -291,7 +293,7 @@ function records.UpdateClass(owner, classToken, flavor)
         if count >= 4096 then store.classes = {} end
     end
     store.classes[key] = classToken
-    for level = 1, records.Cap(flavor) - 1 do
+    for level = 1, records.Cap(flavor) do
         local record = mode[level]
         if type(record) == "table" and record.owner == owner and record.classToken ~= classToken then
             record.classToken, changed = classToken, true
@@ -320,6 +322,11 @@ function records.Best(level, flavor)
     local history = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB.levelBests
     local bests = type(history) == "table" and history[flavor]
     local seconds = type(bests) == "table" and bests[level]
+    if level == records.Cap(flavor) then
+        local totals = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB.maxLevelTimes
+        totals = type(totals) == "table" and totals[flavor]
+        seconds = type(totals) == "table" and totals[level]
+    end
     local owner = records.OwnName()
     if not records.ValidInterval(level, seconds, flavor) then seconds = nil end
     if seconds then seconds = math.floor(seconds) end

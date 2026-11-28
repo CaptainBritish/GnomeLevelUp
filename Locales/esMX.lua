@@ -67,7 +67,6 @@ RegisterLocaleBuilder("esMX", function() return {
 -- Optional texture effects, shared by both Animation menus.
 RegisterLocaleBuilder("esMX", function() return {
     ["Portrait sparks"] = "Chispas del retrato",
-    ["New ability sparkles"] = "Destellos en nuevas facultades",
     ["Background embers"] = "Ascuas de fondo",
     ["Frame edge glow"] = "Resplandor del marco",
 } end)
@@ -177,7 +176,7 @@ RegisterLocaleBuilder("esMX", function() return { ["Firework size (%)"] = "Tama�
 RegisterLocaleBuilder("esMX", function() return { ["Frame inset (px)"] = "Margen del marco (px)" } end)
 
 -- Optional popup finishing effects.
-RegisterLocaleBuilder("esMX", function() return { ["Portrait ring glint"] = "Destello del anillo del retrato", ["Ability reveal shine"] = "Brillo al aparecer habilidades", ["Milestone anticipation"] = "Anticipación de hitos", ["Stat impact sparks"] = "Chispas de mejora de estadísticas", ["Background depth"] = "Profundidad del fondo", ["Closing animation"] = "Animación de cierre", ["Milestone color transition"] = "Transición de color de hitos" } end)
+RegisterLocaleBuilder("esMX", function() return { ["Portrait ring glint"] = "Destello del anillo del retrato", ["Closing animation"] = "Animación de cierre" } end)
 RegisterLocaleBuilder("esMX", function() return { ["Screenshot milestones"] = "Capturas de pantalla en hitos" } end)
 RegisterLocaleBuilder("esMX", function() return { ["Portrait motes"] = "Partículas del retrato", ["Background motes"] = "Partículas de fondo" } end)
 RegisterLocaleBuilder("esMX", function() return { ["3D Portraits may consume more memory."] = "Los retratos 3D pueden consumir más memoria." } end)
@@ -199,7 +198,7 @@ RegisterLocaleBuilder("esMX", function() return {
     ["%dh %02dm %02ds"] = "%dh %02dmin %02ds", ["%dm %02ds"] = "%dmin %02ds", ["%ds"] = "%ds",
 } end)
 
--- Max-level celebration and experimental animation audio.
+-- Max-level celebration and custom animation audio.
 RegisterLocaleBuilder("esMX", function() return {
     ["Max Level Celebration"] = "Celebración del nivel máximo",
     ["Time to max level: %s"] = "Tiempo hasta el nivel máximo: %s",
@@ -527,3 +526,11 @@ RegisterLocaleBuilder("esMX", function() return {
 RegisterLocaleBuilder("esMX", function() return { ["Reset debug settings"] = "Restablecer ajustes de depuración" } end)
 
 RegisterLocaleBuilder("esMX", function() return { ["Force 2D portraits in Druid forms"] = "Forzar retratos 2D en formas de druida", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Usa un retrato 2D durante la transformación y restaura el retrato seleccionado al salir de la forma." } end)
+
+RegisterLocaleBuilder("esMX", function() return { ["Show saved Beast Training skills"] = "Mostrar habilidades de adiestramiento guardadas", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Función experimental; puede causar problemas. Muestra habilidades sin aprender de la lista de adiestramiento guardada para tu mascota actual. Abre Adiestramiento de bestias para actualizarla; la disponibilidad puede estar desactualizada y pueden faltar habilidades nuevas." } end)
+
+RegisterLocaleBuilder("esMX", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Restablece los ajustes de depuración, incluidos retratos guardados, partículas, sonidos y texturas. Conserva tiempos e informes. El modo de depuración permanece activado." } end)
+
+RegisterLocaleBuilder("esMX", function() return { ["Saved Beast Training"] = "Adiestramiento de bestias guardado", ["Last refreshed: %s"] = "Última actualización: %s", ["Last refreshed: unknown"] = "Última actualización: desconocida", ["Open Beast Training to refresh this list."] = "Abre Adiestramiento de bestias para actualizar esta lista." } end)
+
+RegisterLocaleBuilder("esMX", function() return { ["Total played: %s"] = "Tiempo total jugado: %s" } end)

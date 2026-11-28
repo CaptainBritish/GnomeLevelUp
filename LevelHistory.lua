@@ -3,6 +3,9 @@ local ADDON_NAME, ns = ...
 -- History is account data, independent of appearance profiles. Legacy records
 -- are copied when each character logs in; unvisited characters cannot be read.
 local samples
+local completedMaxRun
+local completedFinalInterval
+---@alias GLUTimeRecordComparison {seconds: number, previous: number|nil, personal: boolean, guild: boolean}
 local SAMPLE_LEVEL_SECONDS = 20 * 60 * 60
 
 local function HistoryLevelCap(flavor)
@@ -58,7 +61,7 @@ function ns.SyncLevelHistory()
     -- Apply account-side resets before importing those records on its next login.
     local reset = tonumber(character.timesResetRevision) or 0
     if (tonumber(legacy.levelHistoryResetRevision) or 0) < reset then
-        legacy.levelTimes, legacy.levelBests, legacy.fastestLevelTimes = nil, nil, nil
+        legacy.levelTimes, legacy.levelBests, legacy.fastestLevelTimes, legacy.maxLevelTimes = nil, nil, nil, nil
         legacy.levelHistoryResetRevision = reset
     end
     for _, flavor in ipairs({ "retail", "forever" }) do
@@ -71,6 +74,13 @@ function ns.SyncLevelHistory()
             if ValidTime(seconds) then record.times[level] = seconds end
             if ValidTime(best) and (not ValidTime(record.bests[level]) or best < record.bests[level]) then
                 record.bests[level] = best
+            end
+        end
+        local totals = type(legacy.maxLevelTimes) == "table" and legacy.maxLevelTimes[flavor]
+        record.maxLevelTimes = type(record.maxLevelTimes) == "table" and record.maxLevelTimes or {}
+        for cap, seconds in pairs(type(totals) == "table" and totals or {}) do
+            if type(cap) == "number" and cap >= 2 and cap <= 1000 and cap % 1 == 0 and ValidTime(seconds) then
+                record.maxLevelTimes[cap] = seconds
             end
         end
         local fastest = type(legacy.fastestLevelTimes) == "table" and legacy.fastestLevelTimes[flavor]
@@ -108,7 +118,9 @@ function ns.ResetAccountCharacterTimers(key)
     character.flavors = {}
     character.timesResetRevision = (tonumber(character.timesResetRevision) or 0) + 1
     if key == current and type(GnomeLevelUpCharacterDB) == "table" then
-        GnomeLevelUpCharacterDB.levelTimes, GnomeLevelUpCharacterDB.levelBests, GnomeLevelUpCharacterDB.fastestLevelTimes = nil, nil, nil
+        completedMaxRun = nil
+        completedFinalInterval = nil
+        GnomeLevelUpCharacterDB.levelTimes, GnomeLevelUpCharacterDB.levelBests, GnomeLevelUpCharacterDB.fastestLevelTimes, GnomeLevelUpCharacterDB.maxLevelTimes = nil, nil, nil, nil
         GnomeLevelUpCharacterDB.levelHistoryResetRevision = character.timesResetRevision
     end
     samples = nil
@@ -137,6 +149,19 @@ function ns.RecordCompletedLevel(reachedLevel, seconds)
         or not seconds or seconds ~= seconds or seconds < 0 or seconds == math.huge then return end
     ns.SyncLevelHistory()
     if ns.NoteGuildLevelCompletion then ns.NoteGuildLevelCompletion(reachedLevel, seconds) end
+    if reachedLevel == ns.GetLevelCap() and seconds >= 1 then
+        local flavor = ns.GetCurrentFlavor()
+        if not completedFinalInterval or completedFinalInterval.level ~= reachedLevel or completedFinalInterval.flavor ~= flavor then
+            local previous
+            for _, character in pairs(Store()) do
+                local record = type(character) == "table" and type(character.flavors) == "table" and character.flavors[flavor]
+                local best = record and record.bests and record.bests[reachedLevel - 1]
+                if ValidTime(best) and (not previous or best < previous) then previous = best end
+            end
+            completedFinalInterval = { level = reachedLevel, flavor = flavor, previous = previous }
+        end
+        completedFinalInterval.seconds = seconds
+    end
     GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
     local history = GnomeLevelUpCharacterDB.levelTimes
     if type(history) ~= "table" then history = {}; GnomeLevelUpCharacterDB.levelTimes = history end
@@ -165,8 +190,80 @@ function ns.RecordCompletedLevel(reachedLevel, seconds)
     if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
 end
 
+-- Save only a measured completion, rather than a sum of partially recorded levels.
+---@return GLUTimeRecordComparison|nil
+function ns.GetFinalLevelRecordComparison(level)
+    local result = completedFinalInterval
+    if not result or result.level ~= level or result.flavor ~= ns.GetCurrentFlavor() then return end
+    local personal = not result.previous or result.seconds < result.previous
+    local guild = ns.GetGuildLevelCelebration and ns.GetGuildLevelCelebration(level, result.seconds)
+    if not personal and not guild then return end
+    local previous = result.previous
+    if not personal then previous = guild.previous end
+    return { seconds = result.seconds, previous = previous, personal = personal, guild = guild ~= nil }
+end
+
+---@return GLUTimeRecordComparison|nil
+function ns.GetMaxLevelRecordComparison(level)
+    local result = completedMaxRun
+    if not result or result.level ~= level or result.flavor ~= ns.GetCurrentFlavor() then return end
+    local guild = result.guild and ns.GuildRecords and ns.GuildRecords.Enabled()
+        and ns.GuildRecords.Identity() == result.guildKey
+    if guild then
+        local best = ns.GetGuildLevelRecord(level, result.flavor)
+        guild = (not best or best.seconds >= result.seconds)
+            and not ns.GuildRecords.IsDeleted(level, result.seconds, ns.GuildRecords.OwnName(), result.flavor)
+    end
+    if not result.personal and not guild then return end
+    local previous = result.guildPrevious
+    if result.personal then previous = result.personalPrevious end
+    return { seconds = result.seconds, previous = previous,
+        guild = guild == true, personal = result.personal == true }
+end
+
+function ns.RecordMaxLevelTime(seconds)
+    local cap, flavor = ns.GetLevelCap(), ns.GetCurrentFlavor()
+    if not ValidTime(seconds) or seconds < 1 or seconds > ns.MAX_FULL_RUN_SECONDS then return false end
+    ns.SyncLevelHistory()
+    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
+    local db = GnomeLevelUpCharacterDB
+    db.maxLevelTimes = type(db.maxLevelTimes) == "table" and db.maxLevelTimes or {}
+    db.maxLevelTimes[flavor] = type(db.maxLevelTimes[flavor]) == "table" and db.maxLevelTimes[flavor] or {}
+    seconds = math.floor(seconds)
+    local previous = db.maxLevelTimes[flavor][cap]
+    if ValidTime(previous) and previous <= seconds then return false end
+    local personalPrevious
+    for _, character in pairs(Store()) do
+        local record = type(character) == "table" and type(character.flavors) == "table" and character.flavors[flavor]
+        local best = record and record.maxLevelTimes and record.maxLevelTimes[cap]
+        if ValidTime(best) and (not personalPrevious or best < personalPrevious) then personalPrevious = best end
+    end
+    local guild = ns.GuildRecords and ns.GuildRecords.Enabled()
+    local guildRecord = guild and ns.GetGuildLevelRecord(cap, flavor)
+    local guildPrevious = guildRecord and guildRecord.seconds
+    completedMaxRun = { level = cap, flavor = flavor, seconds = seconds,
+        personal = not personalPrevious or seconds < personalPrevious, personalPrevious = personalPrevious,
+        guild = guild and (not guildPrevious or seconds < guildPrevious), guildPrevious = guildPrevious,
+        guildKey = guild and ns.GuildRecords.Identity() }
+    db.maxLevelTimes[flavor][cap] = seconds
+    ns.SyncLevelHistory()
+    if ns.PublishGuildLevelTime then ns.PublishGuildLevelTime(cap, seconds) end
+    local saved = db.lastLevelUp and db.lastLevelUp[flavor]
+    if saved and saved.level == cap then
+        saved.timeToCap, saved.totalComparison = seconds, ns.GetMaxLevelRecordComparison(cap)
+        saved.finalComparison = ns.GetFinalLevelRecordComparison(cap)
+        if not ValidTime(saved.seconds) and saved.finalComparison then saved.seconds = saved.finalComparison.seconds end
+    end
+    if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
+    if ns.RefreshMaxLevelPlayedTime then ns.RefreshMaxLevelPlayedTime() end
+    return true
+end
+
 function ns.GetTimeToMaxLevel()
     local cap = ns.GetLevelCap()
+    local totals = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB.maxLevelTimes
+    totals = type(totals) == "table" and totals[ns.GetCurrentFlavor()]
+    if type(totals) == "table" and ValidTime(totals[cap]) then return totals[cap] end
     local history = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB.levelTimes
     local times = type(history) == "table" and history[ns.GetCurrentFlavor()]
     if not cap or type(times) ~= "table" then return nil end
@@ -179,39 +276,6 @@ function ns.GetTimeToMaxLevel()
     return total < math.huge and total or nil
 end
 
---@do-not-package@
-function ns.SetDebugLevelRecord(level, seconds)
-    if not ns.IsDebugEnabled() then return false end
-    level, seconds = tonumber(level), tonumber(seconds)
-    local cap = HistoryLevelCap(ns.GetCurrentFlavor())
-    if not level or level % 1 ~= 0 or level < 2 or level > cap or not seconds
-        or seconds ~= seconds or seconds < 1 or seconds > 365 * 86400 then return false end
-    level = level - 1 -- Match the reached-level labels; storage uses the interval's start.
-    seconds = math.floor(seconds)
-    ns.SyncLevelHistory()
-    GnomeLevelUpCharacterDB = type(GnomeLevelUpCharacterDB) == "table" and GnomeLevelUpCharacterDB or {}
-    local db, mode = GnomeLevelUpCharacterDB, ns.GetCurrentFlavor()
-    db.levelTimes = type(db.levelTimes) == "table" and db.levelTimes or {}
-    db.levelBests = type(db.levelBests) == "table" and db.levelBests or {}
-    db.fastestLevelTimes = type(db.fastestLevelTimes) == "table" and db.fastestLevelTimes or {}
-    db.levelTimes[mode] = type(db.levelTimes[mode]) == "table" and db.levelTimes[mode] or {}
-    db.levelBests[mode] = type(db.levelBests[mode]) == "table" and db.levelBests[mode] or {}
-    local replaced = db.levelBests[mode][level]
-    db.levelTimes[mode][level], db.levelBests[mode][level] = seconds, seconds
-    local fastest = db.fastestLevelTimes[mode]
-    if fastest == replaced or not ValidTime(fastest) then fastest = nil end
-    for _, value in pairs(db.levelBests[mode]) do
-        if ValidTime(value) and value >= 1 and (not fastest or value < fastest) then fastest = value end
-    end
-    db.fastestLevelTimes[mode] = fastest
-    local _, character = ns.SyncLevelHistory()
-    local record = FlavorRecord(character, mode)
-    record.times[level], record.bests[level], record.fastest = seconds, seconds, fastest
-    if ns.PublishGuildLevelTime then ns.PublishGuildLevelTime(level, seconds) end
-    if ns.RefreshLevelHistoryOptions then ns.RefreshLevelHistoryOptions() end
-    return true
-end
---@end-do-not-package@
 
 function ns.RecordLevelPace(seconds)
     seconds = tonumber(seconds)
@@ -306,22 +370,28 @@ function ns.GetLevelHistoryView(key, flavor)
     if sample then record = samples[flavor] end
     local cap = HistoryLevelCap(flavor)
     local view = { name = character.name, classToken = character.classToken, rows = {}, total = 0, count = 0, cap = cap, sample = sample }
-    for level = 1, cap - 1 do
-        local row = { level = level, time = record.times[level] }
+    for level = 1, cap do
+        local totalRun = level == cap
+        local row = { level = level, totalRun = totalRun,
+            time = totalRun and record.maxLevelTimes and record.maxLevelTimes[cap] or not totalRun and record.times[level] or nil }
         if not ValidTime(row.time) then row.time = nil end
-        if sample then
+        if sample and not totalRun then
             row.accountBest, row.owner, row.ownBest = record.bests[level], character.name, true
-        else
+        elseif not sample then
             for otherKey, other in pairs(characters) do
                 local otherRecord = type(other) == "table" and type(other.flavors) == "table" and other.flavors[flavor]
-                local best = type(otherRecord) == "table" and type(otherRecord.bests) == "table" and otherRecord.bests[level]
+                local bests
+                if type(otherRecord) == "table" then
+                    if totalRun then bests = otherRecord.maxLevelTimes else bests = otherRecord.bests end
+                end
+                local best = type(bests) == "table" and bests[level]
                 if ValidTime(best) and (not row.accountBest or best < row.accountBest
                     or best == row.accountBest and otherKey == key) then
                     row.accountBest, row.owner, row.ownBest = best, other.name, otherKey == key
                 end
             end
         end
-        if row.time then view.total, view.count = view.total + row.time, view.count + 1 end
+        if row.time and not totalRun then view.total, view.count = view.total + row.time, view.count + 1 end
         view.rows[#view.rows + 1] = row
         local guild, guildKey
         if key == current and ns.GetGuildLevelRecord then
@@ -331,7 +401,7 @@ function ns.GetLevelHistoryView(key, flavor)
             guild, guildKey = ns.GuildRecords.CharacterRecord(key, level, flavor)
         end
         if guild then
-            row.guildRecord = { level = level, time = guild.seconds,
+            row.guildRecord = { level = level, totalRun = totalRun, time = guild.seconds,
                 owner = guild.owner, guild = true, flavor = flavor,
                 classToken = guild.classToken,
                 guildKey = guildKey,
@@ -398,7 +468,7 @@ end
 local function ShowRecordTooltip(owner, record, guild)
     if not GameTooltip or not record then return end
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:SetText(ns.L("Level") .. " " .. tostring(record.level + 1))
+    GameTooltip:SetText(record.totalRun and ("1–" .. record.level) or ns.L("Level") .. " " .. tostring(record.level + 1), 1, 1, 1)
     GameTooltip:AddLine(ns.L(guild and "Guild record" or "Personal best") .. ": "
         .. FormatTime(guild and record.time or record.accountBest), .4, .85, 1)
     if record.owner then GameTooltip:AddLine(ns.FormatCharacterName(record.owner), 1, 1, 1) end
@@ -481,7 +551,7 @@ local function LayoutHistoryRow(row, record, index, width, top, longestTime, cla
     row.guildShade:SetColorTexture(r*.82,g*.82,b*.82,.20)
     row.guildOwnerText:SetTextColor(textR,textG,textB);row.ownerText:SetTextColor(.65,.75,.68)
     row.bar:SetWidth(math.max(1, width * (record.time or 0) / longestTime));row.bar:SetShown(record.time ~= nil)
-    local values = { tostring(record.level + 1), FormatTime(record.time), FormatTime(record.accountBest), FormatTime(guild and guild.time) }
+    local values = { record.totalRun and ("1–" .. record.level) or tostring(record.level + 1), FormatTime(record.time), FormatTime(record.accountBest), FormatTime(guild and guild.time) }
     for column,text in ipairs(row.texts) do
         text:ClearAllPoints()
         text:SetPoint("TOPLEFT", row, "TOPLEFT", 8 + width * HISTORY_COLUMN_STARTS[column], -5)

@@ -4,50 +4,29 @@
 
 ##### New Features
 
-* Added guild level-time sharing, enabled by default. Times sync once on login, with a separate comparison when you level up.
-* Guild records have their own class-coloured column in Level History, with lighter text and the original holder's name. Guildmates can share saved records from offline and former members too.
-* Added a **New Guild Record!** celebration to the level-up popup. Preview it with `/glu debugtime guild` while debug mode is enabled.
-* Guild leaders and ranks allowed to edit officer notes can delete shared records with an **[X]** and a confirmation prompt.
-* Guild record tooltips show who supplied the record and when it was received in debug mode.
+* Added guild level-time sharing. Guild records have their own column in Level History. Guild leaders and officers can delete shared records in case of abuse.
+* At max level, the popup shows total played time alongside the final level time. Level History also includes a separate guild record for the full 1–60 run.
+* Personal and guild records for the final level and full run use the old-time knock-out animation, with announcements fading between records when several are beaten. Preview them with `/glu test 60 personal`, `/glu test 60 guild`, or `/glu test 60 both all` in debug mode.
+* Full custom theme support is now finished and implemented!
+* Added **Show saved Beast Training skills** for Hunters. This is a very experimental feature and may not work properly.
 
 ##### Customization Options
 
-* Added **FE Path of Radiance** as a second example theme, with a gold frame, matching portrait ring and dividers, tiled blue background, custom font and level-up sound.
-* Simplified the theme-pack setup guide, with advanced settings in a separate reference.
-* Added a Druid-only option to use 2D portraits in forms, enabled by default.
-* Set the default 3D mask size to 98%, with a one-time update for existing profiles and saved portrait tuning.
-* Expanded custom theme support to include fonts, individual popup text sizes, divider textures and custom sounds, alongside frames, backgrounds and portrait rings.
-* Themes can declare whether they include custom sounds, so artwork-only packs keep the normal sound fallback.
-* Replaced the old example themes with **FFIV Blue Atlas**, featuring a silver frame and dividers, tiled blue background, larger custom font, matching thin portrait ring and level-up sound.
+* Added two example themes based on Fire Emblem and Final Fantasy 9, available as a separate addon at https://www.curseforge.com/wow/addons/gnomelevelup-custom-theme-example
 
 ##### Bug Fixes and Optimization
 
-* Added Gwen to Special Thanks.
-* Added a Debug reset button to restore tuning defaults, including saved portrait adjustments, without clearing recorded data.
-* Fixed live Druid form controls ignoring adjustments. Each appearance now keeps its own tuning, separate from humanoid settings.
-* Druid portrait defaults are reapplied once to replace older adjustments. Changes made afterward remain saved.
-* Matched live Druid portrait loading to the debug previews and stopped repeated mask-camera setup during refreshes.
-* Druid portrait presets now use the player's current display ID instead of relying on a reused portrait model. Added `/glu debugportrait info` to inspect the selected appearance and settings.
-* Added the default Retail Night Elf and Tauren form mappings and corrected circular mask sizing for different screen aspect ratios.
-* Added 3D portrait presets for default Night Elf, Tauren and Skyborne Cat and Bear forms, plus all Tree forms. Other forms and barber-shop appearances use zeroed positions and rotation. Leaving form restores normal portrait settings.
-* Added Druid form previews to `/glu debugportrait`, so they can be checked without a Druid character.
-* Druid form previews now include default Night Elf, Skyborne and Tauren variants, using Forever's current form displays and clearing the previous model before loading.
-* Fixed Druid preview controls showing normal portrait values. Each preview starts with its form's preset and can be adjusted without changing saved portrait settings.
+* 3D Portraits are currently forced off while druid forms are active until I can find a good way to deal with their positioning. You can disable this in appearance options while on a Druid.
+* Corrected 3D portrait masking on odd aspect ratios.
 * Clearing character times now works for the character selected in Level History, including logged-out characters.
-* Level History now labels times by the level reached, so the final level is included.
-* Fixed guild records disappearing when selecting another character in Level History. Each character now shows records from their own saved guild.
-* Fixed updated custom theme text sizes not applying to an already selected theme, including Blue Atlas's larger level label.
-* Fixed shared records losing their holder's class colour when later records arrived after the class information.
 * Fixed Forever character names losing their surnames or showing a dash between first and last names.
-* Simplified history level labels and made History mode debug-only. Account-wide best-time comparisons are now always enabled, removing the extra toggle.
-* Fixed custom theme font choices carrying over to Modern. Each theme now remembers its own font, and the font menu shows the font's name.
-* Guild sharing sends only the records that need updating, retries temporarily blocked messages and spreads out replies during busy logins.
-* Characters in the same guild now share their saved guild records locally. Leaving a guild clears that character's access without removing records used by your other guilded characters.
-* Saved record removals stop older caches from restoring a deleted record once its removal is verified. Newly relayed removals require officer confirmation.
-* Added translations for the guild controls and deletion prompts.
-* Cleaned up pet tracking and removed duplicate saved observations and prices while keeping each pet's skill records.
-* Tidied popup layout, ability scrolling and report-window code. Pet lookups no longer create or prune saved data, and report copying keeps its existing clearing behavior.
-* Improved theme error messages and added an asset checker and updated guide for theme authors.
+* Cleaned up pet tracking and removed duplicate saved observations and prices.
+* Tidied popup layout, ability scrolling and report-window code.
+* Consolidated ability-list building, grid layout and pet option callbacks, simplified saved pet data handling.
+* Removed retired animation labels, duplicate help definitions and unused report code.
+* Reduced unnecessary popup refreshes, especially for unchanged pet skills and hidden popups.
+* Improved custom theme error messages.
+* Added a Debug reset button to restore tuning defaults without clearing recorded data.
 
 ## 1.6.7
 

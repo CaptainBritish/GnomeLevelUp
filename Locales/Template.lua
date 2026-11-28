@@ -236,7 +236,6 @@ RegisterLocaleBuilder("xxXX", function() return {
 
     -- Optional texture effects, shared by both Animation menus.
     ["Portrait sparks"] = "Portrait sparks",
-    ["New ability sparkles"] = "New ability sparkles",
     ["Background embers"] = "Background embers",
     ["Frame edge glow"] = "Frame edge glow",
 
@@ -333,12 +332,7 @@ RegisterLocaleBuilder("xxXX", function() return {
 
     -- Optional popup finishing effects.
     ["Portrait ring glint"] = "Portrait ring glint",
-    ["Ability reveal shine"] = "Ability reveal shine",
-    ["Milestone anticipation"] = "Milestone anticipation",
-    ["Stat impact sparks"] = "Stat impact sparks",
-    ["Background depth"] = "Background depth",
     ["Closing animation"] = "Closing animation",
-    ["Milestone color transition"] = "Milestone colour transition",
     ["Screenshot milestones"] = "Screenshot milestones",
     ["Portrait motes"] = "Portrait motes",
     ["Background motes"] = "Background motes",
@@ -361,8 +355,9 @@ RegisterLocaleBuilder("xxXX", function() return {
     ["%dm %02ds"] = "%dm %02ds",
     ["%ds"] = "%ds",
 
-    -- Max-level celebration and experimental animation audio.
+    -- Max-level celebration and custom animation audio.
     ["Max Level Celebration"] = "Max Level Celebration",
+    ["Total played: %s"] = "Total played: %s",
     ["Time to max level: %s"] = "Time to max level: %s",
     ["%dd %02dh %02dm %02ds"] = "%dd %02dh %02dm %02ds",
     ["Portrait impact sound"] = "Portrait impact sound",
@@ -702,3 +697,5 @@ RegisterLocaleBuilder("xxXX", function() return {
     ["Choose a custom colour for the timeline."] = "Choose a custom colour for the timeline.",
     ["Use your class colour for the timeline."] = "Use your class colour for the timeline.",
 } end)
+
+RegisterLocaleBuilder("xxXX", function() return { ["Saved Beast Training"] = "Saved Beast Training", ["Last refreshed: %s"] = "Last refreshed: %s", ["Last refreshed: unknown"] = "Last refreshed: unknown", ["Open Beast Training to refresh this list."] = "Open Beast Training to refresh this list." } end)

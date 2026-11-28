@@ -239,7 +239,6 @@ RegisterLocaleBuilder("trTR", function() return {
 
     -- Optional texture effects, shared by both Animation menus.
     ["Portrait sparks"] = "Portre kıvılcımları",
-    ["New ability sparkles"] = "Yeni beceri ışıltıları",
     ["Background embers"] = "Arkaplan korları",
     ["Frame edge glow"] = "Çerçeve kenar parıltısı",
 
@@ -336,12 +335,7 @@ RegisterLocaleBuilder("trTR", function() return {
 
     -- Optional popup finishing effects.
     ["Portrait ring glint"] = "Portre çerçeve ışıltısı",
-    ["Ability reveal shine"] = "Beceri açılım parıltısı",
-    ["Milestone anticipation"] = "Dönüm Noktası beklentisi",
-    ["Stat impact sparks"] = "İstatistik darbe kıvılcımları",
-    ["Background depth"] = "Arkaplan derinliği",
     ["Closing animation"] = "Kapanma animasyonu",
-    ["Milestone color transition"] = "Dönüm Noktası renk geçişi",
     ["Screenshot milestones"] = "Dönüm Noktalarında Ekran Görüntüsü al",
     ["Portrait motes"] = "Portre zerreleri",
     ["Background motes"] = "Arkaplan zerreleri",
@@ -364,7 +358,7 @@ RegisterLocaleBuilder("trTR", function() return {
     ["%dm %02ds"] = "%ddk %02dsn",
     ["%ds"] = "%dsn",
 
-    -- Max-level celebration and experimental animation audio.
+    -- Max-level celebration and custom animation audio.
     ["Max Level Celebration"] = "En Yüksek Seviye Kutlaması",
     ["Time to max level: %s"] = "En yüksek seviyeye süre: %s",
     ["%dd %02dh %02dm %02ds"] = "%dg %02ds %02ddk %02dsn",
@@ -709,3 +703,11 @@ RegisterLocaleBuilder("trTR", function() return {
 RegisterLocaleBuilder("trTR", function() return { ["Reset debug settings"] = "Hata ayıklama ayarlarını sıfırla" } end)
 
 RegisterLocaleBuilder("trTR", function() return { ["Force 2D portraits in Druid forms"] = "Druid biçimlerinde 2B portreleri zorla", ["Use a 2D portrait while transformed and restore the selected portrait when leaving form."] = "Dönüşüm sırasında 2B portre kullanır ve biçimden çıkınca seçili portreyi geri yükler." } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Show saved Beast Training skills"] = "Kayıtlı hayvan eğitimi becerilerini göster", ["Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing."] = "Deneysel özellik; sorunlara yol açabilir. Mevcut yoldaşın kayıtlı eğitim listesindeki öğrenilmemiş becerileri gösterir. Güncellemek için hayvan eğitimini aç; kayıtlı uygunluk bilgisi eski olabilir ve yeni beceriler eksik kalabilir." } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Restore Debug tuning, including saved portrait adjustments, particles, sound overrides and texture adjustments. Recorded times and reports are kept. Debug mode stays enabled."] = "Kayıtlı portre, parçacık, ses ve doku ayarları dahil hata ayıklama ayarlarını sıfırlar. Süreler ve raporlar korunur. Hata ayıklama modu açık kalır." } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Saved Beast Training"] = "Kayıtlı Hayvan Eğitimi", ["Last refreshed: %s"] = "Son yenileme: %s", ["Last refreshed: unknown"] = "Son yenileme: bilinmiyor", ["Open Beast Training to refresh this list."] = "Bu listeyi yenilemek için Hayvan Eğitimi penceresini aç." } end)
+
+RegisterLocaleBuilder("trTR", function() return { ["Total played: %s"] = "Toplam oynama süresi: %s" } end)

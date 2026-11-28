@@ -297,11 +297,6 @@ local function PlacePortraitPreviewBelowPopup()
     end
 end
 
-local function Apply()
-    ns.ApplyCurrentAppearance()
-    ns.RefreshOptionsPanel()
-end
-
 local function ChoiceLabel(value, choices)
     for _, choice in ipairs(choices or {}) do
         if choice.value == value then return ns.LocalizeChoiceLabel(choice), choice.fontLocale end
@@ -366,19 +361,6 @@ local function Toggle(label, key, after)
             end
         end,
     }
-end
-
-local function PetClassToggle(label, key, class)
-    local entry = Toggle(label, key)
-    entry.isAvailable = function()
-        local _, token = UnitClass("player")
-        return token == class and ns.TrainerAbilitiesEnabled()
-    end
-    local activate = entry.activate
-    entry.activate = function()
-        if entry.isAvailable() then activate() end
-    end
-    return entry
 end
 
 local function NumericOption(key)
@@ -462,7 +444,8 @@ local function BuildEntries(key)
                 function(v)
                     ns.db.backgroundStyle = v
                     ns.db.backgroundFillMode = v == "tile" and "tile" or "scale"
-                    Apply()
+                    ns.ApplyBackgroundAppearance()
+                    ns.RefreshOptionsPanel()
                 end, ns.BACKGROUND_FILL_CHOICES or {}, nil, TexturedAppearanceAvailable),
             { label = "Background opacity", get = function() return string.format("%.0f%%", (tonumber(ns.db.bgOpacity) or 0.7) * 100) end,
                 activate = function(direction)
@@ -549,9 +532,10 @@ local function BuildEntries(key)
                 Toggle("Show unlearned weapon skills", "showWeaponSkills"),
                 Toggle("Show learning costs", "showTrainerCosts"),
                 Toggle("Show prices in tooltips", "showTrainerCostsInTooltips"),
-                PetClassToggle("Show Warlock pet abilities", "showWarlockPetSkills", "WARLOCK"),
-                PetClassToggle("Filter grimoires by active pet", "filterWarlockPetByActivePet", "WARLOCK"),
-                PetClassToggle("Show Hunter pet abilities", "showHunterPetSkills", "HUNTER"),
+                Toggle(nil, "showWarlockPetSkills"),
+                Toggle(nil, "filterWarlockPetByActivePet"),
+                Toggle(nil, "showHunterPetSkills"),
+                Toggle(nil, "showSavedBeastTraining"),
             }
         end
         for _, filter in ipairs(ns.ABILITY_FILTERS) do
@@ -1340,7 +1324,10 @@ function ns.ToggleControllerOptions(force, allowKeyboard, firstTime)
     return true
 end
 
+--@do-not-package@
+-- Direct close entry point for development fixtures; live controls use Close.
 function ns.CloseControllerOptions() Close() end
+--@end-do-not-package@
 
 function ns.OpenControllerOptionsWhenFree()
     if not IsActive() then return false end

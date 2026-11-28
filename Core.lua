@@ -3,6 +3,8 @@ local ADDON_NAME, ns = ...
 ns.PORTRAIT_MEMORY_WARNING = "3D Portraits may consume more memory."
 
 ns.DEFAULT_FONT_PATH = "Fonts\\FRIZQT__.TTF"
+-- A finite, exactly represented placeholder that remains plain digits on the wire.
+ns.MAX_FULL_RUN_SECONDS = 999999999999
 
 local DATABASE_SCHEMA_VERSION = 6
 
@@ -42,6 +44,7 @@ local defaults = {
     relevantRetailStatsOnly = true,
     showWarlockPetSkills = true,
     showHunterPetSkills = true,
+    showSavedBeastTraining = false,
     filterWarlockPetByActivePet = true,
     showAllWarlockGrimoires = false,
     useHorizontalAbilityScroll = false,
@@ -219,24 +222,6 @@ for _, spec in ipairs(ns.ANIMATION_SOUND_SETTINGS) do
     defaults[spec.key] = 0
 end
 
-function ns.RemoveObsoleteAnimationSounds(settings)
-    for key in pairs(settings) do
-        if type(key) == "string" and key:match("^animationSound_") and defaults[key] == nil then settings[key] = nil end
-    end
-end
-
-function ns.MigrateLevelUpSoundPreference(settings)
-    local choice = settings.soundChoice
-    if choice == "THEME" then
-        settings.soundChoice = defaults.soundChoice
-        settings.useThemeLevelUpSound = true
-    end
-    if settings.levelUpSoundCustomized ~= nil then return end
-    settings.levelUpSoundCustomized = (type(choice) == "string" and choice ~= "" and choice ~= "LEVELUP")
-        or (type(settings.customSoundFile) == "string" and settings.customSoundFile ~= "")
-        or (type(settings.customSoundChoice) == "string" and settings.customSoundChoice ~= "")
-end
-
 ns.TEXT_SIZE_SETTINGS = {
     {key = "statTextScale", label = "Stat text size"},
     {key = "headingTextScale", label = "Heading text size"},
@@ -373,14 +358,6 @@ function ns.TrainerCostsInTooltips()
     return ns.TrainerAbilitiesEnabled() and ns.db ~= nil and ns.db.showTrainerCostsInTooltips == true
 end
 
-function ns.MigrateTrainerPriceSettings(settings)
-    if settings.showTrainerCostsInTooltips == nil then
-        settings.showTrainerCostsInTooltips = settings.showTrainerCosts == true
-        if settings.trainerCostsTooltipOnly == true then settings.showTrainerCosts = false end
-    end
-    settings.trainerCostsTooltipOnly = nil
-end
-
 ns.ABILITY_FILTERS = {
     { key = "showOnlyCurrentLevelSkills", label = "Only skills unlocked at this level", isAvailable = ns.NewAbilitiesEnabled },
     { key = "showOnlyNewSkills", label = "Hide rank upgrades", isAvailable = ns.TrainerAbilitiesEnabled, trainerOnly = true },
@@ -459,10 +436,27 @@ local function SharedToggle(key, label, changed, description, available)
         end }
 end
 local function RefreshAbilityOptions()
-    ns.RefreshPopupLayout()
+    ns.RefreshPopupContent()
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
+function ns.PetTrainingOptionsAvailable(class)
+    local _, playerClass = UnitClass("player")
+    return playerClass == class and ns.TrainerAbilitiesEnabled()
+end
+for _, option in ipairs({
+    { "showHunterPetSkills", "Show Hunter pet abilities", "HUNTER" },
+    { "showWarlockPetSkills", "Show Warlock pet abilities", "WARLOCK" },
+    { "filterWarlockPetByActivePet", "Filter grimoires by active pet", "WARLOCK" },
+}) do
+    local key, label, class = option[1], option[2], option[3]
+    SharedToggle(key, label, RefreshAbilityOptions, nil, function() return ns.PetTrainingOptionsAvailable(class) end)
+end
 SharedToggle("showNewAbilities", "Show new abilities", RefreshAbilityOptions)
+SharedToggle("showSavedBeastTraining", "Show saved Beast Training skills", RefreshAbilityOptions,
+    "Experimental feature; may cause issues. Show unlearned skills from your current pet's saved Beast Training list. Open Beast Training to refresh it; saved availability may be out of date and newly available skills may be missing.",
+    function()
+        return ns.PetTrainingOptionsAvailable("HUNTER") and ns.db.showHunterPetSkills ~= false
+    end)
 SharedToggle("showTrainerCosts", "Show learning costs", RefreshAbilityOptions, nil, ns.TrainerAbilitiesEnabled)
 SharedToggle("showTrainerCostsInTooltips", "Show prices in tooltips", RefreshAbilityOptions,
     "Show full learning costs when hovering over abilities.", ns.TrainerAbilitiesEnabled)
@@ -548,7 +542,10 @@ local function RefreshTimeline()
     if ns.RefreshLevelTimeline then ns.RefreshLevelTimeline() end
     if ns.RefreshOptionsPanel then ns.RefreshOptionsPanel() end
 end
-SharedToggle("showLevelTimeline", "Show level timeline", RefreshTimeline, "Show progress between levels and upcoming abilities below the popup.")
+SharedToggle("showLevelTimeline", "Show level timeline", function()
+    if ns.db.horizontalMode then ns.RefreshPopupLayout() end
+    RefreshTimeline()
+end, "Show progress between levels and upcoming abilities below the popup.")
 function ns.LevelTimelineEnabled()
     return ns.db.showLevelTimeline == true
 end
@@ -654,7 +651,7 @@ ns.RESETTABLE_SETTING_KEYS = {
     "soundChannel", "soundVolume", "customSoundFile", "customSoundChoice",
     "enabled", "duration", "scale", "horizontalScale", "autoScanTrainers", "monitorTrainerChanges", "scanProfessionTrainers", "showWeaponSkills", "showTrainerCosts", "showTrainerCostsInTooltips", "showOnlyCurrentLevelSkills", "showOnlyNewSkills", "showWarlockPetSkills", "showHunterPetSkills", "filterWarlockPetByActivePet", "showAllWarlockGrimoires", "useHorizontalAbilityScroll", "compactMode", "horizontalMode", "showLevelTime", "ignoreMouseoverDelay", "ignoreMouseoverDelayUserSet", "clickThrough", "hideBlizzardLevelUp",
     "bgOpacity", "backgroundHueOpacity", "backgroundColor", "frameColor", "portraitRingColor", "animSpeedMultiplier", "reducedMotion", "statSlideDirection", "equalStatWidths", "abbreviateStatNames", "customFontPath", "statTextScale", "headingTextScale", "timeTextScale",
-    "showNewAbilities", "showLatestTrainingRanks", "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
+    "showNewAbilities", "showSavedBeastTraining", "showLatestTrainingRanks", "waitForCombatEnd", "forceFlavor", "frameStrata", "printInstructions",
     "framePosition", "horizontalFramePosition", "lockFramePosition", "sectionPadding", "compactHorizontalPadding", "rightClickClose", "showTextShadow", "useClassColors", "minimapButtonShown", "minimapAngle", "suspendPreview", "portraitMode", "playerPortraitPosition", "playerPortraitScale", "debugEnabled",
     "collapsedSections", "backgroundMode", "backgroundTheme", "backgroundChoice", "frameChoice", "backgroundStyle", "backgroundFillMode", "backgroundTextureColors", "backgroundTextureTransforms",
     "portraitRingEnabled", "portraitRingTexture", "portraitRingChoice", "portraitRingScale", "portraitRingOffset", "horizontalPortraitRingScale", "horizontalPortraitRingOffset", "classColourPortraitBackground", "controllerGlyphStyle", "controllerMenuFrameStrata",
@@ -671,12 +668,6 @@ local function ResetSettingKeys(keys)
     end
 end
 ns.ResetSettingKeys = ResetSettingKeys
-
-function ns.MigratePortraitMaskDefaults(settings)
-    if type(settings) ~= "table" or (tonumber(settings.portraitMaskDefaultsVersion) or 0) >= 1 then return end
-    settings.portraitModelMaskSize = defaults.portraitModelMaskSize
-    settings.portraitMaskDefaultsVersion = 1
-end
 
 ns.CLASS_COLORS = {
     DEATHKNIGHT = { 196 / 255, 30 / 255, 58 / 255 },
@@ -730,8 +721,8 @@ local function MergeMissingSettings(db, defaultsTable)
 end
 
 local function ApplyAppearanceNow()
-    if ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
-    if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity) end
+    if ns.ApplyBackgroundOpacity then ns.ApplyBackgroundOpacity(ns.db.bgOpacity)
+    elseif ns.ApplyBackgroundAppearance then ns.ApplyBackgroundAppearance() end
     if ns.ApplyFont then ns.ApplyFont(ns.db.customFontPath) end
     if ns.ApplyFrameStrata then ns.ApplyFrameStrata(ns.db.frameStrata) end
     if ns.ApplyFrameLock then ns.ApplyFrameLock(ns.db.lockFramePosition) end
@@ -812,37 +803,6 @@ local function SelectedCompositeTheme()
     end
 end
 ns.GetSelectedCompositeTheme = SelectedCompositeTheme
-
--- Replace the withdrawn atlas background without changing the frame selection.
-function ns.RetireDustyStoneBackground(settings)
-    if settings.backgroundChoice ~= "DUSTY_STONE" then return end
-    settings.backgroundChoice = "SCRATCHED_STONE"
-    settings.backgroundTheme = nil
-    settings.backgroundStyle, settings.backgroundFillMode = "fill", "scale"
-    local preferences = settings.themeHuePreferences
-    local saved = preferences and preferences.background and preferences.background.SCRATCHED_STONE
-    settings.backgroundColor = CopySetting(saved and saved.color or ns.GetBackgroundReference("SCRATCHED_STONE").defaultHue)
-    settings.backgroundHueOpacity = saved and saved.opacity or 1
-end
-
--- Merge the duplicate Horde background into Wood Panel, keeping an existing
--- Wood Panel preference when both assets have separately saved hues.
-function ns.RetireHordeBackground(settings)
-    local preferences = settings.themeHuePreferences
-    local backgrounds = preferences and preferences.background
-    if backgrounds and backgrounds.HORDE then
-        if not backgrounds.WOOD_PANEL then backgrounds.WOOD_PANEL = CopySetting(backgrounds.HORDE) end
-        backgrounds.HORDE = nil
-    end
-    if settings.backgroundChoice == "HORDE" then
-        settings.backgroundChoice = "WOOD_PANEL"
-        local saved = backgrounds and backgrounds.WOOD_PANEL
-        if saved then
-            settings.backgroundColor = CopySetting(saved.color)
-            settings.backgroundHueOpacity = saved.opacity or 1
-        end
-    end
-end
 
 local HUE_COMPONENTS = {
     background = { color = "backgroundColor" },
@@ -1088,20 +1048,6 @@ function ns.GetDefaultControllerGlyphStyle()
     return "none"
 end
 
--- Repair only the original rotated-strip defaults; preserve other custom tuning.
--- Profiles load after InitDB, so both settings entry points use this repair.
-function ns.NormalizeTrellisSideTransforms(settings)
-    if settings.frameChoice ~= "TRELLIS" then return end
-    local transforms = settings.backgroundTextureTransforms
-    local left = transforms and transforms.left
-    local right = transforms and transforms.right
-    if left and right and left.rotation == 270 and right.rotation == 90
-        and not left.flipX and not left.flipY and not right.flipX and not right.flipY then
-        transforms.left = { rotation = 0, flipX = false, flipY = false }
-        transforms.right = { rotation = 0, flipX = true, flipY = false }
-    end
-end
-
 local function InitDB()
     defaults.controllerGlyphStyle = ns.GetDefaultControllerGlyphStyle()
     -- Load saved settings and fill in anything that is missing.
@@ -1111,129 +1057,9 @@ local function InitDB()
     ns.MigrateLevelUpSoundPreference(GnomeLevelUpDB)
     ns.MigrateTrainerPriceSettings(GnomeLevelUpDB)
     ns.NormalizeAbilityFilters(GnomeLevelUpDB)
-    local savedSchemaVersion = tonumber(GnomeLevelUpDB.schemaVersion) or 0
-    -- Capture the pre-1.3.2 selectors before defaults add the new independent
-    -- fields. This lets the migration distinguish an old custom theme from a
-    -- deliberately selected Modern appearance.
-    local legacyBackgroundMode = GnomeLevelUpDB.backgroundMode
-    local legacyBackgroundTheme = GnomeLevelUpDB.backgroundTheme
-    if type(legacyBackgroundTheme) == "string" then
-        legacyBackgroundTheme = legacyBackgroundTheme:gsub("^CUSTOM:", "")
-    end
-    local legacyBackgroundChoice = GnomeLevelUpDB.backgroundChoice
-    local legacyFrameChoice = GnomeLevelUpDB.frameChoice
-    local legacyBackgroundStyle = GnomeLevelUpDB.backgroundStyle
-    local legacyBackgroundFillMode = GnomeLevelUpDB.backgroundFillMode
-    -- Early 1.3.4 builds saved a white frame default before migrating the
-    -- shared hue. Repair that case once, as well as a direct 1.3.2 upgrade.
-    local legacyHue = GnomeLevelUpDB.backgroundColor
-    local savedFrameHue = GnomeLevelUpDB.frameColor
-    local frameHueMissing = savedFrameHue == nil
-    local frameHueIsDefault = type(savedFrameHue) == "table"
-        and savedFrameHue[1] == 1 and savedFrameHue[2] == 1 and savedFrameHue[3] == 1
-    if GnomeLevelUpDB.sharedHueMigrationVersion ~= 1
-        and (frameHueMissing or (savedSchemaVersion <= 6 and frameHueIsDefault))
-        and type(legacyHue) == "table"
-        and type(legacyHue[1]) == "number" and type(legacyHue[2]) == "number"
-        and type(legacyHue[3]) == "number" then
-        -- Legacy black meant no tint, so use the new frame's neutral white.
-        if legacyHue[1] == 0 and legacyHue[2] == 0 and legacyHue[3] == 0 then
-            GnomeLevelUpDB.frameColor = { 1, 1, 1 }
-        else
-            GnomeLevelUpDB.frameColor = CopySetting(legacyHue)
-        end
-    end
-    GnomeLevelUpDB.sharedHueMigrationVersion = 1
-    -- Combine the two portrait effects, retaining a fully disabled old profile.
-    if GnomeLevelUpDB.portraitAnimation == nil
-        and (GnomeLevelUpDB.portraitRingPulse ~= nil or GnomeLevelUpDB.portraitStarburst ~= nil) then
-        GnomeLevelUpDB.portraitAnimation = GnomeLevelUpDB.portraitRingPulse ~= false
-            or GnomeLevelUpDB.portraitStarburst ~= false
-    end
-    GnomeLevelUpDB.portraitRingPulse = nil
-    GnomeLevelUpDB.portraitStarburst = nil
-    -- Emphasis now controls counting too; preserve its existing preference.
-    GnomeLevelUpDB.countStatGains = nil
-    GnomeLevelUpDB.statTickerSounds = nil
-    GnomeLevelUpDB.portraitImpactSound, GnomeLevelUpDB.starburstSound = nil, nil
-    -- Retire the shipped experiment once; later debug selections remain editable.
-    if not GnomeLevelUpDB.effectSoundDefaultsRemoved then
-        if GnomeLevelUpDB.animationSound_portraitImpact == 4177602 then GnomeLevelUpDB.animationSound_portraitImpact = 0 end
-        if GnomeLevelUpDB.animationSound_starburst == 979016 then GnomeLevelUpDB.animationSound_starburst = 0 end
-        GnomeLevelUpDB.effectSoundDefaultsRemoved = true
-    end
-    -- Migrate the particle defaults once; preserve later debug edits.
-    if GnomeLevelUpDB.particleTuningPresetVersion ~= 1 then
-        GnomeLevelUpDB.particlePortraitCount = 5
-        GnomeLevelUpDB.particlePortraitSize = 200
-        GnomeLevelUpDB.particleStarburstCount = 5
-        GnomeLevelUpDB.particleEmberCount = 20
-        GnomeLevelUpDB.particleEmberSize = 150
-        GnomeLevelUpDB.particleTuningPresetVersion = 1
-    end
-    -- Apply the new visual preset once, then preserve later debug tuning.
-    if GnomeLevelUpDB.effectReadabilityPresetVersion ~= 1 then
-        GnomeLevelUpDB.starburstOpacity = 50
-        GnomeLevelUpDB.particleSparkleSize = 200
-        GnomeLevelUpDB.particleEmberOpacity = 40
-        GnomeLevelUpDB.effectReadabilityPresetVersion = 1
-    end
-    -- Refresh the old defaults without replacing custom debug values.
-    if GnomeLevelUpDB.effectPolishPresetVersion ~= 1 then
-        if GnomeLevelUpDB.fireworkSize == nil or GnomeLevelUpDB.fireworkSize == 80 then GnomeLevelUpDB.fireworkSize = 60 end
-        if GnomeLevelUpDB.portraitPulseOpacity == nil or GnomeLevelUpDB.portraitPulseOpacity == 71.5 then GnomeLevelUpDB.portraitPulseOpacity = 50 end
-        if GnomeLevelUpDB.particleEmberOpacity == nil or GnomeLevelUpDB.particleEmberOpacity == 30 then GnomeLevelUpDB.particleEmberOpacity = 40 end
-        GnomeLevelUpDB.effectPolishPresetVersion = 1
-    end
+    local previous = ns.MigrateSettingsBeforeDefaults(GnomeLevelUpDB)
     MergeMissingSettings(GnomeLevelUpDB, defaults)
-    -- 1.3 stored one theme value for the whole custom appearance. Preserve
-    -- that exact pairing while introducing independent frame/background keys.
-    -- This is deliberately based on the values captured above; using the
-    -- merged defaults here would make an old profile look like a fresh default
-    -- profile and leave the background renderer without a valid nine-slice.
-    local oldTheme = ns.FindBackgroundTheme(legacyBackgroundTheme)
-    local hadIndependentSelectors = legacyBackgroundChoice ~= nil or legacyFrameChoice ~= nil
-    if legacyBackgroundMode == "MODERN" and not legacyBackgroundTheme then
-        GnomeLevelUpDB.backgroundTheme = nil
-        GnomeLevelUpDB.backgroundChoice = legacyBackgroundChoice or "NONE"
-        GnomeLevelUpDB.frameChoice = legacyFrameChoice or "BLACK_METAL"
-    elseif oldTheme and (not hadIndependentSelectors or savedSchemaVersion < 2) then
-        GnomeLevelUpDB.backgroundMode = "CUSTOM"
-        GnomeLevelUpDB.backgroundTheme = oldTheme.value
-        GnomeLevelUpDB.backgroundChoice = oldTheme.backgroundName
-        GnomeLevelUpDB.frameChoice = oldTheme.frameName or oldTheme.backgroundName
-        if not legacyBackgroundStyle then
-            local appearance = oldTheme.appearance or {}
-            GnomeLevelUpDB.backgroundStyle = appearance.backgroundStyle
-                or (legacyBackgroundFillMode == "tile" and "tile" or "stretch")
-        end
-    elseif legacyBackgroundMode == "CUSTOM" and not hadIndependentSelectors then
-        -- A removed or manually edited 1.3 theme must not leave CUSTOM mode
-        -- pointing at missing textures. Fall back cleanly to Modern.
-        GnomeLevelUpDB.backgroundMode = "MODERN"
-        GnomeLevelUpDB.backgroundTheme = nil
-        GnomeLevelUpDB.backgroundChoice = "NONE"
-        GnomeLevelUpDB.frameChoice = "BLACK_METAL"
-    elseif hadIndependentSelectors and not legacyBackgroundTheme then
-        GnomeLevelUpDB.backgroundTheme = nil
-    elseif not hadIndependentSelectors and (legacyBackgroundMode ~= nil or legacyBackgroundTheme ~= nil or savedSchemaVersion > 0) then
-        GnomeLevelUpDB.backgroundMode = "MODERN"
-        GnomeLevelUpDB.backgroundTheme = nil
-        GnomeLevelUpDB.backgroundChoice = "NONE"
-        GnomeLevelUpDB.frameChoice = "BLACK_METAL"
-    end
-    -- Discard stale selectors left by removed themes or manually edited
-    -- profiles before the renderer tries to resolve them.
-    if savedSchemaVersion < 3 and tonumber(GnomeLevelUpDB.portraitRingScale) == 1.0 then
-        GnomeLevelUpDB.portraitRingScale = 1.10
-    end
-    -- 1.3.4 uses a neutral white default for authored portrait rings. Migrate
-    -- the previous built-in gold default while preserving an intentional tint.
-    local savedRingColor = GnomeLevelUpDB.portraitRingColor
-    if type(savedRingColor) == "table"
-        and savedRingColor[1] == 1 and savedRingColor[2] == 0.82 and savedRingColor[3] == 0.20 then
-        GnomeLevelUpDB.portraitRingColor = { 1, 1, 1 }
-    end
+    ns.MigrateLegacyAppearance(GnomeLevelUpDB, previous)
     -- Retire removed choices before validating them against the live registry.
     ns.RetireDustyStoneBackground(GnomeLevelUpDB)
     ns.RetireHordeBackground(GnomeLevelUpDB)
@@ -1249,79 +1075,18 @@ local function InitDB()
         and not ns.IsThemePackKey(GnomeLevelUpDB.frameChoice) then
         GnomeLevelUpDB.frameChoice = "BLACK_METAL"
     end
-    -- Older profiles only stored the center fill mode. Preserve that choice
-    -- when introducing the per-theme style setting.
-    if not legacyBackgroundStyle and not oldTheme
-        and (legacyBackgroundMode ~= nil or legacyBackgroundFillMode ~= nil or hadIndependentSelectors) then
-        GnomeLevelUpDB.backgroundStyle = GnomeLevelUpDB.backgroundFillMode == "tile"
-            and "tile" or "stretch"
-    end
     if GnomeLevelUpDB.forceFlavor ~= "auto"
         and GnomeLevelUpDB.forceFlavor ~= "retail"
         and GnomeLevelUpDB.forceFlavor ~= "forever" then
         GnomeLevelUpDB.forceFlavor = "auto"
     end
-    -- Move the first layout defaults forward without overwriting a custom divider color.
-    if savedSchemaVersion < 2 and (GnomeLevelUpDB.uiDefaultsVersion or 0) < 2 then
-        if GnomeLevelUpDB.sectionPadding == 6 then
-            GnomeLevelUpDB.sectionPadding = 8
-        end
-        local divider = GnomeLevelUpDB.colors and GnomeLevelUpDB.colors.divider
-        if divider and divider[1] == 1 and divider[2] == 1 and divider[3] == 1 then
-            divider[1], divider[2], divider[3] = 106 / 255, 106 / 255, 106 / 255
-        end
-        GnomeLevelUpDB.uiDefaultsVersion = 2
-    end
-    -- Profiles from the pre-versioned format may contain partial or removed
-    -- selectors. A versioned pass makes later migrations deterministic while
-    -- preserving every user-owned setting that still has a valid meaning.
-    if savedSchemaVersion < 4 then
-        if not GnomeLevelUpDB.backgroundStyle then
-            GnomeLevelUpDB.backgroundStyle = GnomeLevelUpDB.backgroundFillMode == "tile"
-                and "tile" or "stretch"
-        end
-        if not GnomeLevelUpDB.frameChoice then GnomeLevelUpDB.frameChoice = "BLACK_METAL" end
-        if not GnomeLevelUpDB.backgroundChoice then GnomeLevelUpDB.backgroundChoice = "NONE" end
-    end
-    -- Blizzard owns level-up chat now; retire the addon-only settings.
-    GnomeLevelUpDB.printClassicLevelUpText = nil
-    GnomeLevelUpDB.classicLevelUpTextColor = nil
-    GnomeLevelUpDB.popupClosingAnimation = nil
-    GnomeLevelUpDB.milestoneColorTransition = nil
-    GnomeLevelUpDB.statImpactSparks = nil
-    GnomeLevelUpDB.newAbilitySparkles = nil
-    GnomeLevelUpDB.abilityRevealShine = nil
-    GnomeLevelUpDB.backgroundDepth = nil
-    GnomeLevelUpDB.milestoneAnticipation = nil
-    GnomeLevelUpDB.levelNumberReveal = nil
-    GnomeLevelUpDB.persistentOptionsPreview = nil
-    GnomeLevelUpDB.themePreview = nil
+    ns.MigrateLegacyLayout(GnomeLevelUpDB, previous)
     ns.db = GnomeLevelUpDB
     ns.NormalizeScreenshotSettings(ns.db)
     ns.NormalizeBackgroundMotes(ns.db)
     if not IsMilestonePreset(ns.db.milestoneInterval) then ns.db.milestoneInterval = defaults.milestoneInterval end
 
-    -- Retire the deleted placeholder in profiles saved by older theme builds.
-    local savedRingTexture = ns.db.portraitRingTexture
-    if type(savedRingTexture) == "string"
-        and savedRingTexture:lower():match("portrait%-ring%-placeholder%.tga$") then
-        ns.db.portraitRingTexture = nil
-        ns.db.portraitRingChoice = "NONE"
-        ns.db.portraitRingEnabled = false
-    end
-
-    -- Existing saved themes keep their appearance transforms in SavedVariables.
-    -- Refresh only the nine-slice transform map so the shared corner/edge
-    -- textures take effect without resetting the user's other appearance work.
-    local themeTextureVersion = 1
-    if (tonumber(GnomeLevelUpDB.backgroundThemeTextureVersion) or 0) < themeTextureVersion then
-        local theme = ns.FindBackgroundTheme(GnomeLevelUpDB.backgroundTheme)
-        local transforms = theme and theme.appearance and theme.appearance.backgroundTextureTransforms
-        if transforms then
-            GnomeLevelUpDB.backgroundTextureTransforms = CopySetting(transforms)
-        end
-        GnomeLevelUpDB.backgroundThemeTextureVersion = themeTextureVersion
-    end
+    ns.MigrateSavedThemeTextures(ns.db)
     ns.NormalizeTrellisSideTransforms(ns.db)
     if GnomeLevelUpDB.horizontalMode then GnomeLevelUpDB.compactMode = true end
     GnomeLevelUpDB.schemaVersion = DATABASE_SCHEMA_VERSION
@@ -2519,7 +2284,7 @@ local function BuildPreviewStatChanges(maxLevelPreview)
     return previewStats
 end
 
-function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest, weatherTest, previewLevel)
+function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, abilityCount, paceScenario, rangeStart, portraitTest, weatherTest, previewLevel, recordScope)
     EnsureDatabase()
     local currentLevel = maxLevelPreview and ns.GetLevelCap() or milestoneLevel or previewLevel or UnitLevel("player")
     local forever = ns.GetCurrentFlavor() == "forever"
@@ -2563,10 +2328,24 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     local previewStats = BuildPreviewStatChanges(maxLevelPreview)
     local seconds = (not previewLevel or maxLevelPreview) and ns.GetCurrentLevelPlayedTime
         and ns.GetCurrentLevelPlayedTime() or nil
+    if maxLevelPreview and not seconds then seconds = 110 end
     local previous
     if paceScenario then
         seconds = 110
         previous = paceScenario == "slower" and 90 or (paceScenario == "best" or paceScenario == "guild") and 140 or nil
+    end
+    local recordPreview
+    if paceScenario == "totalpersonal" or paceScenario == "totalguild" or paceScenario == "totalboth" then
+        local total = ns.GetTimeToMaxLevel() or (3 * 86400 + 4 * 3600 + 15 * 60)
+        recordPreview = {}
+        if recordScope ~= "level" then
+            recordPreview.total = { seconds = total, previous = total + 3600,
+                guild = paceScenario ~= "totalpersonal", personal = paceScenario ~= "totalguild" }
+        end
+        if recordScope == "level" or recordScope == "all" then
+            recordPreview.finalInterval = { seconds = 110, previous = 140,
+                guild = paceScenario ~= "totalpersonal", personal = paceScenario ~= "totalguild" }
+        end
     end
     local secondaryStats = ns.db.showSecondaryStats and ns.BuildSecondaryPreviewStats() or nil
     if secondaryStats and #secondaryStats > 1 and (debugSkills or milestoneLevel or maxLevelPreview
@@ -2576,7 +2355,7 @@ function ns.PreviewLevelUp(debugSkills, milestoneLevel, maxLevelPreview, ability
     end
     ns.ShowLevelUp(currentLevel, previewStats, trainerAbilities, unlearnedWeaponSkills, seconds, warlockPetAbilities,
         true, milestoneLevel ~= nil or maxLevelPreview == true or previewLevel ~= nil,
-        previous, maxLevelPreview, paceScenario ~= nil,
+        previous, maxLevelPreview, recordPreview or paceScenario ~= nil,
         rangeStart, secondaryStats, nil, portraitTest, weatherTest, previewLevel ~= nil,
         paceScenario == "guild" and { previous = 140, seconds = 110 } or nil)
     if ns.QueueBlizzardSuppression then ns.QueueBlizzardSuppression() end
@@ -2687,19 +2466,6 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
     msg = (msg or ""):lower()
     msg = msg:match("^%s*(.-)%s*$") -- trim
 
-    --@do-not-package@
-    if msg == "debugrecord" or msg:match("^debugrecord%s") then
-        if not ns.IsDebugEnabled() then
-            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
-            return
-        end
-        local level, seconds = msg:match("^debugrecord%s+(%d+)%s+([%d%.]+)$")
-        if level and seconds and ns.SetDebugLevelRecord(tonumber(level), tonumber(seconds)) then
-            print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Level %d", tonumber(level)) .. " - " .. ns.FormatLevelClock(tonumber(seconds)))
-        else print("|cff3fe0ffGnomeLevelUp|r: /glu debugrecord <level> <timeinseconds>") end
-        return
-    end
-    --@end-do-not-package@
     if msg == "debugwelcome" then
         if not ns.IsDebugEnabled() then
             print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
@@ -2814,14 +2580,29 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Recorded level timers and best times reset for this character."))
     elseif msg == "test" or msg:match("^test%s") then
         local count = msg == "test" and 3 or tonumber(msg:match("^test%s+count%s+(%d+)$"))
-        local level = tonumber(msg:match("^test%s+(%d+)$"))
+        local levelText, record, recordScope = msg:match("^test%s+(%d+)%s*(%a*)%s*(%a*)$")
+        local level = tonumber(levelText)
+        if record == "" then record = nil end
+        if recordScope == "" then recordScope = nil end
         local cap = level and ns.GetLevelCap()
+        if record then
+            if not ns.IsDebugEnabled() then
+                print("|cff3fe0ffGnomeLevelUp|r: " .. ns.L("Enable debug commands") .. ": /glu debug on")
+                return
+            end
+            if level ~= cap or (record ~= "personal" and record ~= "best" and record ~= "guild" and record ~= "both")
+                or recordScope and recordScope ~= "level" and recordScope ~= "all" then
+                print("|cff3fe0ffGnomeLevelUp|r: /glu test <max level> <personal|guild|both> [level|all]")
+                return
+            end
+        end
         if count and count >= 1 and count <= 30 then
             ns.PreviewLevelUp(false, nil, nil, count)
         elseif level and level >= 1 and level <= (cap or 1000) then
             local maxLevelPreview = level == cap
             if maxLevelPreview then ns.RequestLevelPlayedTime() end
-            ns.PreviewLevelUp(false, nil, maxLevelPreview, nil, nil, nil, nil, nil, level)
+            local scenario = record and (record == "guild" and "totalguild" or record == "both" and "totalboth" or "totalpersonal") or nil
+            ns.PreviewLevelUp(false, nil, maxLevelPreview, nil, scenario, nil, nil, nil, level, recordScope)
         else
             print("|cff3fe0ffGnomeLevelUp|r: /glu test [level] | /glu test count <1-30>")
         end
@@ -2920,6 +2701,7 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("|cff3fe0ffGnomeLevelUp|r commands:")
         print("  /glu test [level] - preview a level-up, with milestone or max-level effects when applicable")
         print("  /glu test count <1-30> - preview a chosen number of sample abilities")
+        print("  /glu test <max level> <personal|guild|both> [level|all] - preview full-run/final-level records (debug mode)")
         print("  /glu testlevels <from> <to> [1-30] - preview combined level gains (debug mode)")
         print("  /glu options       - open the settings page (also under Options > AddOns)")
         print("  /glu sound         - toggle the level-up sound")
@@ -2936,9 +2718,6 @@ SlashCmdList["GNOMELEVELUP"] = function(msg)
         print("  /glu testtrainer   - print the current unlearned skill list")
         print("  /glu debugtime <new|slower|best|guild> - preview personal or guild time records (debug mode)")
         print("  /glu debugwelcome - preview the GnomeLevelUp 2.0 welcome message (debug mode)")
-        --@do-not-package@
-        print("  /glu debugrecord <level> <timeinseconds> - set a real personal record and share it with your guild (debug mode)")
-        --@end-do-not-package@
         print("  /glu debugportrait <info|delay|fail|unmasked|cat|bear|moonkin|travel|aquatic|tree> [nightelf|skyborne|tauren] - test 3D portraits and Druid forms (debug mode)")
         print("  /glu debugstats <old> <new> | reset - exact Strength totals, randomized remaining stats (debug mode)")
         print("  /glu debugmilestone <1-1000> | reset - save a custom milestone interval (active in debug mode)")

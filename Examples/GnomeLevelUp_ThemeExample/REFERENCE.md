@@ -70,15 +70,6 @@ language you intend to support; check accented letters, Cyrillic and other
 scripts in game. If the selected pack is disabled, its bundled font falls back
 to GLU's default without erasing the saved path.
 
-## Test in game
-
-1. Select the theme and run `/glu test` for a normal preview and `/glu test count 30` for scrolling.
-2. Run `/glu test <milestone level>` using your configured milestone interval. Use `/glu test 60` for Forever's maximum-level celebration; on Retail, use that client's current level cap. Milestone and maximum-level effects are included automatically; there are no separate `/glu milestone` or `/glu maxlevel` commands.
-3. Check horizontal and vertical layouts, compact mode, long stat names and prices, portrait modes and the timeline. Check the controller menu and first-time setup too.
-4. Check normal and Classic Mode animations, reduced motion and the appearance of transparent edges. Listen for overlapping or excessively loud cues.
-5. Try the theme's default font, then choose another font and confirm it remains selected during previews and reloads. Test any languages the pack supports.
-6. Test automatic theme audio, an explicitly chosen level-up sound, and Use Theme Sounds turned off. An artwork-only theme with `soundsEnabled = false` should use normal fallback audio.
-7. Save a profile, reload, then disable and re-enable the pack. Missing artwork should fall back safely and return when the pack is enabled again.
 
 ## Sound cues
 
